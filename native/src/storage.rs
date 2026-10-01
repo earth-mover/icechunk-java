@@ -8,10 +8,10 @@ use icechunk::storage::{
     new_local_filesystem_storage, new_s3_storage,
 };
 use jni::EnvUnowned;
-use jni::objects::{JClass, JObject, JString};
+use jni::objects::{JClass, JString};
 use jni::sys::jlong;
 
-use crate::call::{self, Reply};
+use crate::call::{self, block_on, text};
 use crate::error::NativeResult;
 use crate::handles::{self, Object, StorageRef};
 use crate::spec::StorageSpec;
@@ -60,19 +60,13 @@ async fn open(spec: StorageSpec) -> NativeResult<StorageRef> {
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_storageOpen<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     spec: JString<'l>,
 ) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, runtime| {
-            let spec: StorageSpec = serde_json::from_str(&spec.try_to_string(env)?)?;
-            let runtime = std::sync::Arc::clone(runtime);
-            Ok(async move {
-                let storage = open(spec).await?;
-                Ok(Reply::Long(handles::insert(Object::Storage(storage), runtime)?))
-            })
-        })
+    call::run(env, |env| {
+        let spec: StorageSpec = serde_json::from_str(&text(env, &spec)?)?;
+        let storage = block_on(open(spec))??;
+        handles::insert(Object::Storage(storage))
     })
 }
 
@@ -83,13 +77,4 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_close<'l>(
     handle: jlong,
 ) {
     handles::remove(handle);
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_cancel<'l>(
-    _env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    task: jlong,
-) {
-    call::cancel(task);
 }

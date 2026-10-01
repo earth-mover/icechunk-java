@@ -25,8 +25,7 @@ public final class Storage extends NativeHandle {
     }
 
     private static Storage open(Json spec, String description) {
-        String json = spec.toString();
-        return new Storage(NativeCall.runLong(call -> Native.storageOpen(call, json)), description);
+        return new Storage(Native.storageOpen(spec.toString()), description);
     }
 
     /** Storage held in memory and discarded when the last reference to it closes. */

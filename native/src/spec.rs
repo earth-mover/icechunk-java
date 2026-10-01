@@ -235,11 +235,11 @@ pub(crate) struct RepositoryOptionsSpec {
 }
 
 #[derive(Debug)]
-pub(crate) struct RepositoryOptions {
-    pub(crate) config: Option<RepositoryConfig>,
-    pub(crate) virtual_chunk_credentials: HashMap<String, Option<Credentials>>,
-    pub(crate) spec_version: Option<u8>,
-    pub(crate) check_clean_root: bool,
+pub struct RepositoryOptions {
+    pub config: Option<RepositoryConfig>,
+    pub virtual_chunk_credentials: HashMap<String, Option<Credentials>>,
+    pub spec_version: Option<u8>,
+    pub check_clean_root: bool,
 }
 
 impl RepositoryOptionsSpec {

@@ -48,7 +48,7 @@ that cost down:
 ```
 Java API         Storage  Repository  Session  Store        public classes, io.earthmover.icechunk
                     │         │          │        │
-Java internals   NativeCall (one per call)   NativeHandle (owns a long)
+Java internals   NativeHandle (owns a long)   NativeBuffers (lent memory)
                     │
 Native           Native.java  ⇄  icechunk_jni (Rust cdylib)
                                     │
@@ -62,32 +62,32 @@ per Java class: `storage.rs`, `repository.rs`, `session.rs`, `store.rs`.
 
 ## Calls
 
-Every operation, even a cheap one, runs the same way:
+A native method runs on the calling Java thread from start to finish:
 
-1. The Java method creates a `NativeCall` and passes it, with the arguments, to a native method.
-2. The native method reads the arguments on the Java thread, spawns a task on the tokio runtime, and returns a task id
-   at once.
-3. The Java thread waits on the `NativeCall`.
-4. When the task finishes, a runtime thread calls one `on*` method on the `NativeCall` (`onBytes`, `onString`,
-   `onError` and so on), which stores the result and wakes the waiting thread.
-5. The waiting thread returns the result, or builds and throws the exception.
+1. It reads its arguments and looks up the handle.
+2. It drives the icechunk future to completion with tokio's `Handle::block_on`, on the calling thread.
+3. It converts the result to a Java value and returns it, or throws.
 
-Running everything as a task keeps a single code path, and has these consequences:
+The runtime's own threads only poll I/O and run tasks icechunk spawns internally. They never call into Java.
 
-- **No native method blocks.** Java threads never call tokio's `block_on`, which would panic if the caller were itself
-  a runtime thread.
-- **Exceptions have useful stack traces.** The Java exception is created on the waiting thread, so it shows the caller.
-  Native code never constructs Java exception classes, which also means it never has to find a class from a runtime
-  thread whose class loader might not see it.
-- **Calls can be interrupted.** If the waiting thread is interrupted, it cancels the task through `Native.cancel` and
-  throws. The task is aborted at its next await point. Interrupting a commit can leave it committed or not, as with
-  any client that disconnects mid-request.
-- **A panic does not crash the JVM.** Each task is wrapped in `catch_unwind`, and a panic is reported as an error.
-  Panics on the Java thread are caught by jni-rs and thrown as `RuntimeException`.
+The alternative is to run each call as a task on a runtime thread and wake the waiting Java thread with the result.
+Measured with the benchmarks in `benchmarks/`, that handoff costs about 18 µs per call, and about 50 µs per call with 8
+threads, for operations whose own work takes a few microseconds.
 
-A call made from a runtime thread is rejected with `IllegalStateException`. Waiting there would block a thread the
-runtime needs to produce the result. No user code runs on runtime threads today; the check is there for when Java
-callbacks arrive (see [Open questions](#open-questions)).
+Consequences:
+
+- **Calls cannot be interrupted.** The JVM has no way to interrupt a thread running native code, so `Thread.interrupt()`
+  takes effect only when the call returns. Timeouts are an open question (see [Open questions](#open-questions)).
+- **Exceptions show the caller.** Errors are thrown on the calling thread through `IcechunkException.fromNative`,
+  which picks the exception class, so stack traces point at the Java code that made the call.
+- **A panic does not crash the JVM.** jni-rs catches panics at every native method and the binding throws them as
+  `RuntimeException`.
+- **Runtime threads are never attached to the JVM.** So they never keep the JVM from exiting, and never hold a
+  reference to the class loader that loaded the binding.
+
+A call made from a runtime thread is rejected with `IllegalStateException`, because blocking there would hold up the
+threads that drive the call. No Java code runs on runtime threads today; the check is there for when Java callbacks
+arrive.
 
 ## Handles
 
@@ -113,19 +113,13 @@ Ownership between objects follows the Rust side: a `Repository` holds its own re
 
 ## Runtime and class loaders
 
-All handles and tasks share one tokio runtime. Each holds an `Arc` to it; a static holds only a `Weak`. When the last
-handle closes and the last task finishes, the runtime shuts down and its threads exit. The next call starts a new one.
+One tokio runtime serves the process. It starts on the first call and stops in `JNI_OnUnload`, which the JVM calls
+when the class loader that loaded the library is collected; the threads must stop before the library's code is
+unmapped.
 
-This matters for applications that load the library more than once, such as plugin hosts (Fiji) or application
-servers. Runtime threads are attached to the JVM, and each has the binding's class loader as its context class loader.
-A runtime that lived forever would keep that class loader, and everything it loaded, alive after the plugin unloads.
-OpenDAL's binding uses the same refcounted runtime ([executor.rs](https://github.com/apache/opendal/blob/main/bindings/java/src/executor.rs)).
-
-The JVM refuses to load the same library file into two class loaders. The loader therefore extracts a bundled
-library to a new temporary file each time.
-
-Runtime threads detach from the JVM explicitly when they stop. Relying on detach at thread exit can deadlock on
-Windows ([jni-rs#701](https://github.com/jni-rs/jni-rs/issues/701)).
+The JVM refuses to load the same library file into two class loaders. The loader therefore extracts a bundled library
+to a new temporary file each time, and deletes it once loaded. Windows does not allow deleting a loaded library, so
+there the next extraction removes copies that are no longer in use.
 
 ## Configuration as JSON
 
@@ -146,10 +140,31 @@ dependencies to conflict with an application's.
 
 ## Bytes
 
-Values are copied between Java arrays and Rust buffers: once from `byte[]` into Rust on `set`, once from Rust into a
-new `byte[]` on `get`. Zero-copy is possible in principle, through direct `ByteBuffer`s over Rust memory, but it makes
-buffer lifetime part of the API, and the main consumers copy anyway. zarr-java wraps results in heap buffers, and N5's
-`ReadData.from(ByteBuffer)` rejects direct buffers.
+Chunks can be large, so the binding avoids copying them where it can.
+
+**Reads.** `Store.getBuffer` and `getManyBuffers` return a read-only direct `ByteBuffer` over icechunk's own buffer,
+with no copy. The native side boxes the `Bytes` and hands Java its address; a `Cleaner` releases it when the buffer
+becomes unreachable. Slices, duplicates and the read-only view all keep the original buffer reachable, so the memory
+cannot be released while any view exists, and a released buffer cannot be read.
+
+The cost is that the garbage collector does not see that native memory. A program with a large heap and little
+allocation could keep gigabytes of unreachable buffers waiting for a collection. `NativeBuffers` counts the bytes lent
+out and, past a limit (the `icechunk.buffers.limitBytes` property, default the maximum heap size), requests a
+collection and waits briefly for cleaners to run. The JDK manages its own direct buffers the same way. After each
+attempt the limit rises by half, so a program that genuinely holds many buffers is not stalled by a collection on every
+read.
+
+`Store.get` and `getMany` copy into a new `byte[]` instead. That is cheaper for small values and needed by callers that
+want an array.
+
+**Writes.** A `byte[]` or heap buffer is copied once into Rust: the JVM may move heap arrays, so Rust cannot keep a
+pointer to them. A direct `ByteBuffer` larger than 64 KiB is read in place: the native side wraps the buffer's memory
+as a `Bytes` that holds a global reference to the buffer. icechunk drops materialized chunks once they are written,
+but in-memory storage keeps the bytes it was given, and small values stay in the session's change set until commit.
+So the caller must not modify a buffer after passing it to `set`. Values of 64 KiB or less are always copied.
+
+zarr-java's compression codecs copy their input into a `byte[]` (`Utils.toArray`), so for compressed arrays the
+zero-copy read saves one of two copies. For uncompressed data and for direct `Store` users it saves the only one.
 
 `Store.getMany` batches reads into one native call, which icechunk runs concurrently. Use it when reading many chunks
 from object storage; one `get` per chunk pays the network latency each time.
@@ -183,8 +198,8 @@ dylib extracted to a temporary directory.
 ## Extensions
 
 A library such as an Arraylake client can add native operations without forking this one. It depends on the
-`icechunk-jni` crate as an `rlib`, adds its own `Java_...` exports using `icechunk_jni::ext`, and builds one combined
-library. Its jar ships that library under `io/earthmover/icechunk/native-ext/<os>-<arch>/`, which the loader prefers.
+`icechunk-jni` crate as an `rlib`, adds its own `Java_...` exports using `icechunk_jni::ext` (`run`, `block_on`, and
+`insert_*` to register objects, including its own types), and builds one combined library. Its jar ships that library under `io/earthmover/icechunk/native-ext/<os>-<arch>/`, which the loader prefers.
 Handles its native code registers live in the same table as the core's, and `NativeExtensions` wraps them as ordinary
 `Repository` and `Storage` objects.
 
@@ -201,7 +216,7 @@ crates.io version pin here would make that simpler than the git pin.
 ## Testing
 
 - **Rust unit tests** cover the handle table, byte ranges and the JSON specs.
-- **Java tests** cover each class, close races, interruption, and commit conflicts.
+- **Java tests** cover each class, close races, commit conflicts, and the lifetime of lent buffers.
 - **zarr-java round trips** write arrays with bytes, zstd, gzip, blosc and sharding codecs, commit, and read them back
   in a new session.
 - **icechunk's compatibility repositories.** `CompatibilityFixturesTest` reads the repositories icechunk keeps for
@@ -217,8 +232,11 @@ sets.
 
 - **Refreshable credentials.** icechunk can call back for fresh credentials. A Java callback would run on a runtime
   thread and may block on HTTP, so it should run on tokio's blocking pool or a Java executor, never on a worker.
-- **Async API.** `CompletableFuture` variants are a small step from the current design, since every call is already a
-  task. Completions must be delivered on a Java executor so that user callbacks do not run on runtime threads.
+- **Timeouts and cancellation.** Blocking calls cannot be interrupted. A per-call or per-session timeout, applied with
+  `tokio::time::timeout` inside `block_on`, would bound them.
+- **Async API.** `CompletableFuture` variants would spawn the operation on the runtime and complete the future from a
+  runtime thread, which then must be attached to the JVM. Completions should be handed to a Java executor so user
+  callbacks never run on runtime threads.
 - **Logging.** icechunk logs through `tracing`. Forwarding to SLF4J would need a subscriber that hands events to Java
   from runtime threads.
 - **Proxies and trust stores.** The native HTTP client ignores `https.proxyHost` and the JVM's `cacerts`. These could be

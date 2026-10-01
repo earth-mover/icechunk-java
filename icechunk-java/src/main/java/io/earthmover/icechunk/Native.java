@@ -1,11 +1,12 @@
 package io.earthmover.icechunk;
 
+import java.nio.ByteBuffer;
+
 /**
  * The native methods implemented in the Rust {@code icechunk-jni} crate.
  *
- * <p>Every method except {@link #close} and {@link #cancel} starts an operation on the native runtime and returns at
- * once with a task id. The result arrives through the {@link NativeCall} passed as the first argument. Constants here
- * must match their counterparts in the Rust source.
+ * <p>Each method runs the operation on the calling thread and returns its result, or throws. Constants here must match
+ * their counterparts in the Rust source.
  */
 final class Native {
     static final int OPEN = 0;
@@ -33,73 +34,82 @@ final class Native {
 
     static native void close(long handle);
 
-    static native void cancel(long task);
+    static native long storageOpen(String specJson);
 
-    static native long storageOpen(NativeCall call, String specJson);
+    static native long repositoryOpen(long storage, int mode, String optionsJson);
 
-    static native long repositoryOpen(NativeCall call, long storage, int mode, String optionsJson);
+    static native boolean repositoryExists(long storage);
 
-    static native long repositoryExists(NativeCall call, long storage);
+    static native String repositoryConfig(long repository);
 
-    static native long repositoryConfig(NativeCall call, long repository);
+    static native String[] repositoryListBranches(long repository);
 
-    static native long repositoryListBranches(NativeCall call, long repository);
+    static native String[] repositoryListTags(long repository);
 
-    static native long repositoryListTags(NativeCall call, long repository);
+    static native String repositoryLookupBranch(long repository, String name);
 
-    static native long repositoryLookupBranch(NativeCall call, long repository, String name);
+    static native String repositoryLookupTag(long repository, String name);
 
-    static native long repositoryLookupTag(NativeCall call, long repository, String name);
+    static native void repositoryCreateBranch(long repository, String name, String snapshot);
 
-    static native long repositoryCreateBranch(NativeCall call, long repository, String name, String snapshot);
+    static native void repositoryDeleteBranch(long repository, String name);
 
-    static native long repositoryDeleteBranch(NativeCall call, long repository, String name);
+    static native void repositoryResetBranch(long repository, String name, String snapshot);
 
-    static native long repositoryResetBranch(NativeCall call, long repository, String name, String snapshot);
+    static native void repositoryCreateTag(long repository, String name, String snapshot);
 
-    static native long repositoryCreateTag(NativeCall call, long repository, String name, String snapshot);
+    static native void repositoryDeleteTag(long repository, String name);
 
-    static native long repositoryDeleteTag(NativeCall call, long repository, String name);
+    static native String[] repositoryAncestry(long repository, int kind, String value);
 
-    static native long repositoryAncestry(NativeCall call, long repository, int kind, String value);
+    static native long repositoryReadonlySession(long repository, int kind, String value);
 
-    static native long repositoryReadonlySession(NativeCall call, long repository, int kind, String value);
+    static native long repositoryWritableSession(long repository, String branch);
 
-    static native long repositoryWritableSession(NativeCall call, long repository, String branch);
+    static native String sessionSnapshotId(long session);
 
-    static native long sessionSnapshotId(NativeCall call, long session);
+    static native String sessionBranch(long session);
 
-    static native long sessionBranch(NativeCall call, long session);
+    static native boolean sessionReadOnly(long session);
 
-    static native long sessionReadOnly(NativeCall call, long session);
+    static native boolean sessionHasUncommittedChanges(long session);
 
-    static native long sessionHasUncommittedChanges(NativeCall call, long session);
+    static native String sessionCommit(long session, String message);
 
-    static native long sessionCommit(NativeCall call, long session, String message);
+    static native void sessionDiscardChanges(long session);
 
-    static native long sessionDiscardChanges(NativeCall call, long session);
+    static native long sessionStore(long session);
 
-    static native long sessionStore(NativeCall call, long session, int concurrency);
+    static native byte[] storeGet(long store, String key, long rangeKind, long a, long b);
 
-    static native long storeGet(NativeCall call, long store, String key, long rangeKind, long a, long b);
+    /** Fills {@code out} with the buffer's owner and the bytes outstanding, see {@link NativeBuffers}. */
+    static native ByteBuffer storeGetBuffer(long store, String key, long rangeKind, long a, long b, long[] out);
 
-    static native long storeGetMany(NativeCall call, long store, String[] keys, long[] ranges);
+    static native byte[][] storeGetMany(long store, String[] keys, long[] ranges);
 
-    static native long storeSet(NativeCall call, long store, String key, byte[] value);
+    /** Fills {@code out} with one owner per key, then the bytes outstanding. */
+    static native ByteBuffer[] storeGetManyBuffers(long store, String[] keys, long[] ranges, long[] out);
 
-    static native long storeSetIfNotExists(NativeCall call, long store, String key, byte[] value);
+    static native void storeSet(long store, String key, byte[] value, int offset, int length, boolean onlyIfNew);
 
-    static native long storeExists(NativeCall call, long store, String key);
+    static native void storeSetBuffer(
+            long store, String key, ByteBuffer direct, int position, int length, boolean onlyIfNew);
 
-    static native long storeSize(NativeCall call, long store, String key);
+    static native boolean storeExists(long store, String key);
 
-    static native long storeDelete(NativeCall call, long store, String key);
+    static native long storeSize(long store, String key);
 
-    static native long storeDeleteDir(NativeCall call, long store, String prefix);
+    static native void storeDelete(long store, String key);
 
-    static native long storeIsEmpty(NativeCall call, long store, String prefix);
+    static native void storeDeleteDir(long store, String prefix);
 
-    static native long storeList(NativeCall call, long store, int mode, String prefix);
+    static native boolean storeIsEmpty(long store, String prefix);
 
-    static native long storeReadOnly(NativeCall call, long store);
+    static native String[] storeList(long store, int mode, String prefix);
+
+    static native boolean storeReadOnly(long store);
+
+    static native void bufferRelease(long owner);
+
+    static native long bufferOutstanding();
 }

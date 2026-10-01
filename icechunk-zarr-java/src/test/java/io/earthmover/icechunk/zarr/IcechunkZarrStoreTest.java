@@ -10,11 +10,11 @@ import dev.zarr.zarrjava.v3.Array;
 import dev.zarr.zarrjava.v3.DataType;
 import dev.zarr.zarrjava.v3.Group;
 import dev.zarr.zarrjava.v3.codec.CodecBuilder;
-import io.earthmover.icechunk.ByteRange;
 import io.earthmover.icechunk.Repository;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.Storage;
 import io.earthmover.icechunk.Version;
+import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -116,19 +116,47 @@ class IcechunkZarrStoreTest {
             assertNull(store.get(new String[] {"a", "b", "c", "9"}));
             assertEquals(-1, store.getSize(new String[] {"a", "b", "c", "9"}));
             assertEquals(2, store.getSize(new String[] {"a", "b", "c", "1"}));
-            assertEquals(3, store.get(new String[] {"a/b/c/1"}, 0, 1).get());
-            assertEquals(4, store.get(new String[] {"a", "b", "c", "1"}, -1).get());
+            assertEquals(3, store.get(new String[] {"a/b/c/1"}, 0, 1).get(0));
+            assertEquals(4, store.get(new String[] {"a", "b", "c", "1"}, -1).get(0));
         }
     }
 
     @Test
-    void keysAndRanges() {
+    void keys() {
         assertEquals("a/b/zarr.json", IcechunkZarrStore.key(new String[] {"/a/", "b", "", "zarr.json"}));
         assertEquals("", IcechunkZarrStore.key(new String[] {}));
-        assertEquals(ByteRange.all(), IcechunkZarrStore.range(0, -1));
-        assertEquals(ByteRange.from(5), IcechunkZarrStore.range(5, -1));
-        assertEquals(ByteRange.suffix(16), IcechunkZarrStore.range(-16, -1));
-        assertEquals(ByteRange.of(2, 7), IcechunkZarrStore.range(2, 7));
+    }
+
+    /** zarr-java's range convention, as its FilesystemStore implements it. */
+    @Test
+    void ranges() throws Exception {
+        try (Session session = repo.writableSession("main")) {
+            IcechunkZarrStore store = new IcechunkZarrStore(session);
+            Group.create(store.resolve());
+            Array.create(
+                            store.resolve("x"),
+                            Array.metadataBuilder()
+                                    .withShape(8)
+                                    .withDataType(DataType.UINT8)
+                                    .withChunkShape(8)
+                                    .withFillValue(0)
+                                    .build())
+                    .write(ucar.ma2.Array.factory(
+                            ucar.ma2.DataType.UBYTE, new int[] {8}, new byte[] {0, 1, 2, 3, 4, 5, 6, 7}));
+            String[] chunk = {"x", "c", "0"};
+            assertArrayEquals(new byte[] {0, 1, 2, 3, 4, 5, 6, 7}, bytes(store.get(chunk)));
+            assertArrayEquals(new byte[] {5, 6, 7}, bytes(store.get(chunk, 5)));
+            assertArrayEquals(new byte[] {2, 3}, bytes(store.get(chunk, 2, 4)));
+            assertArrayEquals(new byte[] {6, 7}, bytes(store.get(chunk, -2)));
+            assertArrayEquals(new byte[] {4, 5}, bytes(store.get(chunk, -4, 6)));
+            assertNull(store.get(new String[] {"x", "c", "1"}, -4, 6));
+        }
+    }
+
+    private static byte[] bytes(ByteBuffer buffer) {
+        byte[] out = new byte[buffer.remaining()];
+        buffer.duplicate().get(out);
+        return out;
     }
 
     private static List<String> sorted(Stream<String> keys) {

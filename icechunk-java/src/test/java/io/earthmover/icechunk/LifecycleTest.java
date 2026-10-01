@@ -90,18 +90,4 @@ class LifecycleTest {
             pool.shutdownNow();
         }
     }
-
-    @Test
-    void interruptedCallsThrowAndKeepTheFlag() {
-        try (Storage storage = Storage.inMemory()) {
-            Thread.currentThread().interrupt();
-            try {
-                IcechunkException e = assertThrows(IcechunkException.class, () -> Repository.create(storage));
-                assertTrue(e.getCause() instanceof InterruptedException);
-                assertTrue(Thread.currentThread().isInterrupted());
-            } finally {
-                Thread.interrupted();
-            }
-        }
-    }
 }

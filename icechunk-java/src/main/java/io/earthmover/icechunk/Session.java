@@ -1,5 +1,6 @@
 package io.earthmover.icechunk;
 
+import java.lang.ref.Reference;
 import java.util.Optional;
 
 /**
@@ -13,8 +14,6 @@ import java.util.Optional;
  * closes its store.
  */
 public final class Session extends NativeHandle {
-    private static final int DEFAULT_CONCURRENCY = 10;
-
     private final Object storeLock = new Object();
     private Store store;
 
@@ -24,32 +23,47 @@ public final class Session extends NativeHandle {
 
     /** The snapshot this session started from, or after a commit, the snapshot it created. */
     public SnapshotId snapshotId() {
-        long h = handle();
-        return SnapshotId.of(NativeCall.runString(call -> Native.sessionSnapshotId(call, h)));
+        try {
+            return SnapshotId.of(Native.sessionSnapshotId(handle()));
+        } finally {
+            Reference.reachabilityFence(this);
+        }
     }
 
     /** The branch a writable or branch-based session tracks; empty for a tag or snapshot. */
     public Optional<String> branch() {
-        long h = handle();
-        return Optional.ofNullable(NativeCall.runString(call -> Native.sessionBranch(call, h)));
+        try {
+            return Optional.ofNullable(Native.sessionBranch(handle()));
+        } finally {
+            Reference.reachabilityFence(this);
+        }
     }
 
     public boolean isReadOnly() {
-        long h = handle();
-        return NativeCall.runBoolean(call -> Native.sessionReadOnly(call, h));
+        try {
+            return Native.sessionReadOnly(handle());
+        } finally {
+            Reference.reachabilityFence(this);
+        }
     }
 
     public boolean hasUncommittedChanges() {
-        long h = handle();
-        return NativeCall.runBoolean(call -> Native.sessionHasUncommittedChanges(call, h));
+        try {
+            return Native.sessionHasUncommittedChanges(handle());
+        } finally {
+            Reference.reachabilityFence(this);
+        }
     }
 
     /** The Zarr store for this session. The same store is returned on every call. */
     public Store store() {
         synchronized (storeLock) {
             if (store == null || store.isClosed()) {
-                long h = handle();
-                store = new Store(NativeCall.runLong(call -> Native.sessionStore(call, h, DEFAULT_CONCURRENCY)));
+                try {
+                    store = new Store(Native.sessionStore(handle()));
+                } finally {
+                    Reference.reachabilityFence(this);
+                }
             }
             return store;
         }
@@ -65,23 +79,30 @@ public final class Session extends NativeHandle {
      * @throws IcechunkException if the session is read-only or has no changes
      */
     public SnapshotId commit(String message) {
-        long h = handle();
-        return SnapshotId.of(NativeCall.runString(call -> Native.sessionCommit(call, h, message)));
+        try {
+            return SnapshotId.of(Native.sessionCommit(handle(), message));
+        } finally {
+            Reference.reachabilityFence(this);
+        }
     }
 
     /** Drop all uncommitted changes. */
     public void discardChanges() {
-        long h = handle();
-        NativeCall.runVoid(call -> Native.sessionDiscardChanges(call, h));
+        try {
+            Native.sessionDiscardChanges(handle());
+        } finally {
+            Reference.reachabilityFence(this);
+        }
     }
 
+    /** Close the store, then the session, under the lock {@link #store()} takes, so no new store can appear between. */
     @Override
     public void close() {
         synchronized (storeLock) {
             if (store != null) {
                 store.close();
             }
+            super.close();
         }
-        super.close();
     }
 }

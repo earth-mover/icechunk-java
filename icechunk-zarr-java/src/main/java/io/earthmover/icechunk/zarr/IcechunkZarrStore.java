@@ -58,12 +58,20 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
     }
 
     /**
-     * Translate zarr-java's range convention: a negative {@code start} reads the last {@code -start} bytes, and a
-     * negative {@code end} reads to the end of the value. {@code end} is exclusive.
+     * Translate zarr-java's range convention. {@code end} is exclusive, and a negative {@code end} means the end of the
+     * value. A negative {@code start} counts back from the end of the value; with a negative {@code end} that is a
+     * suffix read, which needs no size lookup.
      */
-    static ByteRange range(long start, long end) {
-        if (start < 0) {
+    private ByteRange range(String key, long start, long end) {
+        if (start < 0 && end < 0) {
             return ByteRange.suffix(-start);
+        }
+        if (start < 0) {
+            OptionalLong size = store.size(key);
+            if (!size.isPresent()) {
+                return null;
+            }
+            return ByteRange.of(Math.max(0, size.getAsLong() + start), end);
         }
         if (end < 0) {
             return start == 0 ? ByteRange.all() : ByteRange.from(start);
@@ -86,18 +94,20 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
         return get(keys, start, -1);
     }
 
+    /** Returns a read-only buffer over icechunk's memory; see {@link io.earthmover.icechunk.Store#getBuffer}. */
     @Override
     public ByteBuffer get(String[] keys, long start, long end) {
-        Optional<byte[]> value = store.get(key(keys), range(start, end));
-        return value.map(ByteBuffer::wrap).orElse(null);
+        String key = key(keys);
+        ByteRange range = range(key, start, end);
+        if (range == null) {
+            return null;
+        }
+        return store.getBuffer(key, range).orElse(null);
     }
 
     @Override
     public void set(String[] keys, ByteBuffer bytes) {
-        ByteBuffer source = bytes.duplicate();
-        byte[] value = new byte[source.remaining()];
-        source.get(value);
-        store.set(key(keys), value);
+        store.set(key(keys), bytes);
     }
 
     @Override
@@ -112,7 +122,12 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
 
     @Override
     public InputStream getInputStream(String[] keys, long start, long end) {
-        Optional<byte[]> value = store.get(key(keys), range(start, end));
+        String key = key(keys);
+        ByteRange range = range(key, start, end);
+        if (range == null) {
+            return null;
+        }
+        Optional<byte[]> value = store.get(key, range);
         return value.map(ByteArrayInputStream::new).orElse(null);
     }
 
@@ -139,6 +154,6 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
 
     @Override
     public String toString() {
-        return "IcechunkZarrStore(" + session.snapshotId() + ")";
+        return "IcechunkZarrStore";
     }
 }

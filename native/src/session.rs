@@ -7,60 +7,48 @@ use std::sync::Arc;
 
 use icechunk::Store;
 use jni::EnvUnowned;
-use jni::objects::{JClass, JObject, JString};
-use jni::sys::{jint, jlong};
+use jni::objects::{JClass, JString};
+use jni::sys::{jboolean, jlong};
 
-use crate::call::{self, Reply};
-use crate::error::NativeError;
+use crate::call::{self, block_on, optional_string, text};
 use crate::handles::{self, Object};
-use crate::repository::text;
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_sessionSnapshotId<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     session: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let session = handles::session(session)?;
-            Ok(async move {
-                Ok(Reply::Text(Some(session.read().await.snapshot_id().to_string())))
-            })
-        })
+) -> JString<'l> {
+    call::run(env, |env| {
+        let session = handles::session(session)?;
+        let id = block_on(async { session.read().await.snapshot_id().to_string() })?;
+        Ok(env.new_string(id)?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_sessionBranch<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     session: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let session = handles::session(session)?;
-            Ok(async move {
-                Ok(Reply::Text(session.read().await.branch().map(str::to_owned)))
-            })
-        })
+) -> JString<'l> {
+    call::run(env, |env| {
+        let session = handles::session(session)?;
+        let branch =
+            block_on(async { session.read().await.branch().map(str::to_owned) })?;
+        optional_string(env, branch.as_deref())
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_sessionReadOnly<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     session: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let session = handles::session(session)?;
-            Ok(async move { Ok(Reply::Bool(session.read().await.read_only())) })
-        })
+) -> jboolean {
+    call::run(env, |_| {
+        let session = handles::session(session)?;
+        block_on(async { session.read().await.read_only() })
     })
 }
 
@@ -69,82 +57,53 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_sessionHasUncommittedC
     'l,
 >(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     session: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let session = handles::session(session)?;
-            Ok(
-                async move { Ok(Reply::Bool(session.read().await.has_uncommitted_changes())) },
-            )
-        })
+) -> jboolean {
+    call::run(env, |_| {
+        let session = handles::session(session)?;
+        block_on(async { session.read().await.has_uncommitted_changes() })
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_sessionCommit<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     session: jlong,
     message: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let session = handles::session(session)?;
-            let message = text(env, &message)?;
-            Ok(async move {
-                let mut session = session.write().await;
-                let id = session.commit(message).execute().await?;
-                Ok(Reply::Text(Some(id.to_string())))
-            })
-        })
+) -> JString<'l> {
+    call::run(env, |env| {
+        let session = handles::session(session)?;
+        let message = text(env, &message)?;
+        let id =
+            block_on(async { session.write().await.commit(message).execute().await })??;
+        Ok(env.new_string(id.to_string())?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_sessionDiscardChanges<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     session: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let session = handles::session(session)?;
-            Ok(async move {
-                session.write().await.discard_changes()?;
-                Ok(Reply::Void)
-            })
-        })
-    })
+) {
+    call::run(env, |_| {
+        let session = handles::session(session)?;
+        Ok(block_on(async { session.write().await.discard_changes() })??)
+    });
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_sessionStore<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     session: jlong,
-    concurrency: jint,
 ) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, runtime| {
-            let session = handles::session(session)?;
-            let concurrency =
-                u16::try_from(concurrency).ok().filter(|c| *c > 0).ok_or_else(|| {
-                    NativeError::invalid_argument(format!(
-                        "concurrency must be between 1 and {}, got {concurrency}",
-                        u16::MAX
-                    ))
-                })?;
-            let runtime = Arc::clone(runtime);
-            Ok(async move {
-                let store = Store::from_session_and_config(session, concurrency);
-                Ok(Reply::Long(handles::insert(Object::Store(Arc::new(store)), runtime)?))
-            })
-        })
+    call::run(env, |_| {
+        let session = handles::session(session)?;
+        // `from_session` takes `get_partial_values_concurrency` from the repository config.
+        let store = block_on(Store::from_session(session))?;
+        handles::insert(Object::Store(Arc::new(store)))
     })
 }

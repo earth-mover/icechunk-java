@@ -17,6 +17,7 @@ Rust toolchain pinned in `rust-toolchain.toml` on first use. The interop tests a
 | `pixi run check` | Rust formatting and clippy, Rust tests, then `test`. Run before committing. |
 | `pixi run format` | Format the Rust and Java code. |
 | `pixi run example [Name]` | Run an example from `examples/`. Defaults to `Quickstart`. |
+| `pixi run bench [jmh args]` | Build a release native library and run the JMH benchmarks, with allocation per operation. |
 
 The Java build runs [Error Prone](https://errorprone.info) and `javac -Xlint:all -Werror`, and checks formatting with
 Spotless (palantir-java-format), so warnings and formatting fail the build. Clippy denies `unwrap`, `expect` and
@@ -26,12 +27,14 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 
 | Path | Contents |
 |---|---|
-| `native/src/call.rs` | Starting tasks and reporting results to `NativeCall`. |
+| `native/src/call.rs` | Running a native method: `run`, `block_on`, and errors as Java exceptions. |
+| `native/src/buffers.rs` | Lending icechunk's memory to Java, and borrowing Java's direct buffers. |
 | `native/src/handles.rs` | The handle table. |
-| `native/src/runtime.rs` | The shared tokio runtime and JVM thread attachment. |
+| `native/src/runtime.rs` | The process-wide tokio runtime. |
 | `native/src/spec.rs` | The JSON formats the Java builders send. |
 | `native/src/{storage,repository,session,store}.rs` | Native methods, one module per Java class. |
-| `icechunk-java/` | The public Java API and its internals (`Native`, `NativeCall`, `NativeHandle`, `NativeLoader`, `Json`). |
+| `icechunk-java/` | The public Java API and its internals (`Native`, `NativeHandle`, `NativeBuffers`, `NativeLoader`, `Json`). |
+| `benchmarks/` | JMH benchmarks of the Store API. |
 | `icechunk-zarr-java/` | The zarr-java adapter, and the zarr-java, fixture and Python interop tests. |
 | `examples/` | Runnable examples. |
 | `tests/python/` | The icechunk-python side of the interop test. |
@@ -39,15 +42,17 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 
 ## Adding a native method
 
-1. Declare it in `Native.java`: `static native long thingDo(NativeCall call, long handle, ...)`.
-2. Implement `Java_io_earthmover_icechunk_Native_thingDo` in the matching Rust module. Copy an existing method: wrap
-   the body in `call::entry`, read the Java arguments inside `call::start`'s closure, and return an `async move` block
-   that produces a `Reply`.
-3. Call it from the public class through the matching `NativeCall.run*` helper. Read `handle()` and copy any fields
-   into locals before the lambda.
+1. Declare it in `Native.java`, taking the handle as a `long` and returning the result directly:
+   `static native String[] thingList(long handle, String prefix)`.
+2. Implement `Java_io_earthmover_icechunk_Native_thingList` in the matching Rust module. Copy an existing method: wrap
+   the body in `call::run`, look up the handle, drive the icechunk future with `block_on`, and convert the result.
+   Return errors with `?`; `call::run` throws them as Java exceptions.
+3. Call it from the public class as `Native.thingList(handle(), prefix)` inside `try`, with
+   `Reference.reachabilityFence(this)` in the `finally` block.
 4. If it takes a new kind of option, add it to the Java builder and to `spec.rs`, and extend both `JsonContractTest`
    and the `spec.rs` tests with the same JSON string.
 5. Constants shared by both sides (`Native.RANGE_*`, `Native.VERSION_*` and so on) are defined twice. Change both.
+6. If it is on a hot path, add a case to `benchmarks/` and compare before and after with `pixi run bench`.
 
 ## Updating icechunk
 

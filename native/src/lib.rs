@@ -1,17 +1,16 @@
 //! JNI layer for the icechunk Java bindings.
 //!
 //! Every native method is a static method on `io.earthmover.icechunk.Native`. Each one
-//! takes a `NativeCall` callback object, starts the operation on the shared tokio
-//! runtime, and returns a task id. The result reaches Java through the callback, never
-//! through the return value, so no native method blocks and no Java exception is built
-//! on a runtime thread. `DESIGN.md` at the repository root explains the threading,
-//! handle and lifetime rules.
+//! runs on the calling Java thread: it reads its arguments, drives the icechunk future
+//! to completion on the shared tokio runtime, and returns the result or throws.
+//! `DESIGN.md` at the repository root explains the threading, handle and memory rules.
 
 use std::ffi::c_void;
 
 use jni::JavaVM;
 use jni::sys::{JNI_VERSION_1_8, jint};
 
+mod buffers;
 mod call;
 mod error;
 mod handles;
@@ -25,33 +24,52 @@ mod store;
 /// The pieces a downstream crate needs to add its own native methods to this library.
 ///
 /// A crate such as an Arraylake binding depends on `icechunk-jni` as an `rlib`, defines
-/// more `Java_...` exports with [`ext::entry`] and [`ext::start`], and builds a single
+/// more `Java_...` exports with [`ext::run`] and [`ext::block_on`], and builds a single
 /// `cdylib` containing both. Objects it registers live in the same handle table as the
 /// core's, so the Java core classes can use them.
 pub mod ext {
     use std::sync::Arc;
 
-    pub use crate::call::{Reply, entry, start};
+    pub use crate::call::{ThrowIcechunk, block_on, optional_string, run, strings, text};
     pub use crate::error::{ErrorKind, NativeError, NativeResult};
-    pub use crate::repository::text;
-    pub use crate::runtime::Runtime;
 
     use crate::handles::{self, Object};
 
     /// Register a repository and return the handle `NativeExtensions.repository` wraps.
-    pub fn insert_repository(
-        repository: icechunk::Repository,
-        runtime: Arc<Runtime>,
-    ) -> NativeResult<i64> {
-        handles::insert(Object::Repository(Arc::new(repository)), runtime)
+    pub fn insert_repository(repository: icechunk::Repository) -> NativeResult<i64> {
+        handles::insert(Object::Repository(Arc::new(repository)))
+    }
+
+    /// Register an extension's own object. Java closes it with `NativeExtensions.close`.
+    pub fn insert_extension<T: Send + Sync + 'static>(object: T) -> NativeResult<i64> {
+        handles::insert(Object::Extension(Arc::new(object)))
+    }
+
+    /// Look up an object registered with [`insert_extension`].
+    pub fn extension<T: Send + Sync + 'static>(handle: i64) -> NativeResult<Arc<T>> {
+        handles::extension(handle)?.downcast::<T>().map_err(|_| {
+            NativeError::invalid_argument("handle refers to a different extension type")
+        })
+    }
+
+    /// The runtime icechunk's futures run on, for extensions that spawn their own tasks.
+    /// It lives until the library unloads.
+    pub fn runtime() -> NativeResult<&'static tokio::runtime::Handle> {
+        crate::runtime::handle()
+    }
+
+    /// Parse the `RepositoryOptions` JSON the Java builder produces.
+    pub fn repository_options(
+        json: &str,
+    ) -> NativeResult<crate::spec::RepositoryOptions> {
+        crate::spec::RepositoryOptionsSpec::parse(json)
     }
 
     /// Register a storage and return the handle `NativeExtensions.storage` wraps.
     pub fn insert_storage(
         storage: Arc<dyn icechunk::Storage + Send + Sync>,
-        runtime: Arc<Runtime>,
     ) -> NativeResult<i64> {
-        handles::insert(Object::Storage(storage), runtime)
+        handles::insert(Object::Storage(storage))
     }
 }
 
@@ -66,7 +84,15 @@ pub unsafe extern "system" fn JNI_OnLoad(
     _: *mut c_void,
 ) -> jint {
     // SAFETY: the JVM guarantees `vm` is valid for the life of the library. Wrapping it
-    // registers the process-wide `JavaVM::singleton` that runtime threads attach through.
+    // registers the process-wide `JavaVM::singleton`, which dropping a global reference
+    // on a non-Java thread relies on.
     let _ = unsafe { JavaVM::from_raw(vm) };
     JNI_VERSION_1_8
+}
+
+/// Called by the JVM before it unloads the library, when the class loader that loaded
+/// it is collected. The runtime's threads must stop before the code they run is unmapped.
+#[unsafe(no_mangle)]
+pub extern "system" fn JNI_OnUnload(_vm: *mut jni::sys::JavaVM, _: *mut c_void) {
+    runtime::shutdown();
 }

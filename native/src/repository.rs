@@ -11,11 +11,11 @@ use icechunk::Repository;
 use icechunk::format::SnapshotId;
 use icechunk::format::format_constants::SpecVersionBin;
 use icechunk::repository::VersionInfo;
-use jni::objects::{JClass, JObject, JString};
-use jni::sys::{jint, jlong};
-use jni::{Env, EnvUnowned};
+use jni::EnvUnowned;
+use jni::objects::{JClass, JObjectArray, JString};
+use jni::sys::{jboolean, jint, jlong};
 
-use crate::call::{self, Reply};
+use crate::call::{self, block_on, strings, text};
 use crate::error::{ErrorKind, NativeError, NativeResult};
 use crate::handles::{self, Object};
 use crate::spec::{RepositoryOptions, RepositoryOptionsSpec};
@@ -26,23 +26,27 @@ const OPEN: jint = 0;
 const CREATE: jint = 1;
 const OPEN_OR_CREATE: jint = 2;
 
-/// How `repositoryReadonlySession` interprets its version argument. The values match
-/// the `Native.VERSION_*` constants.
+/// How a version argument is interpreted. The values match the `Native.VERSION_*`
+/// constants.
 const VERSION_BRANCH: jint = 0;
 const VERSION_TAG: jint = 1;
 const VERSION_SNAPSHOT: jint = 2;
-
-pub fn text(env: &Env<'_>, value: &JString<'_>) -> NativeResult<String> {
-    if value.is_null() {
-        return Err(NativeError::invalid_argument("unexpected null string"));
-    }
-    Ok(value.try_to_string(env)?)
-}
 
 fn snapshot_id(id: &str) -> NativeResult<SnapshotId> {
     SnapshotId::try_from(id).map_err(|err| {
         NativeError::invalid_argument(format!("bad snapshot id {id:?}: {err}"))
     })
+}
+
+fn version(kind: jint, value: String) -> NativeResult<VersionInfo> {
+    match kind {
+        VERSION_BRANCH => Ok(VersionInfo::BranchTipRef(value)),
+        VERSION_TAG => Ok(VersionInfo::TagRef(value)),
+        VERSION_SNAPSHOT => Ok(VersionInfo::SnapshotId(snapshot_id(&value)?)),
+        other => {
+            Err(NativeError::invalid_argument(format!("unknown version kind {other}")))
+        }
+    }
 }
 
 fn spec_version(options: &RepositoryOptions) -> NativeResult<Option<SpecVersionBin>> {
@@ -114,239 +118,202 @@ async fn open(
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryOpen<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     storage: jlong,
     mode: jint,
     options: JString<'l>,
 ) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, runtime| {
-            let storage = handles::storage(storage)?;
-            let options = RepositoryOptionsSpec::parse(&text(env, &options)?)?;
-            let runtime = Arc::clone(runtime);
-            Ok(async move {
-                let repository = open(storage, mode, options).await?;
-                let handle =
-                    handles::insert(Object::Repository(Arc::new(repository)), runtime)?;
-                Ok(Reply::Long(handle))
-            })
-        })
+    call::run(env, |env| {
+        let storage = handles::storage(storage)?;
+        let options = RepositoryOptionsSpec::parse(&text(env, &options)?)?;
+        let repository = block_on(open(storage, mode, options))??;
+        handles::insert(Object::Repository(Arc::new(repository)))
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryExists<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     storage: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let storage = handles::storage(storage)?;
-            Ok(async move { Ok(Reply::Bool(Repository::exists(storage, None).await?)) })
-        })
+) -> jboolean {
+    call::run(env, |_| {
+        let storage = handles::storage(storage)?;
+        Ok(block_on(Repository::exists(storage, None))??)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryConfig<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let repository = handles::repository(repository)?;
-            Ok(async move {
-                let json = serde_json::to_string(repository.config()).map_err(|err| {
-                    NativeError::new(ErrorKind::Icechunk, err.to_string())
-                })?;
-                Ok(Reply::Text(Some(json)))
-            })
-        })
+) -> JString<'l> {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let json = serde_json::to_string(repository.config())
+            .map_err(|err| NativeError::new(ErrorKind::Icechunk, err.to_string()))?;
+        Ok(env.new_string(json)?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryListBranches<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let repository = handles::repository(repository)?;
-            Ok(async move {
-                Ok(Reply::Texts(repository.list_branches().await?.into_iter().collect()))
-            })
-        })
+) -> JObjectArray<'l> {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let names = block_on(repository.list_branches())??;
+        strings(env, names.iter())
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryListTags<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |_, _| {
-            let repository = handles::repository(repository)?;
-            Ok(async move {
-                Ok(Reply::Texts(repository.list_tags().await?.into_iter().collect()))
-            })
-        })
+) -> JObjectArray<'l> {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let names = block_on(repository.list_tags())??;
+        strings(env, names.iter())
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryLookupBranch<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     name: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let repository = handles::repository(repository)?;
-            let name = text(env, &name)?;
-            Ok(async move {
-                let id = repository.lookup_branch(&name).await?;
-                Ok(Reply::Text(Some(id.to_string())))
-            })
-        })
+) -> JString<'l> {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let name = text(env, &name)?;
+        let id = block_on(repository.lookup_branch(&name))??;
+        Ok(env.new_string(id.to_string())?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryLookupTag<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     name: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let repository = handles::repository(repository)?;
-            let name = text(env, &name)?;
-            Ok(async move {
-                let id = repository.lookup_tag(&name).await?;
-                Ok(Reply::Text(Some(id.to_string())))
-            })
-        })
+) -> JString<'l> {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let name = text(env, &name)?;
+        let id = block_on(repository.lookup_tag(&name))??;
+        Ok(env.new_string(id.to_string())?)
     })
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryCreateBranch<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     name: JString<'l>,
     snapshot: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let repository = handles::repository(repository)?;
-            let name = text(env, &name)?;
-            let snapshot = snapshot_id(&text(env, &snapshot)?)?;
-            Ok(async move {
-                repository.create_branch(&name, &snapshot).await?;
-                Ok(Reply::Void)
-            })
-        })
-    })
+) {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let name = text(env, &name)?;
+        let snapshot = snapshot_id(&text(env, &snapshot)?)?;
+        Ok(block_on(repository.create_branch(&name, &snapshot))??)
+    });
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryDeleteBranch<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     name: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let repository = handles::repository(repository)?;
-            let name = text(env, &name)?;
-            Ok(async move {
-                repository.delete_branch(&name).await?;
-                Ok(Reply::Void)
-            })
-        })
-    })
+) {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let name = text(env, &name)?;
+        Ok(block_on(repository.delete_branch(&name))??)
+    });
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryResetBranch<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     name: JString<'l>,
     snapshot: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let repository = handles::repository(repository)?;
-            let name = text(env, &name)?;
-            let snapshot = snapshot_id(&text(env, &snapshot)?)?;
-            Ok(async move {
-                repository.reset_branch(&name, &snapshot, None).await?;
-                Ok(Reply::Void)
-            })
-        })
-    })
+) {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let name = text(env, &name)?;
+        let snapshot = snapshot_id(&text(env, &snapshot)?)?;
+        Ok(block_on(repository.reset_branch(&name, &snapshot, None))??)
+    });
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryCreateTag<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     name: JString<'l>,
     snapshot: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let repository = handles::repository(repository)?;
-            let name = text(env, &name)?;
-            let snapshot = snapshot_id(&text(env, &snapshot)?)?;
-            Ok(async move {
-                repository.create_tag(&name, &snapshot).await?;
-                Ok(Reply::Void)
-            })
-        })
-    })
+) {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let name = text(env, &name)?;
+        let snapshot = snapshot_id(&text(env, &snapshot)?)?;
+        Ok(block_on(repository.create_tag(&name, &snapshot))??)
+    });
 }
 
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryDeleteTag<'l>(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     name: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let repository = handles::repository(repository)?;
-            let name = text(env, &name)?;
-            Ok(async move {
-                repository.delete_tag(&name).await?;
-                Ok(Reply::Void)
-            })
-        })
+) {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let name = text(env, &name)?;
+        Ok(block_on(repository.delete_tag(&name))??)
+    });
+}
+
+/// Four strings per snapshot, newest first: id, parent id (empty for the first
+/// snapshot), commit time in RFC 3339 UTC, and message. `Repository.ancestry` reads them
+/// in that order.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryAncestry<'l>(
+    env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    repository: jlong,
+    kind: jint,
+    value: JString<'l>,
+) -> JObjectArray<'l> {
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let version = version(kind, text(env, &value)?)?;
+        let snapshots: Vec<_> = block_on(async {
+            repository.ancestry(&version).await?.try_collect().await
+        })??;
+        let mut fields = Vec::with_capacity(snapshots.len() * 4);
+        for snapshot in snapshots {
+            fields.push(snapshot.id.to_string());
+            fields.push(snapshot.parent_id.map(|id| id.to_string()).unwrap_or_default());
+            fields.push(snapshot.flushed_at.to_rfc3339_opts(SecondsFormat::Micros, true));
+            fields.push(snapshot.message);
+        }
+        strings(env, fields.iter())
     })
 }
 
@@ -355,23 +322,16 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryReadonlySess
     'l,
 >(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     kind: jint,
     value: JString<'l>,
 ) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, runtime| {
-            let repository = handles::repository(repository)?;
-            let version = version(kind, text(env, &value)?)?;
-            let runtime = Arc::clone(runtime);
-            Ok(async move {
-                let session = repository.readonly_session(&version).await?;
-                let session = Arc::new(tokio::sync::RwLock::new(session));
-                Ok(Reply::Long(handles::insert(Object::Session(session), runtime)?))
-            })
-        })
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let version = version(kind, text(env, &value)?)?;
+        let session = block_on(repository.readonly_session(&version))??;
+        handles::insert(Object::Session(Arc::new(tokio::sync::RwLock::new(session))))
     })
 }
 
@@ -380,68 +340,14 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryWritableSess
     'l,
 >(
     env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
+    _class: JClass<'l>,
     repository: jlong,
     branch: JString<'l>,
 ) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, runtime| {
-            let repository = handles::repository(repository)?;
-            let branch = text(env, &branch)?;
-            let runtime = Arc::clone(runtime);
-            Ok(async move {
-                let session = repository.writable_session(&branch).await?;
-                let session = Arc::new(tokio::sync::RwLock::new(session));
-                Ok(Reply::Long(handles::insert(Object::Session(session), runtime)?))
-            })
-        })
-    })
-}
-
-fn version(kind: jint, value: String) -> NativeResult<VersionInfo> {
-    match kind {
-        VERSION_BRANCH => Ok(VersionInfo::BranchTipRef(value)),
-        VERSION_TAG => Ok(VersionInfo::TagRef(value)),
-        VERSION_SNAPSHOT => Ok(VersionInfo::SnapshotId(snapshot_id(&value)?)),
-        other => {
-            Err(NativeError::invalid_argument(format!("unknown version kind {other}")))
-        }
-    }
-}
-
-/// Reply with four strings per snapshot, newest first: id, parent id (empty for the
-/// first snapshot), commit time in RFC 3339 UTC, and message. `Repository.ancestry`
-/// reads them in that order.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryAncestry<'l>(
-    env: EnvUnowned<'l>,
-    class: JClass<'l>,
-    callback: JObject<'l>,
-    repository: jlong,
-    kind: jint,
-    value: JString<'l>,
-) -> jlong {
-    call::entry(env, |env| {
-        call::start(env, &class, &callback, |env, _| {
-            let repository = handles::repository(repository)?;
-            let version = version(kind, text(env, &value)?)?;
-            Ok(async move {
-                let snapshots: Vec<_> =
-                    repository.ancestry(&version).await?.try_collect().await?;
-                let mut fields = Vec::with_capacity(snapshots.len() * 4);
-                for snapshot in snapshots {
-                    fields.push(snapshot.id.to_string());
-                    fields.push(
-                        snapshot.parent_id.map(|id| id.to_string()).unwrap_or_default(),
-                    );
-                    fields.push(
-                        snapshot.flushed_at.to_rfc3339_opts(SecondsFormat::Micros, true),
-                    );
-                    fields.push(snapshot.message);
-                }
-                Ok(Reply::Texts(fields))
-            })
-        })
+    call::run(env, |env| {
+        let repository = handles::repository(repository)?;
+        let branch = text(env, &branch)?;
+        let session = block_on(repository.writable_session(&branch))??;
+        handles::insert(Object::Session(Arc::new(tokio::sync::RwLock::new(session))))
     })
 }

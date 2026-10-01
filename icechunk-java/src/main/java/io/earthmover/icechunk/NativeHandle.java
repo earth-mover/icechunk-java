@@ -10,6 +10,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * because the native side holds its own reference for the duration of each call; later calls throw
  * {@link IllegalStateException}. An unreachable object that was never closed is released by a {@link Cleaner}, but
  * code should not rely on that: native objects can hold network connections and caches.
+ *
+ * <p>Subclasses pass {@link #handle()} to a native method and then call {@code Reference.reachabilityFence(this)} in a
+ * {@code finally} block. Without the fence, the JIT may treat the object as unreachable as soon as the handle has been
+ * read, and the cleaner could close the handle while the native call is still looking it up.
  */
 abstract class NativeHandle implements AutoCloseable {
     private static final Cleaner CLEANER = Cleaner.create();

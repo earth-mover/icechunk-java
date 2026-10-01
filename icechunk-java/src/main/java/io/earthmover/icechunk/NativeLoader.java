@@ -3,6 +3,8 @@ package io.earthmover.icechunk;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.file.DirectoryIteratorException;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -28,10 +30,12 @@ import java.util.Locale;
  * {@code noexec}.
  *
  * <p>Each extraction uses a new file name, so the library can be loaded by more than one class loader in the same
- * JVM, which the JVM refuses for a single file.
+ * JVM, which the JVM refuses for a single file. The copy is deleted once loaded, except on Windows, where a loaded
+ * library cannot be deleted; there, the next extraction removes copies that are no longer in use.
  */
 final class NativeLoader {
     static final String LIBRARY = "icechunk_jni";
+    private static final String PREFIX = "icechunk_jni-";
 
     private NativeLoader() {}
 
@@ -52,7 +56,11 @@ final class NativeLoader {
             String resource = bundle + "/" + platform() + "/" + System.mapLibraryName(LIBRARY);
             try (InputStream in = NativeLoader.class.getResourceAsStream(resource)) {
                 if (in != null) {
-                    System.load(extract(in).toString());
+                    Path file = extract(in);
+                    System.load(file.toString());
+                    // Unix keeps a loaded library mapped after its file is deleted. Windows
+                    // refuses, so there the copy is left and removed by a later start.
+                    Files.deleteIfExists(file);
                     return;
                 }
             } catch (IOException e) {
@@ -63,11 +71,33 @@ final class NativeLoader {
     }
 
     private static Path extract(InputStream in) throws IOException {
-        String tmp = System.getProperty("icechunk.native.tmpdir", System.getProperty("java.io.tmpdir"));
-        Path file = Files.createTempFile(Paths.get(tmp), "icechunk_jni-", "-" + System.mapLibraryName(LIBRARY));
-        file.toFile().deleteOnExit();
+        Path dir = Paths.get(System.getProperty("icechunk.native.tmpdir", System.getProperty("java.io.tmpdir")));
+        String suffix = "-" + System.mapLibraryName(LIBRARY);
+        if (platform().startsWith("windows")) {
+            removeStaleCopies(dir, suffix);
+        }
+        Path file = Files.createTempFile(dir, PREFIX, suffix);
         Files.copy(in, file, StandardCopyOption.REPLACE_EXISTING);
         return file;
+    }
+
+    /**
+     * Delete copies left by earlier runs on Windows. Windows refuses to delete a file that is open, so copies another
+     * JVM has loaded, or is still extracting, are skipped. On other systems copies are deleted as soon as they load,
+     * and a sweep could delete a file another JVM is in the middle of extracting.
+     */
+    private static void removeStaleCopies(Path dir, String suffix) {
+        try (DirectoryStream<Path> copies = Files.newDirectoryStream(dir, PREFIX + "*" + suffix)) {
+            for (Path copy : copies) {
+                try {
+                    Files.deleteIfExists(copy);
+                } catch (IOException inUse) {
+                    // Loaded by a running JVM; a later start will remove it.
+                }
+            }
+        } catch (IOException | DirectoryIteratorException e) {
+            // Cleanup is best effort; extraction below reports real problems.
+        }
     }
 
     /** The bundle directory name for this JVM, for example {@code osx-aarch_64} or {@code linux-x86_64}. */

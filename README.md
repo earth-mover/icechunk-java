@@ -126,6 +126,13 @@ try (Session session = repo.writableSession("main")) {
 }
 ```
 
+### Large values without copying
+
+`Store.get` copies each value into a new `byte[]`. For large chunks, `Store.getBuffer` returns a read-only direct
+`ByteBuffer` over icechunk's own memory instead, released when the buffer is garbage collected. `IcechunkZarrStore`
+uses it. For writes, `Store.set(String, ByteBuffer)` reads a direct buffer of more than 64 KiB in place; do not modify
+it afterwards. [DESIGN.md](DESIGN.md#bytes) has the details.
+
 ### History, branches and tags
 
 ```java
@@ -144,8 +151,8 @@ repo.createTag("v1.0", tip);
 Closing a session closes its store. A repository keeps working after its storage is closed, and a session keeps
 working after its repository is closed.
 
-All four classes are safe to use from several threads. Calls block the calling thread until icechunk finishes. A
-blocked call responds to `Thread.interrupt()` by cancelling the operation and throwing `IcechunkException`.
+All four classes are safe to use from several threads. Each call runs on the calling thread and returns when
+icechunk finishes; calls in progress do not respond to `Thread.interrupt()`.
 
 Errors from icechunk are thrown as `IcechunkException`, and a lost commit race as its subclass `ConflictException`.
 Using a closed object throws `IllegalStateException`.
