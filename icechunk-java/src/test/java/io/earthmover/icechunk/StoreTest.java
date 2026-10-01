@@ -1,0 +1,134 @@
+package io.earthmover.icechunk;
+
+import static io.earthmover.icechunk.RepositoryTest.GROUP;
+import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Optional;
+import java.util.OptionalLong;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+class StoreTest {
+    static final byte[] ARRAY = ("{\"zarr_format\":3,\"node_type\":\"array\",\"shape\":[4],\"data_type\":\"uint8\","
+                    + "\"chunk_grid\":{\"name\":\"regular\",\"configuration\":{\"chunk_shape\":[4]}},"
+                    + "\"chunk_key_encoding\":{\"name\":\"default\",\"configuration\":{\"separator\":\"/\"}},"
+                    + "\"fill_value\":0,\"codecs\":[{\"name\":\"bytes\"}],\"attributes\":{}}")
+            .getBytes(UTF_8);
+    static final byte[] CHUNK = {10, 11, 12, 13};
+
+    private Storage storage;
+    private Repository repo;
+    private Session session;
+    private Store store;
+
+    @BeforeEach
+    void open() {
+        storage = Storage.inMemory();
+        repo = Repository.create(storage);
+        session = repo.writableSession("main");
+        store = session.store();
+        store.set("zarr.json", GROUP);
+        store.set("data/zarr.json", ARRAY);
+        store.set("data/c/0", CHUNK);
+    }
+
+    @AfterEach
+    void close() {
+        session.close();
+        repo.close();
+        storage.close();
+    }
+
+    @Test
+    void sameStoreEachCall() {
+        assertTrue(store == session.store());
+    }
+
+    @Test
+    void getWholeAndRanges() {
+        assertArrayEquals(CHUNK, store.get("data/c/0").orElseThrow());
+        assertArrayEquals(
+                new byte[] {11, 12}, store.get("data/c/0", ByteRange.of(1, 3)).orElseThrow());
+        assertArrayEquals(
+                new byte[] {12, 13}, store.get("data/c/0", ByteRange.from(2)).orElseThrow());
+        assertArrayEquals(
+                new byte[] {13}, store.get("data/c/0", ByteRange.suffix(1)).orElseThrow());
+    }
+
+    @Test
+    void missingKeysAreEmpty() {
+        assertEquals(Optional.empty(), store.get("data/c/1"));
+        assertEquals(Optional.empty(), store.get("nope/zarr.json"));
+        assertFalse(store.exists("data/c/1"));
+        assertEquals(OptionalLong.empty(), store.size("data/c/1"));
+    }
+
+    @Test
+    void sizes() {
+        assertEquals(OptionalLong.of(4), store.size("data/c/0"));
+        assertEquals(OptionalLong.of(ARRAY.length), store.size("data/zarr.json"));
+    }
+
+    @Test
+    void getMany() {
+        List<Optional<byte[]>> values = store.getMany(
+                Arrays.asList("data/c/0", "data/c/9", "zarr.json"),
+                Arrays.asList(ByteRange.suffix(2), ByteRange.all(), ByteRange.all()));
+        assertEquals(3, values.size());
+        assertArrayEquals(new byte[] {12, 13}, values.get(0).orElseThrow());
+        assertEquals(Optional.empty(), values.get(1));
+        assertArrayEquals(GROUP, values.get(2).orElseThrow());
+    }
+
+    @Test
+    void listing() {
+        assertEquals(List.of("data/c/0", "data/zarr.json", "zarr.json"), sorted(store.list()));
+        assertEquals(List.of("data/c/0", "data/zarr.json"), sorted(store.listPrefix("data")));
+        assertEquals(List.of("data", "zarr.json"), sorted(store.listDir("")));
+        assertEquals(List.of("c", "zarr.json"), sorted(store.listDir("data")));
+        assertFalse(store.isEmpty("data"));
+        assertTrue(store.isEmpty("nothing"));
+    }
+
+    @Test
+    void deleteAndDeleteDir() {
+        store.delete("data/c/0");
+        assertFalse(store.exists("data/c/0"));
+        store.deleteDir("data");
+        assertFalse(store.exists("data/zarr.json"));
+        assertTrue(store.exists("zarr.json"));
+    }
+
+    @Test
+    void setIfNotExistsKeepsTheOldValue() {
+        store.setIfNotExists("data/c/0", new byte[] {1, 1, 1, 1});
+        assertArrayEquals(CHUNK, store.get("data/c/0").orElseThrow());
+    }
+
+    @Test
+    void discardChanges() {
+        session.discardChanges();
+        assertFalse(session.hasUncommittedChanges());
+        assertFalse(store.exists("zarr.json"));
+    }
+
+    @Test
+    void invalidRangesAreRejectedInJava() {
+        assertThrows(IllegalArgumentException.class, () -> ByteRange.of(3, 1));
+        assertThrows(IllegalArgumentException.class, () -> ByteRange.suffix(-1));
+    }
+
+    private static List<String> sorted(List<String> keys) {
+        String[] array = keys.toArray(new String[0]);
+        Arrays.sort(array);
+        return List.of(array);
+    }
+}

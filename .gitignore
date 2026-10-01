@@ -1,0 +1,10 @@
+/native/target/
+target/
+.pixi/
+*.class
+.idea/
+*.iml
+.vscode/
+.DS_Store
+/tests/compat/.venv/
+/tests/compat/__pycache__/

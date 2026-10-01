@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>io.earthmover.icechunk</groupId>
+		<artifactId>icechunk-java-parent</artifactId>
+		<version>0.1.0-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>icechunk-zarr-java</artifactId>
+	<name>icechunk-zarr-java</name>
+	<description>A zarr-java Store backed by an icechunk session.</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>io.earthmover.icechunk</groupId>
+			<artifactId>icechunk-java</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<!-- Provided: applications choose their zarr-java version, and its own dependency
+		     tree (netcdf-java, the AWS SDK, okhttp) should not arrive through this jar. -->
+		<dependency>
+			<groupId>dev.zarr</groupId>
+			<artifactId>zarr-java</artifactId>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifestEntries>
+							<Automatic-Module-Name>io.earthmover.icechunk.zarr</Automatic-Module-Name>
+						</manifestEntries>
+					</archive>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>

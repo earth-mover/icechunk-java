@@ -1,0 +1,150 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<groupId>io.earthmover.icechunk</groupId>
+	<artifactId>icechunk-java-parent</artifactId>
+	<version>0.1.0-SNAPSHOT</version>
+	<packaging>pom</packaging>
+
+	<name>icechunk-java (experimental)</name>
+	<description>Experimental, unofficial Java bindings for icechunk.</description>
+	<url>https://github.com/earth-mover/icechunk</url>
+
+	<licenses>
+		<license>
+			<name>Apache-2.0</name>
+			<url>https://www.apache.org/licenses/LICENSE-2.0</url>
+		</license>
+	</licenses>
+
+	<modules>
+		<module>icechunk-java</module>
+		<module>icechunk-zarr-java</module>
+	</modules>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<!-- The bytecode level. Java 11 matches the pom-scijava default, so libraries built
+		     on it (N5, BigDataViewer) can depend on these jars. -->
+		<maven.compiler.release>11</maven.compiler.release>
+		<!-- Directory holding the native library for tests; overridden in CI. -->
+		<icechunk.native.dir>${maven.multiModuleProjectDirectory}/native/target/debug</icechunk.native.dir>
+
+		<junit.version>5.14.4</junit.version>
+		<zarr-java.version>0.3.1</zarr-java.version>
+		<errorprone.version>2.50.0</errorprone.version>
+		<palantir-java-format.version>2.101.0</palantir-java-format.version>
+	</properties>
+
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>org.junit</groupId>
+				<artifactId>junit-bom</artifactId>
+				<version>${junit.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+			<dependency>
+				<groupId>dev.zarr</groupId>
+				<artifactId>zarr-java</artifactId>
+				<version>${zarr-java.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+
+	<build>
+		<pluginManagement>
+			<plugins>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-compiler-plugin</artifactId>
+					<version>3.16.0</version>
+					<configuration>
+						<compilerArgs>
+							<arg>-Xlint:all</arg>
+							<arg>-Werror</arg>
+							<arg>-XDcompilePolicy=simple</arg>
+							<arg>-XDaddTypeAnnotationsToSymbol=true</arg>
+							<arg>--should-stop=ifError=FLOW</arg>
+							<arg>-Xplugin:ErrorProne -XepDisableWarningsInGeneratedCode</arg>
+						</compilerArgs>
+						<annotationProcessorPaths>
+							<path>
+								<groupId>com.google.errorprone</groupId>
+								<artifactId>error_prone_core</artifactId>
+								<version>${errorprone.version}</version>
+							</path>
+						</annotationProcessorPaths>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-surefire-plugin</artifactId>
+					<version>3.6.0</version>
+					<configuration>
+						<systemPropertyVariables>
+							<icechunk.native.dir>${icechunk.native.dir}</icechunk.native.dir>
+						</systemPropertyVariables>
+					</configuration>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-jar-plugin</artifactId>
+					<version>3.5.1</version>
+				</plugin>
+			</plugins>
+		</pluginManagement>
+
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>3.6.3</version>
+				<executions>
+					<execution>
+						<id>enforce-build-environment</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<!-- Error Prone needs a JDK 21 compiler; the output still targets 11. -->
+								<requireJavaVersion>
+									<version>[21,)</version>
+								</requireJavaVersion>
+								<requireMavenVersion>
+									<version>[3.9,)</version>
+								</requireMavenVersion>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+			<plugin>
+				<groupId>com.diffplug.spotless</groupId>
+				<artifactId>spotless-maven-plugin</artifactId>
+				<version>3.10.3</version>
+				<configuration>
+					<java>
+						<palantirJavaFormat>
+							<version>${palantir-java-format.version}</version>
+						</palantirJavaFormat>
+						<removeUnusedImports/>
+						<importOrder/>
+					</java>
+				</configuration>
+				<executions>
+					<execution>
+						<goals>
+							<goal>check</goal>
+						</goals>
+					</execution>
+				</executions>
+			</plugin>
+		</plugins>
+	</build>
+</project>

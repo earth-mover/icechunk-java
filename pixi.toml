@@ -1,0 +1,16 @@
+[workspace]
+name = "icechunk-java"
+channels = ["conda-forge"]
+platforms = ["osx-arm64", "osx-64", "linux-64", "linux-aarch64", "win-64"]
+
+[dependencies]
+openjdk = "21.*"
+maven = "3.9.*"
+
+[tasks]
+build-native = { cmd = "cargo build --manifest-path native/Cargo.toml" }
+lint-native = { cmd = "cargo fmt --manifest-path native/Cargo.toml --check && cargo clippy --manifest-path native/Cargo.toml --all-targets -- -D warnings" }
+test-native = { cmd = "cargo test --manifest-path native/Cargo.toml" }
+format = { cmd = "cargo fmt --manifest-path native/Cargo.toml && mvn -q spotless:apply" }
+test = { cmd = "mvn -B verify", depends-on = ["build-native"] }
+check = { depends-on = ["lint-native", "test-native", "test"] }
