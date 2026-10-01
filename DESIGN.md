@@ -36,7 +36,7 @@ Java with jni-rs and a tokio runtime. OpenDAL's binding is the model for the run
 
 ### What JNI costs
 
-Each native method is written by hand, in Rust and in Java. The surface is 37 methods today. Two choices keep
+Each native method is written by hand, in Rust and in Java. The surface is 36 methods today. Two choices keep
 that cost down:
 
 - Configuration crosses the boundary as JSON, not as field-by-field JNI calls (see
