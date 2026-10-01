@@ -12,5 +12,7 @@ build-native = { cmd = "cargo build --manifest-path native/Cargo.toml" }
 lint-native = { cmd = "cargo fmt --manifest-path native/Cargo.toml --check && cargo clippy --manifest-path native/Cargo.toml --all-targets -- -D warnings" }
 test-native = { cmd = "cargo test --manifest-path native/Cargo.toml" }
 format = { cmd = "cargo fmt --manifest-path native/Cargo.toml && mvn -q spotless:apply" }
-test = { cmd = "mvn -B verify", depends-on = ["build-native"] }
+fetch-fixtures = { cmd = "scripts/fetch-icechunk-fixtures.sh" }
+test = { cmd = "mvn -B verify", depends-on = ["build-native", "fetch-fixtures"] }
+test-strict = { cmd = "mvn -B verify -Dicechunk.tests.strict=true", depends-on = ["build-native", "fetch-fixtures"] }
 check = { depends-on = ["lint-native", "test-native", "test"] }

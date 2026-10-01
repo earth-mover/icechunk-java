@@ -32,6 +32,10 @@
 		<maven.compiler.release>11</maven.compiler.release>
 		<!-- Directory holding the native library for tests; overridden in CI. -->
 		<icechunk.native.dir>${maven.multiModuleProjectDirectory}/native/target/debug</icechunk.native.dir>
+		<!-- icechunk's compatibility repositories, fetched by scripts/fetch-icechunk-fixtures.sh. -->
+		<icechunk.fixtures.dir>${maven.multiModuleProjectDirectory}/target/icechunk-fixtures/icechunk-python/tests/data</icechunk.fixtures.dir>
+		<!-- When true, tests that need fixtures or uv fail instead of skipping. CI sets it. -->
+		<icechunk.tests.strict>false</icechunk.tests.strict>
 
 		<junit.version>5.14.4</junit.version>
 		<zarr-java.version>0.3.1</zarr-java.version>
@@ -88,6 +92,8 @@
 					<configuration>
 						<systemPropertyVariables>
 							<icechunk.native.dir>${icechunk.native.dir}</icechunk.native.dir>
+							<icechunk.fixtures.dir>${icechunk.fixtures.dir}</icechunk.fixtures.dir>
+							<icechunk.tests.strict>${icechunk.tests.strict}</icechunk.tests.strict>
 						</systemPropertyVariables>
 					</configuration>
 				</plugin>
