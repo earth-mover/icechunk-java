@@ -23,6 +23,7 @@
 	<modules>
 		<module>icechunk-java</module>
 		<module>icechunk-zarr-java</module>
+		<module>examples</module>
 	</modules>
 
 	<properties>

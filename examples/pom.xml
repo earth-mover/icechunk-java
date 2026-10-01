@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>io.earthmover.icechunk</groupId>
+		<artifactId>icechunk-java-parent</artifactId>
+		<version>0.1.0-SNAPSHOT</version>
+	</parent>
+
+	<artifactId>icechunk-java-examples</artifactId>
+	<name>icechunk-java examples</name>
+	<description>Small programs showing the API. Not published.</description>
+
+	<properties>
+		<maven.install.skip>true</maven.install.skip>
+		<maven.deploy.skip>true</maven.deploy.skip>
+		<!-- Set on the command line: -Dexample=Quickstart -->
+		<example>Quickstart</example>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>io.earthmover.icechunk</groupId>
+			<artifactId>icechunk-java</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.earthmover.icechunk</groupId>
+			<artifactId>icechunk-zarr-java</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>dev.zarr</groupId>
+			<artifactId>zarr-java</artifactId>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>exec-maven-plugin</artifactId>
+				<version>3.6.4</version>
+				<configuration>
+					<mainClass>io.earthmover.icechunk.examples.${example}</mainClass>
+					<systemProperties>
+						<systemProperty>
+							<key>icechunk.native.dir</key>
+							<value>${icechunk.native.dir}</value>
+						</systemProperty>
+					</systemProperties>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>

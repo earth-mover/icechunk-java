@@ -15,4 +15,5 @@ format = { cmd = "cargo fmt --manifest-path native/Cargo.toml && mvn -q spotless
 fetch-fixtures = { cmd = "scripts/fetch-icechunk-fixtures.sh" }
 test = { cmd = "mvn -B verify", depends-on = ["build-native", "fetch-fixtures"] }
 test-strict = { cmd = "mvn -B verify -Dicechunk.tests.strict=true", depends-on = ["build-native", "fetch-fixtures"] }
+example = { cmd = "mvn -B -q install -DskipTests -pl examples -am && mvn -B -q -pl examples exec:java -Dexample={{ name }}", args = [{ arg = "name", default = "Quickstart" }], depends-on = ["build-native"] }
 check = { depends-on = ["lint-native", "test-native", "test"] }
