@@ -22,6 +22,11 @@ public final class NativeExtensions {
         Native.close(handle);
     }
 
+    /** The JSON form of {@code options}, which the native side parses with {@code icechunk_jni::ext::repository_options}. */
+    public static String toJson(RepositoryOptions options) {
+        return options.toJson();
+    }
+
     /** Take ownership of a repository handle the native extension registered. */
     public static Repository repository(long handle) {
         return new Repository(handle);
