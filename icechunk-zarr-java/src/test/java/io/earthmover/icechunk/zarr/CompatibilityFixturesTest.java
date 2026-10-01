@@ -9,20 +9,23 @@ import dev.zarr.zarrjava.v3.Array;
 import io.earthmover.icechunk.IcechunkException;
 import io.earthmover.icechunk.Repository;
 import io.earthmover.icechunk.Session;
+import io.earthmover.icechunk.SnapshotInfo;
 import io.earthmover.icechunk.Storage;
 import io.earthmover.icechunk.Store;
 import io.earthmover.icechunk.Version;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Reads the repositories icechunk keeps for its own format-compatibility test, {@code test_can_read_old.py}, and checks
- * the same facts that test checks, except those that need ancestry, diffs, or the virtual chunk it serves from MinIO.
+ * the same facts that test checks, except those that need diffs or the virtual chunk it serves from MinIO.
  */
 class CompatibilityFixturesTest {
     @TempDir
@@ -36,6 +39,16 @@ class CompatibilityFixturesTest {
             assertEquals(Set.of("main", "my-branch"), repo.listBranches());
             assertEquals(Set.of("it also works!", "it works!"), repo.listTags());
             assertThrows(IcechunkException.class, () -> repo.readonlySession(Version.tag("deleted")));
+
+            List<String> mainHistory =
+                    List.of("set virtual chunk", "fill data", "empty structure", "Repository initialized");
+            List<String> branchHistory = new ArrayList<>(List.of("some more structure", "delete a chunk"));
+            branchHistory.addAll(mainHistory);
+            assertEquals(mainHistory, messages(repo.ancestry(Version.branch("main"))));
+            assertEquals(branchHistory, messages(repo.ancestry(Version.branch("my-branch"))));
+            assertEquals(branchHistory, messages(repo.ancestry(Version.tag("it also works!"))));
+            assertEquals(
+                    branchHistory.subList(1, branchHistory.size()), messages(repo.ancestry(Version.tag("it works!"))));
 
             try (Session session = repo.readonlySession(Version.branch("my-branch"))) {
                 Store store = session.store();
@@ -65,6 +78,10 @@ class CompatibilityFixturesTest {
                 assertArrayEquals(expected, lowerHalf);
             }
         }
+    }
+
+    private static List<String> messages(List<SnapshotInfo> history) {
+        return history.stream().map(SnapshotInfo::message).collect(Collectors.toList());
     }
 
     private static List<String> sorted(List<String> keys) {

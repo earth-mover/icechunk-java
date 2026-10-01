@@ -5,6 +5,8 @@
 
 use std::sync::Arc;
 
+use chrono::SecondsFormat;
+use futures::TryStreamExt as _;
 use icechunk::Repository;
 use icechunk::format::SnapshotId;
 use icechunk::format::format_constants::SpecVersionBin;
@@ -362,17 +364,7 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryReadonlySess
     call::entry(env, |env| {
         call::start(env, &class, &callback, |env, runtime| {
             let repository = handles::repository(repository)?;
-            let value = text(env, &value)?;
-            let version = match kind {
-                VERSION_BRANCH => VersionInfo::BranchTipRef(value),
-                VERSION_TAG => VersionInfo::TagRef(value),
-                VERSION_SNAPSHOT => VersionInfo::SnapshotId(snapshot_id(&value)?),
-                other => {
-                    return Err(NativeError::invalid_argument(format!(
-                        "unknown version kind {other}"
-                    )));
-                }
-            };
+            let version = version(kind, text(env, &value)?)?;
             let runtime = Arc::clone(runtime);
             Ok(async move {
                 let session = repository.readonly_session(&version).await?;
@@ -402,6 +394,53 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryWritableSess
                 let session = repository.writable_session(&branch).await?;
                 let session = Arc::new(tokio::sync::RwLock::new(session));
                 Ok(Reply::Long(handles::insert(Object::Session(session), runtime)?))
+            })
+        })
+    })
+}
+
+fn version(kind: jint, value: String) -> NativeResult<VersionInfo> {
+    match kind {
+        VERSION_BRANCH => Ok(VersionInfo::BranchTipRef(value)),
+        VERSION_TAG => Ok(VersionInfo::TagRef(value)),
+        VERSION_SNAPSHOT => Ok(VersionInfo::SnapshotId(snapshot_id(&value)?)),
+        other => {
+            Err(NativeError::invalid_argument(format!("unknown version kind {other}")))
+        }
+    }
+}
+
+/// Reply with four strings per snapshot, newest first: id, parent id (empty for the
+/// first snapshot), commit time in RFC 3339 UTC, and message. `Repository.ancestry`
+/// reads them in that order.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryAncestry<'l>(
+    env: EnvUnowned<'l>,
+    class: JClass<'l>,
+    callback: JObject<'l>,
+    repository: jlong,
+    kind: jint,
+    value: JString<'l>,
+) -> jlong {
+    call::entry(env, |env| {
+        call::start(env, &class, &callback, |env, _| {
+            let repository = handles::repository(repository)?;
+            let version = version(kind, text(env, &value)?)?;
+            Ok(async move {
+                let snapshots: Vec<_> =
+                    repository.ancestry(&version).await?.try_collect().await?;
+                let mut fields = Vec::with_capacity(snapshots.len() * 4);
+                for snapshot in snapshots {
+                    fields.push(snapshot.id.to_string());
+                    fields.push(
+                        snapshot.parent_id.map(|id| id.to_string()).unwrap_or_default(),
+                    );
+                    fields.push(
+                        snapshot.flushed_at.to_rfc3339_opts(SecondsFormat::Micros, true),
+                    );
+                    fields.push(snapshot.message);
+                }
+                Ok(Reply::Texts(fields))
             })
         })
     })

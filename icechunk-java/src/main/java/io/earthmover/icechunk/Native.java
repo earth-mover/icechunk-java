@@ -61,6 +61,8 @@ final class Native {
 
     static native long repositoryDeleteTag(NativeCall call, long repository, String name);
 
+    static native long repositoryAncestry(NativeCall call, long repository, int kind, String value);
+
     static native long repositoryReadonlySession(NativeCall call, long repository, int kind, String value);
 
     static native long repositoryWritableSession(NativeCall call, long repository, String branch);

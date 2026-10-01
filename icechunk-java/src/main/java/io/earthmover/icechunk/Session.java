@@ -44,9 +44,7 @@ public final class Session extends NativeHandle {
         return NativeCall.runBoolean(call -> Native.sessionHasUncommittedChanges(call, h));
     }
 
-    /**
-     * The Zarr store for this session. The same store is returned on every call, and it stays valid after a commit.
-     */
+    /** The Zarr store for this session. The same store is returned on every call. */
     public Store store() {
         synchronized (storeLock) {
             if (store == null || store.isClosed()) {
@@ -59,6 +57,8 @@ public final class Session extends NativeHandle {
 
     /**
      * Commit the uncommitted changes as a new snapshot on this session's branch.
+     *
+     * <p>After a successful commit the session is read-only; open a new writable session for further changes.
      *
      * @return the new snapshot
      * @throws ConflictException if another writer committed to the branch since this session started

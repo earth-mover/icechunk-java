@@ -1,6 +1,10 @@
 package io.earthmover.icechunk;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -132,6 +136,24 @@ public final class Repository extends NativeHandle {
         NativeCall.runVoid(call -> Native.repositoryDeleteTag(call, h, tag));
     }
 
+    /** The history leading to {@code version}, newest first, ending with the repository's first snapshot. */
+    public List<SnapshotInfo> ancestry(Version version) {
+        long h = handle();
+        int kind = version.kind();
+        String value = version.value();
+        List<String> fields = NativeCall.runStrings(call -> Native.repositoryAncestry(call, h, kind, value));
+        List<SnapshotInfo> history = new ArrayList<>(fields.size() / 4);
+        for (int i = 0; i + 3 < fields.size(); i += 4) {
+            String parent = fields.get(i + 1);
+            history.add(new SnapshotInfo(
+                    SnapshotId.of(fields.get(i)),
+                    parent.isEmpty() ? null : SnapshotId.of(parent),
+                    Instant.parse(fields.get(i + 2)),
+                    fields.get(i + 3)));
+        }
+        return Collections.unmodifiableList(history);
+    }
+
     /** Open a session that reads {@code version} and cannot write. */
     public Session readonlySession(Version version) {
         long h = handle();
@@ -149,6 +171,6 @@ public final class Repository extends NativeHandle {
     private static Set<String> sortedSet(Iterable<String> names) {
         Set<String> set = new LinkedHashSet<>();
         names.forEach(set::add);
-        return java.util.Collections.unmodifiableSet(set);
+        return Collections.unmodifiableSet(set);
     }
 }

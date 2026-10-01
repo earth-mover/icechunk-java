@@ -8,8 +8,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -58,6 +60,18 @@ class RepositoryTest {
                 session.store().set("a/zarr.json", GROUP);
                 v2 = session.commit("v2");
             }
+
+            List<SnapshotInfo> history = repo.ancestry(Version.branch("main"));
+            assertEquals(
+                    List.of("v2", "v1", "Repository initialized"),
+                    history.stream().map(SnapshotInfo::message).collect(Collectors.toList()));
+            assertEquals(v2, history.get(0).id());
+            assertEquals(Optional.of(v1), history.get(0).parentId());
+            assertEquals(Optional.empty(), history.get(2).parentId());
+            assertTrue(history.get(0)
+                    .writtenAt()
+                    .isAfter(history.get(1).writtenAt().minusSeconds(1)));
+            assertEquals(2, repo.ancestry(Version.tag("v1")).size());
 
             assertEquals(Set.of("dev", "main"), repo.listBranches());
             assertEquals(Set.of("v1"), repo.listTags());
