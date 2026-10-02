@@ -14,7 +14,9 @@
 //! lookup pins the current thread with `crossbeam_epoch`, which is thread-local, and
 //! borrows the object for as long as the returned [`Ref`] lives. Closing a handle unlinks
 //! the object and defers freeing it until every thread that might still hold a `Ref` to
-//! it has unpinned.
+//! it has unpinned. A `Ref` held across a long call therefore delays freeing objects
+//! closed during that call; extensions doing long network I/O can copy the `Arc` out of
+//! the `Ref` and drop it first.
 
 use std::any::Any;
 use std::ops::Deref;
@@ -170,25 +172,35 @@ fn get<T>(
 }
 
 /// Close a handle. Closing an already closed handle is a no-op.
+///
+/// The entry is unlinked under the allocator lock, but handed to the epoch collector
+/// only after the lock is released: collecting can run the destructors of earlier closed
+/// objects, and an extension object's destructor may itself close or open handles.
 pub(crate) fn remove(handle: i64) {
     let (index, generation) = decode(handle);
     let Some(slot) = slot(index) else { return };
-    let mut allocator = ALLOCATOR.lock().unwrap_or_else(PoisonError::into_inner);
     let guard = epoch::pin();
-    let current = slot.load(Ordering::Acquire, &guard);
-    // SAFETY: the entry stays allocated while `guard` is pinned.
-    match unsafe { current.as_ref() } {
-        Some(entry) if entry.generation == generation => {}
-        _ => return,
-    }
-    slot.store(epoch::Shared::null(), Ordering::Release);
+    let unlinked = {
+        let mut allocator = ALLOCATOR.lock().unwrap_or_else(PoisonError::into_inner);
+        let current = slot.load(Ordering::Acquire, &guard);
+        // SAFETY: the entry stays allocated while `guard` is pinned.
+        match unsafe { current.as_ref() } {
+            Some(entry) if entry.generation == generation => {}
+            _ => return,
+        }
+        slot.store(epoch::Shared::null(), Ordering::Release);
+        if let Some(next) = allocator.generations.get_mut(index as usize) {
+            *next = next.wrapping_add(1).max(1);
+        }
+        allocator.free.push(index);
+        current
+    };
     // SAFETY: the entry is no longer reachable from the table, so only threads pinned
-    // before this point can hold a reference, and `defer_destroy` waits for them.
-    unsafe { guard.defer_destroy(current) };
-    if let Some(next) = allocator.generations.get_mut(index as usize) {
-        *next = next.wrapping_add(1).max(1);
-    }
-    allocator.free.push(index);
+    // before it was unlinked can hold a reference, and `defer_destroy` waits for them.
+    unsafe { guard.defer_destroy(unlinked) };
+    // Hand the entry to the global queue now. Otherwise it waits in this thread's local
+    // batch, which is collected only after many more deferrals from the same thread.
+    guard.flush();
 }
 
 pub(crate) fn storage(handle: i64) -> NativeResult<Ref<StorageRef>> {
@@ -255,6 +267,31 @@ mod tests {
         );
         assert_eq!(*extension::<u64>(second).unwrap(), 2);
         remove(second);
+    }
+
+    #[test]
+    fn closed_objects_are_released() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        struct Flag(Arc<AtomicBool>);
+        impl Drop for Flag {
+            fn drop(&mut self) {
+                self.0.store(true, Ordering::SeqCst);
+            }
+        }
+
+        let dropped = Arc::new(AtomicBool::new(false));
+        let handle =
+            insert(Object::Extension(Arc::new(Flag(Arc::clone(&dropped))))).unwrap();
+        remove(handle);
+        // No thread holds a `Ref`, so the next few collections must run the destructor.
+        for _ in 0..1000 {
+            if dropped.load(Ordering::SeqCst) {
+                return;
+            }
+            epoch::pin().flush();
+        }
+        panic!("closed object was not released");
     }
 
     #[test]

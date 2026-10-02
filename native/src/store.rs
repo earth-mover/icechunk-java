@@ -135,14 +135,11 @@ native! { fn storeSet(
     let key = text(env, &key)?;
     let len =
         usize::try_from(length).map_err(|_| NativeError::invalid_argument("negative length"))?;
-    let mut data = Vec::<u8>::with_capacity(len);
-    // SAFETY: the view covers the vector's allocated but uninitialised capacity, as
-    // `i8`, which has the same size and alignment as `u8`. `get_region` fills all of it
-    // or fails, and the length is only set after it succeeds.
+    let mut data = vec![0u8; len];
+    // SAFETY: `i8` and `u8` have the same size and alignment, and the bytes are
+    // initialised, so the vector can be viewed as `i8`.
     let view = unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<i8>(), len) };
     value.get_region(env, offset, view)?;
-    // SAFETY: `get_region` initialised all `len` bytes.
-    unsafe { data.set_len(len) };
     set(store, &key, Bytes::from(data), only_if_new)
 }}
 

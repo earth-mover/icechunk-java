@@ -6,10 +6,12 @@ use crate::error::{ErrorKind, NativeError, NativeResult};
 
 /// The tokio runtime that drives icechunk's I/O.
 ///
-/// Java threads run each operation themselves with `Handle::block_on`, so the runtime's
-/// own workers only poll I/O and the tasks icechunk spawns internally. They never call
-/// into Java and are never attached to the JVM, so they neither keep the JVM from
-/// exiting nor pin the class loader that loaded this library.
+/// Java threads run each operation themselves, through `call::block_on`, so the
+/// runtime's own workers only poll I/O and run the tasks icechunk spawns internally. They
+/// do not call into Java, so they are not attached to the JVM and do not pin the class
+/// loader that loaded this library. The one exception is brief: releasing a Java buffer
+/// that a write borrowed (see `buffers`) attaches the releasing thread for the duration
+/// of the release.
 static HANDLE: OnceLock<tokio::runtime::Handle> = OnceLock::new();
 
 /// Owns the runtime so that `JNI_OnUnload` can stop its threads before the library's

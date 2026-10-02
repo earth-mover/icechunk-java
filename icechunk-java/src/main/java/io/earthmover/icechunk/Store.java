@@ -26,8 +26,10 @@ import java.util.OptionalLong;
  *
  * <p>Reads copy the value into a new array and free icechunk's copy before returning, so memory stays bounded when
  * streaming through many values. Writes take a {@link ByteBuffer}. A heap buffer's bytes are copied once into
- * icechunk. A direct buffer of more than 64 KiB is read in place instead; do not modify it afterwards, because
- * icechunk may still hold it, for example until a commit when the storage is in memory.
+ * icechunk. A direct buffer of more than 64 KiB is read in place instead, and icechunk may keep using it after
+ * {@code set} returns: in-memory storage keeps it for as long as the storage lives, and a value below the
+ * repository's inline chunk threshold stays in the session until commit. Treat a direct buffer passed to
+ * {@code set} as handed over, and do not modify it afterwards.
  */
 public final class Store extends NativeHandle {
     Store(long handle) {

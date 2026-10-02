@@ -36,6 +36,7 @@ import java.util.Locale;
 final class NativeLoader {
     static final String LIBRARY = "icechunk_jni";
     private static final String PREFIX = "icechunk_jni-";
+    private static final long STALE_AFTER_MILLIS = 60L * 60 * 1000;
 
     private NativeLoader() {}
 
@@ -57,10 +58,18 @@ final class NativeLoader {
             try (InputStream in = NativeLoader.class.getResourceAsStream(resource)) {
                 if (in != null) {
                     Path file = extract(in);
-                    System.load(file.toString());
-                    // Unix keeps a loaded library mapped after its file is deleted. Windows
-                    // refuses, so there the copy is left and removed by a later start.
-                    Files.deleteIfExists(file);
+                    try {
+                        System.load(file.toString());
+                    } finally {
+                        // Unix keeps a loaded library mapped after its file is deleted.
+                        // Windows refuses, so there the copy is left and removed by a later
+                        // start; the deletion also cleans up after a failed load.
+                        try {
+                            Files.deleteIfExists(file);
+                        } catch (IOException inUse) {
+                            // Loaded on Windows.
+                        }
+                    }
                     return;
                 }
             } catch (IOException e) {
@@ -82,15 +91,18 @@ final class NativeLoader {
     }
 
     /**
-     * Delete copies left by earlier runs on Windows. Windows refuses to delete a file that is open, so copies another
-     * JVM has loaded, or is still extracting, are skipped. On other systems copies are deleted as soon as they load,
-     * and a sweep could delete a file another JVM is in the middle of extracting.
+     * Delete copies left by earlier runs on Windows. Windows refuses to delete a library another JVM has loaded. A
+     * copy another JVM has only just extracted could still be deleted, so only copies older than an hour are touched.
+     * On other systems copies are deleted as soon as they load.
      */
     private static void removeStaleCopies(Path dir, String suffix) {
+        long cutoff = System.currentTimeMillis() - STALE_AFTER_MILLIS;
         try (DirectoryStream<Path> copies = Files.newDirectoryStream(dir, PREFIX + "*" + suffix)) {
             for (Path copy : copies) {
                 try {
-                    Files.deleteIfExists(copy);
+                    if (Files.getLastModifiedTime(copy).toMillis() < cutoff) {
+                        Files.deleteIfExists(copy);
+                    }
                 } catch (IOException inUse) {
                     // Loaded by a running JVM; a later start will remove it.
                 }

@@ -3,6 +3,11 @@
 //! A large direct buffer is wrapped as a `Bytes` that holds a global reference to the
 //! buffer, so icechunk reads Java's memory in place. Heap arrays cannot be borrowed this
 //! way, because the JVM may move them; they are copied (see `storeSet`).
+//!
+//! The last copy of a borrowed `Bytes` is often dropped on a runtime thread, for example
+//! by the HTTP client after an upload. Dropping the global reference there attaches that
+//! thread to the JVM for the duration of the drop, which jni-rs handles; it costs tens of
+//! microseconds against an upload of more than 64 KiB.
 
 use bytes::Bytes;
 use jni::Env;
@@ -11,10 +16,11 @@ use jni::objects::{Global, JByteBuffer};
 use crate::error::{NativeError, NativeResult};
 
 /// Values up to this size are copied rather than borrowed from Java. Borrowing costs a JNI
-/// global reference, which is not worth it for small values, and icechunk keeps values
-/// below a repository's `inline_chunk_threshold_bytes` (512 by default) in the change set
-/// until commit. Borrowing stays safe above that threshold, since the global reference
-/// keeps the buffer alive, but the caller must leave it unmodified until then.
+/// global reference, which is not worth it for small values. A borrowed value can outlive
+/// the call: in-memory storage keeps the bytes it is given, and values below the
+/// repository's `inline_chunk_threshold_bytes` stay in the change set until commit. The
+/// global reference keeps the buffer alive for as long as icechunk holds it; the Java API
+/// documents that the caller must not modify it.
 const BORROW_THRESHOLD: usize = 64 * 1024;
 
 /// Keeps a Java direct buffer alive while icechunk reads it.

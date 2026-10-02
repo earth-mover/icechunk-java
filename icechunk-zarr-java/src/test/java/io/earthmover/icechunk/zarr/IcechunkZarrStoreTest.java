@@ -111,6 +111,11 @@ class IcechunkZarrStoreTest {
             assertEquals(
                     List.of("b/c/0", "b/c/1", "b/zarr.json", "zarr.json"),
                     sorted(store.list(new String[] {"a"}).map(k -> String.join("/", k))));
+            assertEquals(
+                    List.of("0", "1"),
+                    sorted(store.list(new String[] {"a", "b", "c"}).map(k -> String.join("/", k))),
+                    "a prefix below an array lists that array's keys under it");
+            assertEquals(0, store.list(new String[] {"nothing", "here"}).count());
             assertTrue(store.exists(new String[] {"a", "b", "zarr.json"}));
             assertFalse(store.exists(new String[] {"a", "b", "c", "9"}));
             assertNull(store.get(new String[] {"a", "b", "c", "9"}));
@@ -149,6 +154,7 @@ class IcechunkZarrStoreTest {
             assertArrayEquals(new byte[] {2, 3}, bytes(store.get(chunk, 2, 4)));
             assertArrayEquals(new byte[] {6, 7}, bytes(store.get(chunk, -2)));
             assertArrayEquals(new byte[] {4, 5}, bytes(store.get(chunk, -4, 6)));
+            assertArrayEquals(new byte[] {}, bytes(store.get(chunk, -2, 3)), "an end before the start reads nothing");
             assertNull(store.get(new String[] {"x", "c", "1"}, -4, 6));
         }
     }

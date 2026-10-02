@@ -7,6 +7,7 @@ import io.earthmover.icechunk.Session;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -72,7 +73,8 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
             if (!size.isPresent()) {
                 return Optional.empty();
             }
-            range = ByteRange.of(Math.max(0, size.getAsLong() + start), end);
+            long from = Math.max(0, size.getAsLong() + start);
+            range = ByteRange.of(Math.min(from, end), end);
         } else if (end < 0) {
             range = ByteRange.from(start);
         } else {
@@ -127,16 +129,27 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
         return size.isPresent() ? size.getAsLong() : -1;
     }
 
+    /**
+     * Keys with data under {@code prefix}, relative to it. icechunk lists only under a group or array, so for any other
+     * prefix, such as an array's {@code c} directory or a path that does not exist, this lists the nearest enclosing
+     * node and keeps the keys under {@code prefix}.
+     */
     @Override
     public Stream<String[]> list(String[] prefix) {
         String base = key(prefix);
-        if (base.isEmpty()) {
-            return store.list().stream().map(k -> k.split("/"));
+        String node = base;
+        while (!node.isEmpty() && !store.exists(node + "/zarr.json")) {
+            int slash = node.lastIndexOf('/');
+            node = slash < 0 ? "" : node.substring(0, slash);
         }
-        // icechunk only accepts group and array paths as prefixes, so every key it returns
-        // starts with the prefix and a separator.
-        int strip = base.length() + 1;
-        return store.listPrefix(base).stream().map(k -> k.substring(strip).split("/"));
+        List<String> keys = node.isEmpty() ? store.list() : store.listPrefix(node);
+        if (base.isEmpty()) {
+            return keys.stream().map(k -> k.split("/"));
+        }
+        String dir = base + "/";
+        return keys.stream()
+                .filter(k -> k.startsWith(dir))
+                .map(k -> k.substring(dir.length()).split("/"));
     }
 
     @Override

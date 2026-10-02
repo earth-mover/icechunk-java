@@ -90,8 +90,9 @@ Consequences:
   which picks the exception class, so stack traces point at the Java code that made the call.
 - **A panic does not crash the JVM.** jni-rs catches panics at every native method and the binding throws them as
   `RuntimeException`.
-- **Runtime threads are never attached to the JVM.** So they never keep the JVM from exiting, and never hold a
-  reference to the class loader that loaded the binding.
+- **Runtime threads stay detached from the JVM.** So they never keep the JVM from exiting, and never hold a reference
+  to the class loader that loaded the binding. The one exception is brief: when a runtime thread drops the last
+  reference to a Java buffer a write borrowed, it attaches for the duration of that drop.
 
 A call made from a runtime thread is rejected with `IllegalStateException`, because blocking there would hold up the
 threads that drive the call. No Java code runs on runtime threads today; the check is there for when Java callbacks
@@ -114,7 +115,9 @@ use-after-free that crashes the JVM.
 Lookups take no lock and write no shared memory. A lock or a reference count would be updated by every thread on
 every call; with 8 threads, a `std::sync::RwLock` read alone measured about 2.4 µs. Instead a lookup pins the thread
 with `crossbeam_epoch`, which is thread-local, and borrows the object. A closed object is freed once every thread that
-was pinned when it closed has unpinned, so a long call delays freeing closed objects, but never touches freed memory.
+was pinned when it closed has unpinned, so a long call delays freeing objects closed meanwhile, but never touches
+freed memory. Closing hands the object to crossbeam's global queue at once, so it is freed by the next collection
+after those threads unpin, not after many more closes on the same thread.
 
 Objects that were never closed are released by a `java.lang.ref.Cleaner` when they become unreachable. This is a
 backstop; native objects hold connections and caches, so code should close them.
@@ -172,8 +175,8 @@ Lending icechunk's buffer to Java as a direct `ByteBuffer` would avoid that copy
 so Rust cannot keep a pointer to them, and icechunk keeps the bytes it is given as owned memory. A direct buffer larger
 than 64 KiB is read in place instead: the native side wraps the buffer's memory as `Bytes` holding a global reference
 to the buffer. icechunk drops materialized chunks once they are written, but in-memory storage keeps the bytes it was
-given, and values below the repository's inline threshold stay in the session's change set until commit. So the
-caller must not modify a buffer after passing it to `set`. Values of 64 KiB or less are always copied. A 1 MiB write
+given for as long as the storage lives, and values below the repository's inline threshold stay in the session's change set until commit. So the
+caller must treat a direct buffer passed to `set` as handed over and not modify it afterwards. Values of 64 KiB or less are always copied. A 1 MiB write
 to in-memory storage took 7 µs from a direct buffer and about 670 µs from a heap buffer.
 
 `Store.getPartialValues` batches reads into one native call, which icechunk runs concurrently. Use it when reading many
