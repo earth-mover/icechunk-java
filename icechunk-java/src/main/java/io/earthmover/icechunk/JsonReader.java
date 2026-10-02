@@ -60,6 +60,14 @@ final class JsonReader {
         return fields.get(name) == null ? null : string(fields, name);
     }
 
+    static long integer(Map<String, Object> fields, String name) {
+        Object value = fields.get(name);
+        if (!(value instanceof Long)) {
+            throw mistyped(name, "64-bit integer");
+        }
+        return (Long) value;
+    }
+
     static Map<String, Object> object(Map<String, Object> fields, String name) {
         return asObject(fields.get(name), name);
     }

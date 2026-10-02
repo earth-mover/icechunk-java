@@ -8,9 +8,6 @@ import java.util.Objects;
  * in time.
  */
 public final class Version {
-    private static final Instant FIRST_INSTANT = Instant.parse("0000-01-01T00:00:00Z");
-    private static final Instant LAST_INSTANT = Instant.parse("9999-12-31T23:59:59.999999999Z");
-
     private final String json;
     private final String description;
 
@@ -48,12 +45,8 @@ public final class Version {
      */
     public static Version asOf(String branch, Instant at) {
         Objects.requireNonNull(branch, "branch");
-        Objects.requireNonNull(at, "at");
-        if (at.isBefore(FIRST_INSTANT) || at.isAfter(LAST_INSTANT)) {
-            throw new IllegalArgumentException("asOf time out of range: " + at);
-        }
         return new Version(
-                Json.object().put("type", "as_of").put("branch", branch).put("at", at.toString()),
+                Json.object().put("type", "as_of").put("branch", branch).put("at", Json.timestamp("asOf time", at)),
                 "branch " + branch + " as of " + at);
     }
 

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import org.junit.jupiter.api.Test;
@@ -44,6 +45,31 @@ class ResultsContractTest {
         assertEquals(1, diff.movedNodes().size());
         assertEquals("/a", diff.movedNodes().get(0).from());
         assertEquals("/b", diff.movedNodes().get(0).to());
+    }
+
+    @Test
+    void expireResult() {
+        ExpireResult result =
+                ExpireResult.fromJson("{\"released_snapshots\":[\"0CECHNKREP0F1RSTCMT0\",\"1CECHNKREP0F1RSTCMT0\"],"
+                        + "\"edited_snapshots\":[\"2CECHNKREP0F1RSTCMT0\"],\"deleted_branches\":[\"a\",\"b\"],"
+                        + "\"deleted_tags\":[\"t\"]}");
+        assertEquals(
+                Arrays.asList(SnapshotId.of("0CECHNKREP0F1RSTCMT0"), SnapshotId.of("1CECHNKREP0F1RSTCMT0")),
+                new ArrayList<>(result.releasedSnapshots()));
+        assertEquals(Collections.singleton(SnapshotId.of("2CECHNKREP0F1RSTCMT0")), result.editedSnapshots());
+        assertEquals(Arrays.asList("a", "b"), new ArrayList<>(result.deletedBranches()));
+        assertEquals(Collections.singleton("t"), result.deletedTags());
+    }
+
+    @Test
+    void gcSummary() {
+        GcSummary summary = GcSummary.fromJson("{\"bytes_deleted\":1099511627776,\"chunks_deleted\":1,"
+                + "\"manifests_deleted\":2,\"snapshots_deleted\":3,\"transaction_logs_deleted\":5}");
+        assertEquals(1L << 40, summary.bytesDeleted());
+        assertEquals(1, summary.chunksDeleted());
+        assertEquals(2, summary.manifestsDeleted());
+        assertEquals(3, summary.snapshotsDeleted());
+        assertEquals(5, summary.transactionLogsDeleted());
     }
 
     @Test

@@ -297,5 +297,4 @@ waited about 170 µs on the others.
   from runtime threads.
 - **Proxies and trust stores.** The native HTTP client ignores `https.proxyHost` and the JVM's `cacerts`. These could be
   read from system properties and passed to the client.
-- **Missing operations.** Garbage collection, expiration, rebase, node moves, virtual reference writes, and typed
-  configuration builders.
+- **Missing operations.** Rebase, node moves, virtual reference writes, and typed configuration builders.

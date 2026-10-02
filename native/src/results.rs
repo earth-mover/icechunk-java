@@ -1,16 +1,19 @@
 //! The JSON documents native methods return to Java for structured results.
 //!
 //! Like the documents in `spec`, these are a wire contract with the Java classes that
-//! read them (`SnapshotInfo`, `Diff`), not icechunk's own serde formats. Each type
-//! borrows from icechunk's result and is written straight to the output, so a long
-//! history or a large diff is not copied into an intermediate tree.
+//! read them (`SnapshotInfo`, `Diff`, `ExpireResult`, `GcSummary`), not icechunk's own
+//! serde formats. Histories and diffs borrow from icechunk's result and are written
+//! straight to the output, so a long history or a large diff is not copied into an
+//! intermediate tree.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use chrono::SecondsFormat;
 use icechunk::diff::Diff;
 use icechunk::format::snapshot::{SnapshotInfo, SnapshotProperties};
-use icechunk::format::{ChunkIndices, Path};
+use icechunk::format::{ChunkIndices, Path, SnapshotId};
+use icechunk::ops::gc::{ExpireResult, GCSummary};
+use icechunk::refs::Ref;
 use serde::Serialize;
 use serde::ser::Serializer;
 
@@ -104,11 +107,69 @@ fn chunks<S: Serializer>(
     }))
 }
 
+/// icechunk's `ExpireResult`, with its deleted refs split into branches and tags. Every
+/// list is sorted.
+#[derive(Debug, Serialize)]
+pub(crate) struct ExpirationResult<'a> {
+    released_snapshots: Vec<String>,
+    edited_snapshots: Vec<String>,
+    deleted_branches: Vec<&'a str>,
+    deleted_tags: Vec<&'a str>,
+}
+
+impl<'a> From<&'a ExpireResult> for ExpirationResult<'a> {
+    fn from(result: &'a ExpireResult) -> Self {
+        let ids = |ids: &HashSet<SnapshotId>| {
+            let mut ids: Vec<_> = ids.iter().map(ToString::to_string).collect();
+            ids.sort_unstable();
+            ids
+        };
+        let mut deleted_branches = Vec::new();
+        let mut deleted_tags = Vec::new();
+        for deleted in &result.deleted_refs {
+            match deleted {
+                Ref::Branch(name) => deleted_branches.push(name.as_str()),
+                Ref::Tag(name) => deleted_tags.push(name.as_str()),
+            }
+        }
+        deleted_branches.sort_unstable();
+        deleted_tags.sort_unstable();
+        Self {
+            released_snapshots: ids(&result.released_snapshots),
+            edited_snapshots: ids(&result.edited_snapshots),
+            deleted_branches,
+            deleted_tags,
+        }
+    }
+}
+
+/// icechunk's `GCSummary` without `attributes_deleted`, which icechunk 2.2 never counts.
+#[derive(Debug, Serialize)]
+pub(crate) struct GcSummaryResult {
+    bytes_deleted: u64,
+    chunks_deleted: u64,
+    manifests_deleted: u64,
+    snapshots_deleted: u64,
+    transaction_logs_deleted: u64,
+}
+
+impl From<&GCSummary> for GcSummaryResult {
+    fn from(summary: &GCSummary) -> Self {
+        Self {
+            bytes_deleted: summary.bytes_deleted,
+            chunks_deleted: summary.chunks_deleted,
+            manifests_deleted: summary.manifests_deleted,
+            snapshots_deleted: summary.snapshots_deleted,
+            transaction_logs_deleted: summary.transaction_logs_deleted,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
-    use icechunk::format::{Move, NodeId, NodeType, SnapshotId};
+    use icechunk::format::{Move, NodeId, NodeType};
 
     // `ResultsContractTest` in Java reads these same strings.
 
@@ -154,6 +215,43 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&DiffResult::from(&diff)).unwrap(),
             r#"{"new_groups":["/ng"],"new_arrays":["/na"],"deleted_groups":["/dg"],"deleted_arrays":["/da"],"updated_groups":["/ug"],"updated_arrays":["/ua"],"updated_chunks":{"/ua":[[0,1],[2,3]]},"moved_nodes":[{"from":"/a","to":"/b"}]}"#
+        );
+    }
+
+    #[test]
+    fn expiration() {
+        let id = |s: &str| SnapshotId::try_from(s).unwrap();
+        let result = ExpireResult {
+            released_snapshots: HashSet::from([
+                id("1CECHNKREP0F1RSTCMT0"),
+                id("0CECHNKREP0F1RSTCMT0"),
+            ]),
+            edited_snapshots: HashSet::from([id("2CECHNKREP0F1RSTCMT0")]),
+            deleted_refs: HashSet::from([
+                Ref::Branch("b".to_owned()),
+                Ref::Branch("a".to_owned()),
+                Ref::Tag("t".to_owned()),
+            ]),
+        };
+        assert_eq!(
+            serde_json::to_string(&ExpirationResult::from(&result)).unwrap(),
+            r#"{"released_snapshots":["0CECHNKREP0F1RSTCMT0","1CECHNKREP0F1RSTCMT0"],"edited_snapshots":["2CECHNKREP0F1RSTCMT0"],"deleted_branches":["a","b"],"deleted_tags":["t"]}"#
+        );
+    }
+
+    #[test]
+    fn gc_summary() {
+        let summary = GCSummary {
+            bytes_deleted: 1 << 40,
+            chunks_deleted: 1,
+            manifests_deleted: 2,
+            snapshots_deleted: 3,
+            attributes_deleted: 4,
+            transaction_logs_deleted: 5,
+        };
+        assert_eq!(
+            serde_json::to_string(&GcSummaryResult::from(&summary)).unwrap(),
+            r#"{"bytes_deleted":1099511627776,"chunks_deleted":1,"manifests_deleted":2,"snapshots_deleted":3,"transaction_logs_deleted":5}"#
         );
     }
 }

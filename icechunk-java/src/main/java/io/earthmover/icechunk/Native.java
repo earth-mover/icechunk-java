@@ -14,7 +14,7 @@ final class Native {
      * signatures, the constants below, and the JSON documents they exchange. A library built for another version
      * would read arguments it does not understand, or crash the JVM, so loading checks it first.
      */
-    static final int ABI_VERSION = 1;
+    static final int ABI_VERSION = 2;
 
     static final int OPEN = 0;
     static final int CREATE = 1;
@@ -91,6 +91,10 @@ final class Native {
     static native String repositoryResolveVersion(long repository, String versionJson);
 
     static native String repositoryDiff(long repository, String fromJson, String toJson);
+
+    static native String repositoryExpireSnapshots(long repository, String optionsJson);
+
+    static native String repositoryGarbageCollect(long repository, String optionsJson);
 
     static native long repositoryReadonlySession(long repository, String versionJson);
 

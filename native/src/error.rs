@@ -1,6 +1,7 @@
 use std::fmt;
 
-use icechunk::refs::RefErrorKind;
+use icechunk::ops::gc::GCError;
+use icechunk::refs::{RefError, RefErrorKind};
 use icechunk::repository::{RepositoryError, RepositoryErrorKind};
 use icechunk::session::{SessionError, SessionErrorKind};
 use icechunk::storage::StorageError;
@@ -94,6 +95,17 @@ impl From<RepositoryError> for NativeError {
     }
 }
 
+impl From<RefError> for NativeError {
+    fn from(err: RefError) -> Self {
+        match &err.kind {
+            RefErrorKind::Conflict { .. } => {
+                Self::new(ErrorKind::Conflict, err.to_string())
+            }
+            _ => Self::icechunk(&err),
+        }
+    }
+}
+
 impl From<SessionError> for NativeError {
     fn from(err: SessionError) -> Self {
         match &err.kind {
@@ -119,5 +131,16 @@ impl From<StoreError> for NativeError {
 impl From<StorageError> for NativeError {
     fn from(err: StorageError) -> Self {
         Self::icechunk(&err)
+    }
+}
+
+impl From<GCError> for NativeError {
+    fn from(err: GCError) -> Self {
+        match err {
+            GCError::Ref(err) => err.into(),
+            GCError::Repository(err) => err.into(),
+            GCError::StorageError(err) => err.into(),
+            GCError::FormatError(err) => Self::icechunk(&err),
+        }
     }
 }

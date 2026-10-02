@@ -1,5 +1,6 @@
 package io.earthmover.icechunk;
 
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -227,6 +228,54 @@ public final class Repository extends NativeHandle {
             HandleCleaner.reachabilityFence(this);
         }
         return Diff.fromJson(json);
+    }
+
+    /** Expire snapshots older than {@code olderThan}, keeping the tips of all branches and tags. */
+    public ExpireResult expireSnapshots(Instant olderThan) {
+        return expireSnapshots(olderThan, ExpireOptions.defaults());
+    }
+
+    /**
+     * Remove snapshots written before {@code olderThan} from every history. A snapshot written exactly at
+     * {@code olderThan} is kept, and so is each history's first snapshot and the tip of {@code main}. Kept snapshots
+     * whose parent is removed get the first snapshot of their history as parent.
+     *
+     * <p>Expiration deletes no snapshots or chunks; {@link #garbageCollect} deletes released snapshots and the data
+     * only they use. Other {@code Repository} objects open on the same storage may keep returning the old history from
+     * their caches until reopened. Readers working concurrently can see inconsistent histories.
+     *
+     * @throws IllegalArgumentException if {@code olderThan} is outside the years 0000 to 9999
+     * @throws IcechunkException if the storage or repository is read-only
+     */
+    public ExpireResult expireSnapshots(Instant olderThan, ExpireOptions options) {
+        String json = Objects.requireNonNull(options, "options").toJson(olderThan);
+        try {
+            json = Native.repositoryExpireSnapshots(handle(), json);
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+        return ExpireResult.fromJson(json);
+    }
+
+    /** Delete every object no branch or tag leads to and that was written before {@code cutoff}. */
+    public GcSummary garbageCollect(Instant cutoff) {
+        return garbageCollect(GcOptions.builder().deleteObjectsOlderThan(cutoff).build());
+    }
+
+    /**
+     * Delete unreachable objects, as {@code options} selects. A session's chunks are unreachable until it commits,
+     * so choose cutoffs earlier than the start of any session still writing.
+     *
+     * @throws IcechunkException if the storage or repository is read-only
+     */
+    public GcSummary garbageCollect(GcOptions options) {
+        String json = Objects.requireNonNull(options, "options").toJson();
+        try {
+            json = Native.repositoryGarbageCollect(handle(), json);
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+        return GcSummary.fromJson(json);
     }
 
     /** Open a session that reads {@code version} and cannot write. */

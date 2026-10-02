@@ -1,8 +1,10 @@
 package io.earthmover.icechunk;
 
 import java.math.BigInteger;
+import java.time.Instant;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Builds the JSON documents the native layer reads to configure storage and repositories.
@@ -127,6 +129,23 @@ final class Json {
             throw new IllegalArgumentException(
                     "not a JSON value: " + value.getClass().getName());
         }
+    }
+
+    private static final Instant FIRST_INSTANT = Instant.parse("0000-01-01T00:00:00Z");
+    private static final Instant LAST_INSTANT = Instant.parse("9999-12-31T23:59:59.999999999Z");
+
+    /**
+     * {@code at} as an RFC 3339 timestamp, which the native side parses.
+     *
+     * @throws NullPointerException if {@code at} is null
+     * @throws IllegalArgumentException if {@code at} is outside the years 0000 to 9999, which RFC 3339 cannot express
+     */
+    static String timestamp(String what, Instant at) {
+        Objects.requireNonNull(at, what);
+        if (at.isBefore(FIRST_INSTANT) || at.isAfter(LAST_INSTANT)) {
+            throw new IllegalArgumentException(what + " out of range: " + at);
+        }
+        return at.toString();
     }
 
     /** Insert an already serialized JSON value. */

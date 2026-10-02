@@ -3,6 +3,7 @@ package io.earthmover.icechunk;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.time.Instant;
+import java.util.Collections;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -73,6 +74,34 @@ class JsonContractTest {
                         .build()
                         .toJson());
         assertEquals("{\"allow_empty\":false}", CommitOptions.defaults().toJson());
+    }
+
+    /** The same strings appear in the {@code expire_options} and {@code gc_options} tests in {@code spec.rs}. */
+    @Test
+    void expireOptions() {
+        assertEquals(
+                "{\"older_than\":\"2026-01-02T03:04:05Z\",\"delete_expired_branches\":true,"
+                        + "\"delete_expired_tags\":false}",
+                ExpireOptions.builder()
+                        .deleteExpiredBranches(true)
+                        .build()
+                        .toJson(Instant.parse("2026-01-02T03:04:05Z")));
+    }
+
+    @Test
+    void gcOptions() {
+        assertEquals(
+                "{\"extra_roots\":[\"1CECHNKREP0F1RSTCMT0\"],\"delete_chunks_older_than\":\"2026-01-02T03:04:05Z\","
+                        + "\"delete_snapshots_older_than\":\"2026-01-01T00:00:00Z\",\"max_snapshots_in_memory\":50,"
+                        + "\"max_compressed_manifest_mem_bytes\":536870912,\"max_concurrent_manifest_fetches\":500,"
+                        + "\"dry_run\":true}",
+                GcOptions.builder()
+                        .extraRoots(Collections.singleton(SnapshotId.of("1CECHNKREP0F1RSTCMT0")))
+                        .deleteChunksOlderThan(Instant.parse("2026-01-02T03:04:05Z"))
+                        .deleteSnapshotsOlderThan(Instant.parse("2026-01-01T00:00:00Z"))
+                        .dryRun(true)
+                        .build()
+                        .toJson());
     }
 
     @Test

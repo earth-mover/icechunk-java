@@ -6,9 +6,15 @@
 > published to Maven Central, the API will change without notice, and there is no guarantee of fixes or
 > compatibility. Do not use it for data you cannot afford to lose.
 
-Java bindings for [icechunk](https://icechunk.io), the transactional storage engine for Zarr. They call the icechunk
-Rust library through JNI, so Java programs get the same repositories, branches, tags and commits as icechunk-python,
-and can read and write the same data.
+Java bindings for [icechunk](https://icechunk.io), the transactional storage engine for [Zarr](https://zarr.dev). They
+call the icechunk Rust library through the [Java Native Interface](https://docs.oracle.com/en/java/javase/21/docs/specs/jni/index.html)
+(JNI), so Java programs get the same repositories, branches, tags and commits as
+[icechunk-python](https://pypi.org/project/icechunk/), and can read and write the same data.
+
+icechunk-java gives you a Zarr store. You open a repository, start a session on a branch or an older version, and the
+session's `Store` maps Zarr keys to bytes. What reads and writes those keys is up to you: zarr-java through
+`IcechunkZarrStore`, as below, an adapter for another Zarr library, or your own code. Changes written in a session
+become a new version of the repository when you commit.
 
 ```java
 try (Storage storage = Storage.localFilesystem(Paths.get("/tmp/my-repo"));
@@ -61,12 +67,15 @@ pixi run example                 # run examples/.../Quickstart.java
 pixi run example ReadPublicData  # read ERA5 data from a public S3 bucket
 ```
 
-The jars target Java 8, so libraries that compile for Java 8, such as n5-ij and n5-universe, can depend on them. The
+The jars target Java 8, so libraries that compile for Java 8, such as [n5-ij](https://github.com/saalfeldlab/n5-ij)
+and [n5-universe](https://github.com/saalfeldlab/n5-universe), can depend on them. The
 build itself needs JDK 21.
 
-`icechunk-java` is a multi-release jar: on Java 9 and later the JVM loads newer versions of a few internal classes from
-`META-INF/versions/`, with no change to the API. Today that adds one thing: an object you forget to close is released
-by a `java.lang.ref.Cleaner` once it becomes unreachable, where on Java 8 it stays open until the JVM exits. If you
+`icechunk-java` is a [multi-release jar](https://openjdk.org/jeps/238): on Java 9 and later the JVM loads newer
+versions of a few internal classes from `META-INF/versions/`, with no change to the API. Today that adds one thing: an
+object you forget to close is released by a
+[`java.lang.ref.Cleaner`](https://docs.oracle.com/javase/9/docs/api/java/lang/ref/Cleaner.html) once it becomes
+unreachable, where on Java 8 it stays open until the JVM exits. If you
 shade the jar into an uber-jar, keep `Multi-Release: true` in the merged manifest, or every JVM gets the Java 8
 classes. [DESIGN.md](DESIGN.md#handles) has the details.
 
@@ -183,6 +192,28 @@ repo.resetBranch("experiment", parent, tip);  // ConflictException unless experi
 `diff(from, to)` lists the changes made after `from` up to `to`, so `from` must be an earlier snapshot in `to`'s
 history.
 
+### Expiring snapshots and collecting garbage
+
+Expiration removes old snapshots from every history. Garbage collection then deletes the objects nothing leads to any
+more: snapshots expiration released, snapshots a `resetBranch` moved away from, and the manifests, chunks and
+transaction logs only they used.
+
+```java
+Instant monthAgo = Instant.now().minus(Duration.ofDays(30));
+ExpireResult expired = repo.expireSnapshots(monthAgo);   // keeps every branch and tag tip
+repo.expireSnapshots(monthAgo, ExpireOptions.builder().deleteExpiredBranches(true).build());
+
+GcSummary dryRun = repo.garbageCollect(GcOptions.builder()
+        .deleteObjectsOlderThan(monthAgo)
+        .dryRun(true)
+        .build());
+GcSummary deleted = repo.garbageCollect(monthAgo);
+```
+
+Each kind of object has its own cutoff in `GcOptions`, and `extraRoots` keeps snapshots that no branch or tag leads to.
+A session's chunks are unreachable until it commits, so choose cutoffs earlier than the start of any session still
+writing. Readers working while either operation runs can see inconsistent histories.
+
 ### Closing and threads
 
 `Storage`, `Repository`, `Session` and `Store` hold native resources. Close them, ideally with try-with-resources.
@@ -200,11 +231,13 @@ Using a closed object throws `IllegalStateException`.
 - **Not on Maven Central.** Jars come from GitHub releases or a source build.
 - **zarr-java covers numeric data types only.** It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
-- **Missing APIs.** There is no garbage collection, snapshot expiration, rebase, node move, or writing of virtual
-  references yet, and repository configuration is passed as a JSON document rather than typed builders.
+- **Missing APIs.** There is no rebase, node move, or writing of virtual references yet, and repository configuration
+  is passed as a JSON document rather than typed builders.
 - **Fixed credentials only.** Credentials cannot refresh through a Java callback. The native HTTP client does not use
   the JVM's proxy settings or trust store.
-- **Blocking calls only.** There is no `CompletableFuture` API.
+- **Blocking calls only.** Each call occupies the calling thread until icechunk finishes, and there is no
+  `CompletableFuture` API. For concurrency, use a thread pool, or `Store.getPartialValues` to fetch many keys in one
+  call. A virtual thread holds its carrier thread for the length of a call.
 - **Logs go to standard error.** `Logging.initialize()` turns on icechunk's own log output, filtered by the
   `ICECHUNK_LOG` environment variable; it is not forwarded to a Java logging framework.
 

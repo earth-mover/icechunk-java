@@ -6,7 +6,8 @@
 //! must match what the Java builders emit; `deny_unknown_fields` turns a mismatch into
 //! an error instead of a silently ignored option.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::num::{NonZeroU16, NonZeroUsize};
 use std::path::PathBuf;
 
 use chrono::{DateTime, Utc};
@@ -20,6 +21,7 @@ use serde::Deserialize;
 use icechunk::format::SnapshotId;
 use icechunk::format::format_constants::SpecVersionBin;
 use icechunk::format::snapshot::SnapshotProperties;
+use icechunk::ops::gc::{Action, GCConfig};
 use icechunk::repository::VersionInfo;
 
 use crate::error::{NativeError, NativeResult};
@@ -327,6 +329,65 @@ impl CommitSpec {
     }
 }
 
+/// `ExpireOptions` from Java, with the cutoff `Repository.expireSnapshots` adds.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ExpireSpec {
+    pub(crate) older_than: DateTime<Utc>,
+    pub(crate) delete_expired_branches: bool,
+    pub(crate) delete_expired_tags: bool,
+}
+
+impl ExpireSpec {
+    pub(crate) fn parse(json: &str) -> NativeResult<ExpireSpec> {
+        Ok(serde_json::from_str(json)?)
+    }
+}
+
+/// `GcOptions` from Java. An absent cutoff keeps every object of that kind.
+///
+/// icechunk's `GCConfig` also has a cutoff for attribute files, which icechunk 2.2 never
+/// deletes, so it is always `Action::Keep`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct GcSpec {
+    extra_roots: Vec<String>,
+    delete_chunks_older_than: Option<DateTime<Utc>>,
+    delete_manifests_older_than: Option<DateTime<Utc>>,
+    delete_transaction_logs_older_than: Option<DateTime<Utc>>,
+    delete_snapshots_older_than: Option<DateTime<Utc>>,
+    max_snapshots_in_memory: NonZeroU16,
+    max_compressed_manifest_mem_bytes: NonZeroUsize,
+    max_concurrent_manifest_fetches: NonZeroU16,
+    dry_run: bool,
+}
+
+impl GcSpec {
+    pub(crate) fn parse(json: &str) -> NativeResult<GCConfig> {
+        let spec: GcSpec = serde_json::from_str(json)?;
+        let action = |cutoff: Option<DateTime<Utc>>| {
+            cutoff.map_or(Action::Keep, Action::DeleteIfCreatedBefore)
+        };
+        let extra_roots = spec
+            .extra_roots
+            .iter()
+            .map(|id| snapshot_id(id))
+            .collect::<NativeResult<HashSet<_>>>()?;
+        Ok(GCConfig::new(
+            extra_roots,
+            action(spec.delete_chunks_older_than),
+            action(spec.delete_manifests_older_than),
+            Action::Keep,
+            action(spec.delete_transaction_logs_older_than),
+            action(spec.delete_snapshots_older_than),
+            spec.max_snapshots_in_memory,
+            spec.max_compressed_manifest_mem_bytes,
+            spec.max_concurrent_manifest_fetches,
+            spec.dry_run,
+        ))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -452,5 +513,37 @@ mod tests {
         assert_eq!(metadata.get("n"), Some(&serde_json::json!(1)));
         let defaults = CommitSpec::parse(r#"{"allow_empty":false}"#).unwrap();
         assert!(defaults.metadata.is_none() && !defaults.allow_empty);
+    }
+
+    #[test]
+    fn expire_options() {
+        let spec = ExpireSpec::parse(
+            r#"{"older_than":"2026-01-02T03:04:05Z","delete_expired_branches":true,"delete_expired_tags":false}"#,
+        )
+        .unwrap();
+        assert_eq!(spec.older_than.to_rfc3339(), "2026-01-02T03:04:05+00:00");
+        assert!(spec.delete_expired_branches && !spec.delete_expired_tags);
+    }
+
+    #[test]
+    fn gc_options() {
+        let config = GcSpec::parse(
+            r#"{"extra_roots":["1CECHNKREP0F1RSTCMT0"],"delete_chunks_older_than":"2026-01-02T03:04:05Z","delete_snapshots_older_than":"2026-01-01T00:00:00Z","max_snapshots_in_memory":50,"max_compressed_manifest_mem_bytes":536870912,"max_concurrent_manifest_fetches":500,"dry_run":true}"#,
+        )
+        .unwrap();
+        assert!(config.deletes_chunks() && config.deletes_snapshots());
+        assert!(!config.deletes_manifests() && !config.deletes_transaction_logs());
+        assert!(!config.deletes_attributes());
+    }
+
+    #[test]
+    fn bad_gc_options_are_rejected() {
+        let limits = r#""max_compressed_manifest_mem_bytes":1,"max_concurrent_manifest_fetches":1,"dry_run":false"#;
+        let zero =
+            format!(r#"{{"extra_roots":[],"max_snapshots_in_memory":0,{limits}}}"#);
+        assert!(GcSpec::parse(&zero).is_err());
+        let bad_root =
+            format!(r#"{{"extra_roots":["nope"],"max_snapshots_in_memory":1,{limits}}}"#);
+        assert!(GcSpec::parse(&bad_root).is_err());
     }
 }
