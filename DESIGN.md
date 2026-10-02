@@ -149,27 +149,30 @@ there the next extraction removes copies that are no longer in use.
 
 ## Configuration as JSON
 
-Storage options, credentials, repository options, versions and commit options travel to the native side as JSON
-strings. The Java classes (`S3Options`, `S3Credentials`, `RepositoryOptions`, `Version`, `CommitOptions`, ...) produce
-them, and `native/src/spec.rs` parses them.
+Storage options, credentials, repository options, versions, and commit, expiration and garbage collection options
+travel to the native side as JSON strings. The Java classes (`S3Options`, `S3Credentials`, `RepositoryOptions`,
+`Version`, `CommitOptions`, `GcOptions`, ...) produce them, and `native/src/spec.rs` parses them.
 
 Results that are records, such as `SnapshotInfo` and `Diff`, come back the same way: `native/src/results.rs` defines
 each document as a struct that borrows from icechunk's result, and the Java class reads it with `JsonReader`. Scalars
 and flat lists of strings, such as snapshot ids, branch names and store keys, stay plain JNI values and `String[]`,
 which need no parsing.
 
-The JSON format is the binding's own, not icechunk's serde format. icechunk's serialized types follow its persistence
-needs, use several tagging styles, and can change between releases; the binding's format changes only when the
-binding does. Tests pin the format from both sides. For inputs, `JsonContractTest` checks the exact strings the Java
-classes produce, and the tests in `spec.rs` parse the same strings; `deny_unknown_fields` turns a mismatch into an
-error instead of a silently ignored option. For results, the tests in `results.rs` check the exact strings the native
-side writes, and `ResultsContractTest` reads the same strings; `JsonReader` names any missing or mistyped field.
+The JSON format is the binding's own, not icechunk's serde format. Several inputs have no serde form in icechunk:
+`VersionInfo`, `GCConfig` and the commit options. icechunk's credential serde exists so icechunk-python can pickle
+credentials, includes typetag tags for refreshable credential fetchers, and changed in a patch release: v1.0.2 re-tagged
+GCS and Azure static credentials ([icechunk#1109](https://github.com/earth-mover/icechunk/pull/1109)). The binding's
+format changes only when the binding does. Tests pin the format from both sides. For inputs, `JsonContractTest` checks
+the exact strings the Java classes produce, and the tests in `spec.rs` parse the same strings; `deny_unknown_fields`
+turns a mismatch into an error instead of a silently ignored option. For results, the tests in `results.rs` check the
+exact strings the native side writes, and `ResultsContractTest` reads the same strings; `JsonReader` names any missing
+or mistyped field.
 
 Commit metadata is user data rather than part of the format: it passes through as arbitrary JSON, written by
 `Json.putValue` and stored by icechunk unchanged.
 
 The exception is repository configuration, which is passed through unchanged as icechunk's own `RepositoryConfig`
-JSON. icechunk stores that document in every repository, so its format is already stable across releases.
+JSON. icechunk stores that document in every repository, so it keeps reading the documents older releases wrote.
 
 The Java side writes JSON with a small `Json` class and reads it with `JsonReader` instead of a JSON library, so
 `icechunk-java` has no runtime dependencies to conflict with an application's.

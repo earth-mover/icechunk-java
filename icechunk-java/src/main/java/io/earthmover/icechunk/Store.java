@@ -29,6 +29,8 @@ import java.util.OptionalLong;
  * {@code set} returns: in-memory storage keeps it for as long as the storage lives, and a value below the
  * repository's inline chunk threshold stays in the session until commit. Treat a direct buffer passed to
  * {@code set} as handed over, and do not modify it afterwards.
+ *
+ * <p>Changes through a read-only session throw {@link IcechunkException}.
  */
 public final class Store extends NativeHandle {
     Store(long handle) {
@@ -91,6 +93,9 @@ public final class Store extends NativeHandle {
     /**
      * Store the remaining bytes of {@code value} at {@code key}, replacing any existing value. The buffer's position
      * is not changed. See the class description for when a direct buffer is read in place.
+     *
+     * @throws IcechunkException if the session is read-only, or {@code key} is neither a {@code zarr.json} nor a chunk
+     *     of an existing array
      */
     public void set(String key, ByteBuffer value) {
         write(key, value, false);
@@ -124,6 +129,7 @@ public final class Store extends NativeHandle {
         }
     }
 
+    /** Returns true if {@code key} has a value. */
     public boolean exists(String key) {
         try {
             return Native.storeExists(handle(), key);
@@ -201,7 +207,11 @@ public final class Store extends NativeHandle {
         return list(Native.LIST_ALL, "");
     }
 
-    /** Every key under the group or array {@code prefix}, as full keys. */
+    /**
+     * Every key under the group or array {@code prefix}, as full keys.
+     *
+     * @throws IcechunkException if {@code prefix} is not a group or array
+     */
     public List<String> listPrefix(String prefix) {
         return list(Native.LIST_PREFIX, prefix);
     }
@@ -222,6 +232,7 @@ public final class Store extends NativeHandle {
         }
     }
 
+    /** Returns true if the store's session cannot write. */
     public boolean isReadOnly() {
         try {
             return Native.storeReadOnly(handle());

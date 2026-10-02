@@ -21,6 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** Commit metadata, snapshot lookup, versions, diffs, branch resets and logging setup. */
 class HistoryTest {
     private Storage storage;
     private Repository repo;

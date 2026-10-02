@@ -10,8 +10,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Writes from every kind of {@link ByteBuffer}: heap, sliced, read-only, and direct above and below the size at which
- * direct buffers are read in place. */
+/**
+ * Writes from every kind of {@link ByteBuffer}: heap, sliced, read-only, and direct above and below the size at which
+ * direct buffers are read in place.
+ */
 class BufferTest {
     private Storage storage;
     private Repository repo;

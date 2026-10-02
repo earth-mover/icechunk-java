@@ -7,11 +7,11 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Builds the JSON documents the native layer reads to configure storage and repositories.
+ * Builds the JSON documents the native layer reads, such as storage specs, repository options and versions.
  *
- * <p>The documents only contain strings, numbers, booleans and nested objects, so a few dozen lines replace a JSON
- * library dependency. Null values are omitted, which the native side reads as "not set". {@link #putValue} also writes
- * arbitrary JSON values, such as commit metadata, where null is kept.
+ * <p>The {@code put} methods write strings, numbers, booleans and nested objects, so a few dozen lines replace a JSON
+ * library dependency. They omit null values, which the native side reads as "not set". {@link #putValue} writes any
+ * JSON value, including lists and the user's commit metadata, and keeps null.
  */
 final class Json {
     private final StringBuilder out = new StringBuilder("{");

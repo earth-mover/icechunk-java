@@ -1,3 +1,6 @@
+//! Native methods for `Storage`: opening each kind of storage from its JSON spec, and
+//! `Native.close`, which closes a handle of any type.
+
 use icechunk::storage::{
     new_azure_blob_storage, new_gcs_storage, new_http_storage, new_in_memory_storage,
     new_local_filesystem_storage, new_s3_storage,

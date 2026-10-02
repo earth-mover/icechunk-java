@@ -1,10 +1,13 @@
-//! The JSON documents Java sends to describe storage, credentials and repository options.
+//! The JSON documents Java sends: storage, credentials, repository options, versions, and
+//! commit, expiration and garbage collection options.
 //!
-//! These types are the wire contract with the `io.earthmover.icechunk` builders. They
-//! are deliberately separate from icechunk's own serde types, whose shapes follow
-//! icechunk's persistence needs and can change between releases. Every field name here
-//! must match what the Java builders emit; `deny_unknown_fields` turns a mismatch into
-//! an error instead of a silently ignored option.
+//! These types are the binding's own, not icechunk's serde types. Several inputs have no
+//! serde form in icechunk (`VersionInfo`, `GCConfig`, commit options). icechunk's
+//! credential serde exists so icechunk-python can pickle credentials, includes typetag
+//! tags for refreshable credential fetchers, and changed in a patch release (v1.0.2
+//! re-tagged GCS and Azure static credentials, icechunk#1109). Every field name here must
+//! match what the Java builders emit; `deny_unknown_fields` rejects a misspelled field
+//! instead of ignoring it.
 
 use std::collections::{HashMap, HashSet};
 use std::num::{NonZeroU16, NonZeroUsize};
@@ -234,8 +237,8 @@ impl From<ContainerCredentialsSpec> for Credentials {
 #[derive(Debug, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub(crate) struct RepositoryOptionsSpec {
-    /// icechunk's own `RepositoryConfig` document, passed through unchanged. Its shape is
-    /// icechunk's persisted config format, which is already stable across releases.
+    /// icechunk's own `RepositoryConfig` document, passed through unchanged. icechunk
+    /// persists this format in every repository, so it keeps reading older documents.
     config: Option<serde_json::Value>,
     virtual_chunk_credentials: HashMap<String, ContainerCredentialsSpec>,
     spec_version: Option<u8>,

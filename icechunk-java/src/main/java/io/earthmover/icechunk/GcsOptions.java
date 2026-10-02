@@ -19,6 +19,11 @@ public final class GcsOptions {
         this.config = Collections.unmodifiableMap(new LinkedHashMap<>(builder.config));
     }
 
+    /**
+     * A builder for {@code bucket}, with no prefix and credentials from the environment.
+     *
+     * @throws NullPointerException if {@code bucket} is null
+     */
     public static Builder builder(String bucket) {
         return new Builder(bucket);
     }

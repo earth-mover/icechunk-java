@@ -32,6 +32,11 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
     private final Session session;
     private final io.earthmover.icechunk.Store store;
 
+    /**
+     * A store over {@code session}'s {@link Session#store()}.
+     *
+     * @throws IllegalStateException if the session is closed
+     */
     public IcechunkZarrStore(Session session) {
         this.session = Objects.requireNonNull(session, "session");
         this.store = session.store();
@@ -61,7 +66,6 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
      * Read the part of the value zarr-java's range arguments select, or empty if the key does not exist. {@code end}
      * is exclusive, and a negative {@code end} means the end of the value. A negative {@code start} counts back from
      * the end of the value; with a negative {@code end} that is a suffix read, which needs no size lookup.
-     *
      */
     private Optional<byte[]> read(String[] keys, long start, long end) {
         String key = key(keys);

@@ -27,6 +27,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+/** zarr-java round trips through {@link IcechunkZarrStore}, and its key, range and listing conventions. */
 class IcechunkZarrStoreTest {
     private Storage storage;
     private Repository repo;

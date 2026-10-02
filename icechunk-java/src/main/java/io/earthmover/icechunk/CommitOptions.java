@@ -24,10 +24,12 @@ public final class CommitOptions {
         this.json = json.put("allow_empty", builder.allowEmpty).toString();
     }
 
+    /** No metadata, and a commit with no changes throws. */
     public static CommitOptions defaults() {
         return DEFAULTS;
     }
 
+    /** A builder that starts from {@link #defaults()}. */
     public static Builder builder() {
         return new Builder();
     }

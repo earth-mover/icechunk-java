@@ -21,6 +21,12 @@ public final class AzureOptions {
         this.config = Collections.unmodifiableMap(new LinkedHashMap<>(builder.config));
     }
 
+    /**
+     * A builder for {@code container} in storage account {@code account}, with no prefix and credentials from the
+     * environment.
+     *
+     * @throws NullPointerException if {@code account} or {@code container} is null
+     */
     public static Builder builder(String account, String container) {
         return new Builder(account, container);
     }

@@ -10,6 +10,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** {@link JsonReader} parsing, including what {@link Json} writes. */
 class JsonReaderTest {
     @Test
     void values() {

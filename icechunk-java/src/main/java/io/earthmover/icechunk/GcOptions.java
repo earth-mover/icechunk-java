@@ -42,6 +42,10 @@ public final class GcOptions {
                 .toString();
     }
 
+    /**
+     * A builder with no cutoffs, which deletes nothing until one is set, and the default limits: 50 snapshots in
+     * memory, 512 MiB of compressed manifests, and 500 concurrent manifest fetches.
+     */
     public static Builder builder() {
         return new Builder();
     }

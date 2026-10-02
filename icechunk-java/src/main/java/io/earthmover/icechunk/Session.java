@@ -30,7 +30,7 @@ public final class Session extends NativeHandle {
         }
     }
 
-    /** The branch a writable or branch-based session tracks; empty for a tag or snapshot. */
+    /** The branch a writable session commits to; empty for a read-only session, and after a commit. */
     public Optional<String> branch() {
         try {
             return Optional.ofNullable(Native.sessionBranch(handle()));
@@ -39,6 +39,7 @@ public final class Session extends NativeHandle {
         }
     }
 
+    /** Returns true for a session opened read-only, and for a writable session after it commits. */
     public boolean isReadOnly() {
         try {
             return Native.sessionReadOnly(handle());
@@ -47,6 +48,7 @@ public final class Session extends NativeHandle {
         }
     }
 
+    /** Returns true if the session has writes that are neither committed nor discarded. */
     public boolean hasUncommittedChanges() {
         try {
             return Native.sessionHasUncommittedChanges(handle());

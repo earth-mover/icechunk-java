@@ -20,10 +20,12 @@ public final class ExpireOptions {
         this.deleteExpiredTags = builder.deleteExpiredTags;
     }
 
+    /** Keep expired branches and tags. */
     public static ExpireOptions defaults() {
         return DEFAULTS;
     }
 
+    /** A builder that starts from {@link #defaults()}. */
     public static Builder builder() {
         return new Builder();
     }

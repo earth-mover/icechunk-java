@@ -29,10 +29,12 @@ public final class RepositoryOptions {
                 .toString();
     }
 
+    /** No configuration overrides, and no virtual chunk containers authorized. */
     public static RepositoryOptions defaults() {
         return DEFAULTS;
     }
 
+    /** A builder that starts from {@link #defaults()}. */
     public static Builder builder() {
         return new Builder();
     }
@@ -51,7 +53,9 @@ public final class RepositoryOptions {
 
         /**
          * Repository configuration as a JSON document in icechunk's {@code RepositoryConfig} format, layered over the
-         * config stored in the repository. {@link Repository#configJson()} returns a document in this format.
+         * config stored in the repository. {@link Repository#configJson()} returns a document in this format. Defaults
+         * to none. A document icechunk cannot parse makes opening or creating the repository throw
+         * {@link IllegalArgumentException}.
          */
         public Builder configJson(String configJson) {
             this.configJson = configJson;
@@ -65,7 +69,10 @@ public final class RepositoryOptions {
             return this;
         }
 
-        /** The on-disk format version for a new repository. Defaults to the latest; ignored when opening. */
+        /**
+         * The on-disk format version for a new repository. Defaults to the latest; ignored when opening. A version
+         * icechunk does not support makes opening or creating throw {@link IllegalArgumentException}.
+         */
         public Builder specVersion(int specVersion) {
             this.specVersion = specVersion;
             return this;

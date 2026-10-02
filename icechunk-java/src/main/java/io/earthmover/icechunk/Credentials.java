@@ -14,14 +14,17 @@ public final class Credentials {
         this.json = json;
     }
 
+    /** Read an S3 or S3-compatible container with {@code credentials}. */
     public static Credentials s3(S3Credentials credentials) {
         return new Credentials(Json.object().put("type", "s3").put("credentials", credentials.toJson()));
     }
 
+    /** Read a Google Cloud Storage container with {@code credentials}. */
     public static Credentials gcs(GcsCredentials credentials) {
         return new Credentials(Json.object().put("type", "gcs").put("credentials", credentials.toJson()));
     }
 
+    /** Read an Azure Blob Storage container with {@code credentials}. */
     public static Credentials azure(AzureCredentials credentials) {
         return new Credentials(Json.object().put("type", "azure").put("credentials", credentials.toJson()));
     }

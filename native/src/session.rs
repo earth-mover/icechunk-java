@@ -1,3 +1,5 @@
+//! Native methods for `Session`.
+
 use std::sync::Arc;
 
 use icechunk::Store;

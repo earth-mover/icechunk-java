@@ -17,6 +17,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** Closing native objects, alone and while other threads use them, and the cleaner for unclosed ones. */
 class LifecycleTest {
     @Test
     void closedObjectsThrowIllegalState() {

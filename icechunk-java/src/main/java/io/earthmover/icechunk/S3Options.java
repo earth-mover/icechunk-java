@@ -35,6 +35,11 @@ public final class S3Options {
         this.credentials = builder.credentials;
     }
 
+    /**
+     * A builder for {@code bucket}, with no prefix and credentials from the environment.
+     *
+     * @throws NullPointerException if {@code bucket} is null
+     */
     public static Builder builder(String bucket) {
         return new Builder(bucket);
     }
@@ -77,6 +82,7 @@ public final class S3Options {
             return this;
         }
 
+        /** The bucket's region. Defaults to the AWS SDK's region chain: environment variables, then profiles. */
         public Builder region(String region) {
             this.region = region;
             return this;
@@ -88,23 +94,25 @@ public final class S3Options {
             return this;
         }
 
-        /** Allow plain HTTP endpoints, typically for a local MinIO. */
+        /** Allow plain HTTP endpoints, typically for a local MinIO. Defaults to false. */
         public Builder allowHttp(boolean allowHttp) {
             this.allowHttp = allowHttp;
             return this;
         }
 
-        /** Address the bucket in the URL path instead of the host name. */
+        /** Address the bucket in the URL path instead of the host name. Defaults to false. */
         public Builder forcePathStyle(boolean forcePathStyle) {
             this.forcePathStyle = forcePathStyle;
             return this;
         }
 
+        /** How long a transfer may stall before it fails. Defaults to 10 seconds; 0 turns the check off. */
         public Builder networkStreamTimeoutSeconds(int seconds) {
             this.networkStreamTimeoutSeconds = seconds;
             return this;
         }
 
+        /** Whether to send requests to a requester-pays bucket, billing them to the caller. Defaults to false. */
         public Builder requesterPays(boolean requesterPays) {
             this.requesterPays = requesterPays;
             return this;

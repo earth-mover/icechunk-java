@@ -52,6 +52,7 @@ abstract class NativeHandle implements AutoCloseable {
         return release.closed.get();
     }
 
+    /** Release the native object. Closing again does nothing. */
     @Override
     public void close() {
         cleanable.run();

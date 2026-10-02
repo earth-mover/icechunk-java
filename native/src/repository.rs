@@ -1,3 +1,6 @@
+//! Native methods for `Repository`: opening and creating repositories, branches and tags,
+//! history and diffs, sessions, and snapshot expiration and garbage collection.
+
 use std::sync::Arc;
 
 use futures::TryStreamExt as _;
@@ -202,7 +205,8 @@ fn ref_action(delete: bool) -> ExpiredRefAction {
 }
 
 native! { fn repositoryExpireSnapshots(env, repository: jlong, options: JString<'l>) -> JString<'l> {
-    // A long call must not hold the handle's epoch guard; see `handles`.
+    // Drop the epoch guard before this long call, so it does not delay freeing objects
+    // closed meanwhile; see `handles`.
     let repository = Arc::clone(&*handles::repository(repository)?);
     let spec = ExpireSpec::parse(&text(env, &options)?)?;
     let config = repository.config();
@@ -218,7 +222,8 @@ native! { fn repositoryExpireSnapshots(env, repository: jlong, options: JString<
 }}
 
 native! { fn repositoryGarbageCollect(env, repository: jlong, options: JString<'l>) -> JString<'l> {
-    // A long call must not hold the handle's epoch guard; see `handles`.
+    // Drop the epoch guard before this long call, so it does not delay freeing objects
+    // closed meanwhile; see `handles`.
     let repository = Arc::clone(&*handles::repository(repository)?);
     let gc = GcSpec::parse(&text(env, &options)?)?;
     let config = repository.config();

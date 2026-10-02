@@ -19,6 +19,7 @@ import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Creating and opening repositories, branches and tags, sessions, and commit conflicts. */
 class RepositoryTest {
     static final byte[] GROUP = "{\"zarr_format\":3,\"node_type\":\"group\",\"attributes\":{}}".getBytes(UTF_8);
 

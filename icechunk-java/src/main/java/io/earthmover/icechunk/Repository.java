@@ -46,6 +46,12 @@ public final class Repository extends NativeHandle {
         return open(storage, RepositoryOptions.defaults());
     }
 
+    /**
+     * Open an existing repository with {@code options}.
+     *
+     * @throws IcechunkException if there is no repository at {@code storage}
+     * @throws IllegalArgumentException if icechunk cannot parse the options' configuration
+     */
     public static Repository open(Storage storage, RepositoryOptions options) {
         return open(storage, Native.OPEN, options);
     }
@@ -59,6 +65,13 @@ public final class Repository extends NativeHandle {
         return create(storage, RepositoryOptions.defaults());
     }
 
+    /**
+     * Create a new, empty repository with {@code options}.
+     *
+     * @throws IcechunkException if a repository already exists at {@code storage}, or, unless
+     *     {@link RepositoryOptions.Builder#checkCleanRoot} is false, if the location holds other objects
+     * @throws IllegalArgumentException if icechunk cannot parse the options' configuration or spec version
+     */
     public static Repository create(Storage storage, RepositoryOptions options) {
         return open(storage, Native.CREATE, options);
     }
@@ -68,6 +81,7 @@ public final class Repository extends NativeHandle {
         return openOrCreate(storage, RepositoryOptions.defaults());
     }
 
+    /** As {@link #openOrCreate(Storage)}, with {@code options}. */
     public static Repository openOrCreate(Storage storage, RepositoryOptions options) {
         return open(storage, Native.OPEN_OR_CREATE, options);
     }
@@ -108,7 +122,11 @@ public final class Repository extends NativeHandle {
         }
     }
 
-    /** The snapshot at the tip of {@code branch}. */
+    /**
+     * The snapshot at the tip of {@code branch}.
+     *
+     * @throws IcechunkException if there is no such branch
+     */
     public SnapshotId lookupBranch(String branch) {
         try {
             return SnapshotId.of(Native.repositoryLookupBranch(handle(), branch));
@@ -117,7 +135,11 @@ public final class Repository extends NativeHandle {
         }
     }
 
-    /** The snapshot {@code tag} points to. */
+    /**
+     * The snapshot {@code tag} points to.
+     *
+     * @throws IcechunkException if there is no such tag
+     */
     public SnapshotId lookupTag(String tag) {
         try {
             return SnapshotId.of(Native.repositoryLookupTag(handle(), tag));
@@ -126,7 +148,11 @@ public final class Repository extends NativeHandle {
         }
     }
 
-    /** Create {@code branch} pointing at {@code snapshot}. */
+    /**
+     * Create {@code branch} pointing at {@code snapshot}.
+     *
+     * @throws IcechunkException if the branch already exists or the snapshot is not in the repository
+     */
     public void createBranch(String branch, SnapshotId snapshot) {
         try {
             Native.repositoryCreateBranch(handle(), branch, snapshot.toString());
@@ -135,6 +161,11 @@ public final class Repository extends NativeHandle {
         }
     }
 
+    /**
+     * Delete {@code branch}.
+     *
+     * @throws IcechunkException if there is no such branch, or {@code branch} is {@code main}
+     */
     public void deleteBranch(String branch) {
         try {
             Native.repositoryDeleteBranch(handle(), branch);
@@ -162,7 +193,11 @@ public final class Repository extends NativeHandle {
         }
     }
 
-    /** Create {@code tag} pointing at {@code snapshot}. Tags cannot be moved. */
+    /**
+     * Create {@code tag} pointing at {@code snapshot}. Tags cannot be moved.
+     *
+     * @throws IcechunkException if the tag exists, existed and was deleted, or the snapshot is not in the repository
+     */
     public void createTag(String tag, SnapshotId snapshot) {
         try {
             Native.repositoryCreateTag(handle(), tag, snapshot.toString());
@@ -171,6 +206,11 @@ public final class Repository extends NativeHandle {
         }
     }
 
+    /**
+     * Delete {@code tag}. Its name cannot be used for a new tag afterwards.
+     *
+     * @throws IcechunkException if there is no such tag
+     */
     public void deleteTag(String tag) {
         try {
             Native.repositoryDeleteTag(handle(), tag);

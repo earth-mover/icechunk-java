@@ -1,3 +1,5 @@
+//! Native methods for `Store`, the Zarr key/value view of a session.
+
 use bytes::Bytes;
 use futures::TryStreamExt as _;
 use icechunk::format::ByteRange;

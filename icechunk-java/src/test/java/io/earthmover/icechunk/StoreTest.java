@@ -17,6 +17,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** The {@link Store} operations on a writable session. */
 class StoreTest {
     static final byte[] ARRAY = ("{\"zarr_format\":3,\"node_type\":\"array\",\"shape\":[4],\"data_type\":\"uint8\","
                     + "\"chunk_grid\":{\"name\":\"regular\",\"configuration\":{\"chunk_shape\":[4]}},"
@@ -93,6 +94,7 @@ class StoreTest {
     void listing() {
         assertEquals(Arrays.asList("data/c/0", "data/zarr.json", "zarr.json"), sorted(store.list()));
         assertEquals(Arrays.asList("data/c/0", "data/zarr.json"), sorted(store.listPrefix("data")));
+        assertThrows(IcechunkException.class, () -> store.listPrefix("missing"));
         assertEquals(Arrays.asList("data", "zarr.json"), sorted(store.listDir("")));
         assertEquals(Arrays.asList("c", "zarr.json"), sorted(store.listDir("data")));
         assertFalse(store.isEmpty("data"));

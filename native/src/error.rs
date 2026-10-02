@@ -1,3 +1,6 @@
+//! The error type native methods return, and how icechunk's errors map onto the kinds
+//! `IcechunkException.fromNative` turns into Java exceptions.
+
 use std::fmt;
 
 use icechunk::ops::gc::GCError;
