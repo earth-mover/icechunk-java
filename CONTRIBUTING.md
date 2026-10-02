@@ -17,7 +17,8 @@ Rust toolchain pinned in `rust-toolchain.toml` on first use. The interop tests a
 | `pixi run check` | Rust formatting and clippy, Rust tests, then `test`. Run before committing. |
 | `pixi run format` | Format the Rust and Java code. |
 | `pixi run example [Name]` | Run an example from `examples/`. Defaults to `Quickstart`. |
-| `pixi run bench [jmh args]` | Build a release native library and run the JMH benchmarks, with allocation per operation. |
+| `pixi run bench [jmh args]` | Build a release native library and run the JMH benchmarks locally, with allocation per operation. Narrow the grid for local runs, for example `pixi run bench "StoreBenchmark.get$ -p chunkBytes=64"`; the full grid takes about half an hour. |
+| `scripts/bench-coiled.sh [vm-type]` | Run the full benchmark grid and memory probe on a [Coiled](https://coiled.io) VM. |
 
 The Java build runs [Error Prone](https://errorprone.info) and `javac -Xlint:all -Werror`, and checks formatting with
 Spotless (palantir-java-format), so warnings and formatting fail the build. Clippy denies `unwrap`, `expect` and
