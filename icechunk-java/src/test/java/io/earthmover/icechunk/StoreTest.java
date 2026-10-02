@@ -132,4 +132,16 @@ class StoreTest {
         Arrays.sort(array);
         return Arrays.asList(array);
     }
+
+    @Test
+    void getSizePrefixAddsMetadataAndChunks() {
+        assertEquals(ARRAY.length + CHUNK.length, store.getSizePrefix("data"));
+        assertEquals(GROUP.length + ARRAY.length + CHUNK.length, store.getSizePrefix(""));
+    }
+
+    @Test
+    void clearDeletesEverything() {
+        store.clear();
+        assertEquals(Arrays.asList(), store.list());
+    }
 }

@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.zarr.zarrjava.v3.Array;
+import io.earthmover.icechunk.Diff;
 import io.earthmover.icechunk.IcechunkException;
 import io.earthmover.icechunk.Repository;
 import io.earthmover.icechunk.Session;
@@ -16,6 +17,7 @@ import io.earthmover.icechunk.Version;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -26,7 +28,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * Reads the repositories icechunk keeps for its own format-compatibility test, {@code test_can_read_old.py}, and checks
- * the same facts that test checks, except those that need diffs or the virtual chunk it serves from MinIO.
+ * the same facts that test checks, except those that need the virtual chunk it serves from MinIO.
  */
 class CompatibilityFixturesTest {
     @TempDir
@@ -50,6 +52,25 @@ class CompatibilityFixturesTest {
             assertEquals(branchHistory, messages(repo.ancestry(Version.tag("it also works!"))));
             assertEquals(
                     branchHistory.subList(1, branchHistory.size()), messages(repo.ancestry(Version.tag("it works!"))));
+
+            List<SnapshotInfo> parents = repo.ancestry(Version.branch("main"));
+            Diff diff =
+                    repo.diff(Version.snapshot(parents.get(parents.size() - 2).id()), Version.branch("main"));
+            assertEquals(Collections.emptySet(), diff.newGroups());
+            assertEquals(Collections.emptySet(), diff.newArrays());
+            assertEquals(
+                    setOf("/group1/big_chunks", "/group1/small_chunks"),
+                    diff.updatedChunks().keySet());
+            assertEquals(
+                    setOf("[0, 0]", "[0, 1]", "[1, 0]", "[1, 1]"),
+                    chunkSet(diff.updatedChunks().get("/group1/big_chunks")));
+            assertEquals(
+                    setOf("[0]", "[1]", "[2]", "[3]", "[4]"),
+                    chunkSet(diff.updatedChunks().get("/group1/small_chunks")));
+            assertEquals(Collections.emptySet(), diff.deletedGroups());
+            assertEquals(Collections.emptySet(), diff.deletedArrays());
+            assertEquals(Collections.emptySet(), diff.updatedGroups());
+            assertEquals(Collections.emptySet(), diff.updatedArrays());
 
             try (Session session = repo.readonlySession(Version.branch("my-branch"))) {
                 Store store = session.store();
@@ -80,6 +101,10 @@ class CompatibilityFixturesTest {
                 assertArrayEquals(expected, lowerHalf);
             }
         }
+    }
+
+    private static Set<String> chunkSet(List<List<Long>> chunks) {
+        return chunks.stream().map(Object::toString).collect(Collectors.toSet());
     }
 
     private static List<String> messages(List<SnapshotInfo> history) {

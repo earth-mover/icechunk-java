@@ -63,10 +63,29 @@ where
 
 /// Read a Java string argument, rejecting null.
 pub fn text(env: &Env<'_>, value: &JString<'_>) -> NativeResult<String> {
+    optional_text(env, value)?
+        .ok_or_else(|| NativeError::invalid_argument("unexpected null string"))
+}
+
+/// Read a Java string argument that may be null.
+pub(crate) fn optional_text(
+    env: &Env<'_>,
+    value: &JString<'_>,
+) -> NativeResult<Option<String>> {
     if value.is_null() {
-        return Err(NativeError::invalid_argument("unexpected null string"));
+        return Ok(None);
     }
-    Ok(value.try_to_string(env)?)
+    Ok(Some(value.try_to_string(env)?))
+}
+
+/// A Java `String` holding `value` as JSON.
+pub(crate) fn json_string<'local>(
+    env: &mut Env<'local>,
+    value: &impl serde::Serialize,
+) -> NativeResult<JString<'local>> {
+    let json = serde_json::to_string(value)
+        .map_err(|err| NativeError::new(ErrorKind::Icechunk, err.to_string()))?;
+    Ok(env.new_string(json)?)
 }
 
 /// Throws an `IcechunkException` (or the subclass `IcechunkException.fromNative` picks

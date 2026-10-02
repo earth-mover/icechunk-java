@@ -1,46 +1,21 @@
 use std::sync::Arc;
 
-use chrono::SecondsFormat;
 use futures::TryStreamExt as _;
 use icechunk::Repository;
-use icechunk::format::SnapshotId;
-use icechunk::repository::VersionInfo;
 use jni::objects::{JObjectArray, JString};
 use jni::sys::{jboolean, jint, jlong};
 
-use crate::call::{block_on, native, strings, text};
-use crate::error::{ErrorKind, NativeError, NativeResult};
+use crate::call::{block_on, json_string, native, optional_text, strings, text};
+use crate::error::{NativeError, NativeResult};
 use crate::handles::{self, Object};
-use crate::spec::{RepositoryOptions, RepositoryOptionsSpec};
+use crate::results::{DiffResult, SnapshotInfoResult, SnapshotInfosResult};
+use crate::spec::{RepositoryOptions, RepositoryOptionsSpec, VersionSpec, snapshot_id};
 
 /// How `repositoryOpen` treats an existing or missing repository. The values match the
 /// `Native.OPEN_*` constants.
 pub(crate) const OPEN: jint = 0;
 pub(crate) const CREATE: jint = 1;
 pub(crate) const OPEN_OR_CREATE: jint = 2;
-
-/// How a version argument is interpreted. The values match the `Native.VERSION_*`
-/// constants.
-pub(crate) const VERSION_BRANCH: jint = 0;
-pub(crate) const VERSION_TAG: jint = 1;
-pub(crate) const VERSION_SNAPSHOT: jint = 2;
-
-fn snapshot_id(id: &str) -> NativeResult<SnapshotId> {
-    SnapshotId::try_from(id).map_err(|err| {
-        NativeError::invalid_argument(format!("bad snapshot id {id:?}: {err}"))
-    })
-}
-
-fn version(kind: jint, value: String) -> NativeResult<VersionInfo> {
-    match kind {
-        VERSION_BRANCH => Ok(VersionInfo::BranchTipRef(value)),
-        VERSION_TAG => Ok(VersionInfo::TagRef(value)),
-        VERSION_SNAPSHOT => Ok(VersionInfo::SnapshotId(snapshot_id(&value)?)),
-        other => {
-            Err(NativeError::invalid_argument(format!("unknown version kind {other}")))
-        }
-    }
-}
 
 async fn open(
     storage: handles::StorageRef,
@@ -98,9 +73,7 @@ native! { fn repositoryExists(_, storage: jlong) -> jboolean {
 
 native! { fn repositoryConfig(env, repository: jlong) -> JString<'l> {
     let repository = handles::repository(repository)?;
-    let json = serde_json::to_string(repository.config())
-        .map_err(|err| NativeError::new(ErrorKind::Icechunk, err.to_string()))?;
-    Ok(env.new_string(json)?)
+    json_string(env, repository.config())
 }}
 
 native! { fn repositoryListBranches(env, repository: jlong) -> JObjectArray<'l, JString<'l>> {
@@ -144,13 +117,15 @@ native! { fn repositoryDeleteBranch(env, repository: jlong, name: JString<'l>) -
     Ok(block_on(repository.delete_branch(&name))??)
 }}
 
+// `from` is null, or the snapshot the branch must currently point to.
 native! { fn repositoryResetBranch(
-    env, repository: jlong, name: JString<'l>, snapshot: JString<'l>
+    env, repository: jlong, name: JString<'l>, to: JString<'l>, from: JString<'l>
 ) -> () {
     let repository = handles::repository(repository)?;
     let name = text(env, &name)?;
-    let snapshot = snapshot_id(&text(env, &snapshot)?)?;
-    Ok(block_on(repository.reset_branch(&name, &snapshot, None))??)
+    let to = snapshot_id(&text(env, &to)?)?;
+    let from = optional_text(env, &from)?.map(|id| snapshot_id(&id)).transpose()?;
+    Ok(block_on(repository.reset_branch(&name, &to, from.as_ref()))??)
 }}
 
 native! { fn repositoryCreateTag(
@@ -168,30 +143,42 @@ native! { fn repositoryDeleteTag(env, repository: jlong, name: JString<'l>) -> (
     Ok(block_on(repository.delete_tag(&name))??)
 }}
 
-// Four strings per snapshot, newest first: id, parent id (empty for the first snapshot),
-// commit time in RFC 3339 UTC, and message. `Repository.ancestry` reads them in that order.
-native! { fn repositoryAncestry(
-    env, repository: jlong, kind: jint, value: JString<'l>
-) -> JObjectArray<'l, JString<'l>> {
+// A `SnapshotInfosResult` document, newest first.
+native! { fn repositoryAncestry(env, repository: jlong, version: JString<'l>) -> JString<'l> {
     let repository = handles::repository(repository)?;
-    let version = version(kind, text(env, &value)?)?;
+    let version = VersionSpec::parse(&text(env, &version)?)?;
     let snapshots: Vec<_> =
         block_on(async { repository.ancestry(&version).await?.try_collect().await })??;
-    let mut fields = Vec::with_capacity(snapshots.len() * 4);
-    for snapshot in snapshots {
-        fields.push(snapshot.id.to_string());
-        fields.push(snapshot.parent_id.map(|id| id.to_string()).unwrap_or_default());
-        fields.push(snapshot.flushed_at.to_rfc3339_opts(SecondsFormat::Micros, true));
-        fields.push(snapshot.message);
-    }
-    strings(env, fields.iter())
+    json_string(env, &SnapshotInfosResult(&snapshots))
 }}
 
-native! { fn repositoryReadonlySession(
-    env, repository: jlong, kind: jint, value: JString<'l>
-) -> jlong {
+native! { fn repositoryLookupSnapshot(env, repository: jlong, id: JString<'l>) -> JString<'l> {
     let repository = handles::repository(repository)?;
-    let version = version(kind, text(env, &value)?)?;
+    let id = snapshot_id(&text(env, &id)?)?;
+    let snapshot = block_on(repository.lookup_snapshot(&id))??;
+    json_string(env, &SnapshotInfoResult::from(&snapshot))
+}}
+
+native! { fn repositoryResolveVersion(env, repository: jlong, version: JString<'l>) -> JString<'l> {
+    let repository = handles::repository(repository)?;
+    let version = VersionSpec::parse(&text(env, &version)?)?;
+    let id = block_on(repository.resolve_version(&version))??;
+    Ok(env.new_string(id.to_string())?)
+}}
+
+native! { fn repositoryDiff(
+    env, repository: jlong, from: JString<'l>, to: JString<'l>
+) -> JString<'l> {
+    let repository = handles::repository(repository)?;
+    let from = VersionSpec::parse(&text(env, &from)?)?;
+    let to = VersionSpec::parse(&text(env, &to)?)?;
+    let diff = block_on(repository.diff(&from, &to))??;
+    json_string(env, &DiffResult::from(&diff))
+}}
+
+native! { fn repositoryReadonlySession(env, repository: jlong, version: JString<'l>) -> jlong {
+    let repository = handles::repository(repository)?;
+    let version = VersionSpec::parse(&text(env, &version)?)?;
     let session = block_on(repository.readonly_session(&version))??;
     handles::insert(Object::Session(Arc::new(tokio::sync::RwLock::new(session))))
 }}

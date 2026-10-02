@@ -161,6 +161,32 @@ public final class Store extends NativeHandle {
         }
     }
 
+    /**
+     * The total size in bytes of the metadata and chunks of the group or array at {@code prefix} and everything below
+     * it. An empty prefix sizes the whole store.
+     *
+     * <p>The total is not a snapshot: with concurrent writes it may or may not include keys written or deleted while
+     * it runs.
+     *
+     * @throws IcechunkException if {@code prefix} is not a group or array
+     */
+    public long getSizePrefix(String prefix) {
+        try {
+            return Native.storeGetSizePrefix(handle(), prefix);
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
+    /** Delete every key in the store. */
+    public void clear() {
+        try {
+            Native.storeClear(handle());
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
     /** Returns true if no key starts with {@code prefix}. */
     public boolean isEmpty(String prefix) {
         try {

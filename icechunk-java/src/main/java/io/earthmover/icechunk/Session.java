@@ -83,11 +83,32 @@ public final class Session extends NativeHandle {
      * @throws IcechunkException if the session is read-only or has no changes
      */
     public SnapshotId commit(String message) {
+        return commit(message, CommitOptions.defaults());
+    }
+
+    /**
+     * Commit the uncommitted changes as a new snapshot, with metadata or other {@code options}.
+     *
+     * @see #commit(String)
+     */
+    public SnapshotId commit(String message, CommitOptions options) {
+        String json = options.toJson();
         try {
-            return SnapshotId.of(Native.sessionCommit(handle(), message));
+            return SnapshotId.of(Native.sessionCommit(handle(), message, json));
         } finally {
             HandleCleaner.reachabilityFence(this);
         }
+    }
+
+    /** The uncommitted changes. */
+    public Diff status() {
+        String json;
+        try {
+            json = Native.sessionStatus(handle());
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+        return Diff.fromJson(json);
     }
 
     /** Drop all uncommitted changes. */

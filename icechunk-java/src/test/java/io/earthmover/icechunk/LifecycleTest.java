@@ -121,4 +121,37 @@ class LifecycleTest {
         }
         assertEquals(1, released.get());
     }
+
+    /**
+     * Sizing a prefix while another thread writes and deletes must neither deadlock on the session lock nor fail on a
+     * key deleted after it was listed.
+     */
+    @Test
+    void getSizePrefixWithConcurrentWrites() throws Exception {
+        ExecutorService pool = Executors.newFixedThreadPool(2);
+        try (Storage storage = Storage.inMemory();
+                Repository repo = Repository.create(storage);
+                Session session = repo.writableSession("main")) {
+            Store store = session.store();
+            store.set("zarr.json", ByteBuffer.wrap(GROUP));
+            store.set("data/zarr.json", ByteBuffer.wrap(StoreTest.ARRAY));
+            Future<?> sizer = pool.submit(() -> {
+                for (int i = 0; i < 2000; i++) {
+                    store.getSizePrefix("");
+                }
+            });
+            Future<?> writer = pool.submit(() -> {
+                for (int i = 0; i < 2000; i++) {
+                    store.set("data/c/0", ByteBuffer.wrap(StoreTest.CHUNK));
+                    store.set("g" + i % 4 + "/zarr.json", ByteBuffer.wrap(GROUP));
+                    store.delete("data/c/0");
+                    store.deleteDir("g" + (i + 2) % 4);
+                }
+            });
+            sizer.get(60, TimeUnit.SECONDS);
+            writer.get(60, TimeUnit.SECONDS);
+        } finally {
+            pool.shutdownNow();
+        }
+    }
 }

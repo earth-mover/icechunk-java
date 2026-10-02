@@ -9,6 +9,7 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
+use chrono::{DateTime, Utc};
 use icechunk::RepositoryConfig;
 use icechunk::config::{
     AzureCredentials, AzureStaticCredentials, Credentials, GcsBearerCredential,
@@ -16,7 +17,10 @@ use icechunk::config::{
 };
 use serde::Deserialize;
 
+use icechunk::format::SnapshotId;
 use icechunk::format::format_constants::SpecVersionBin;
+use icechunk::format::snapshot::SnapshotProperties;
+use icechunk::repository::VersionInfo;
 
 use crate::error::{NativeError, NativeResult};
 
@@ -270,6 +274,59 @@ impl RepositoryOptionsSpec {
     }
 }
 
+pub(crate) fn snapshot_id(id: &str) -> NativeResult<SnapshotId> {
+    SnapshotId::try_from(id).map_err(|err| {
+        NativeError::invalid_argument(format!("bad snapshot id {id:?}: {err}"))
+    })
+}
+
+/// A `Version` from Java, one variant per `VersionInfo` variant.
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub(crate) enum VersionSpec {
+    Branch {
+        name: String,
+    },
+    Tag {
+        name: String,
+    },
+    SnapshotId {
+        id: String,
+    },
+    /// `at` is an RFC 3339 timestamp, as `java.time.Instant.toString` writes it.
+    AsOf {
+        branch: String,
+        at: DateTime<Utc>,
+    },
+}
+
+impl VersionSpec {
+    pub(crate) fn parse(json: &str) -> NativeResult<VersionInfo> {
+        match serde_json::from_str(json)? {
+            VersionSpec::Branch { name } => Ok(VersionInfo::BranchTipRef(name)),
+            VersionSpec::Tag { name } => Ok(VersionInfo::TagRef(name)),
+            VersionSpec::SnapshotId { id } => {
+                Ok(VersionInfo::SnapshotId(snapshot_id(&id)?))
+            }
+            VersionSpec::AsOf { branch, at } => Ok(VersionInfo::AsOf { branch, at }),
+        }
+    }
+}
+
+/// `CommitOptions` from Java.
+#[derive(Debug, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub(crate) struct CommitSpec {
+    pub(crate) metadata: Option<SnapshotProperties>,
+    pub(crate) allow_empty: bool,
+}
+
+impl CommitSpec {
+    pub(crate) fn parse(json: &str) -> NativeResult<CommitSpec> {
+        Ok(serde_json::from_str(json)?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,5 +404,53 @@ mod tests {
         let options = RepositoryOptionsSpec::parse("{}").unwrap();
         assert!(options.config.is_none());
         assert!(options.check_clean_root);
+    }
+
+    #[test]
+    fn versions() {
+        assert!(matches!(
+            VersionSpec::parse(r#"{"type":"branch","name":"main"}"#).unwrap(),
+            VersionInfo::BranchTipRef(name) if name == "main"
+        ));
+        assert!(matches!(
+            VersionSpec::parse(r#"{"type":"tag","name":"v1"}"#).unwrap(),
+            VersionInfo::TagRef(name) if name == "v1"
+        ));
+        assert!(matches!(
+            VersionSpec::parse(r#"{"type":"snapshot_id","id":"1CECHNKREP0F1RSTCMT0"}"#)
+                .unwrap(),
+            VersionInfo::SnapshotId(_)
+        ));
+        let VersionInfo::AsOf { branch, at } = VersionSpec::parse(
+            r#"{"type":"as_of","branch":"main","at":"2026-01-02T03:04:05.000006Z"}"#,
+        )
+        .unwrap() else {
+            panic!("expected AsOf");
+        };
+        assert_eq!(branch, "main");
+        assert_eq!(at.to_rfc3339(), "2026-01-02T03:04:05.000006+00:00");
+    }
+
+    #[test]
+    fn bad_versions_are_rejected() {
+        assert!(VersionSpec::parse(r#"{"type":"snapshot_id","id":"nope"}"#).is_err());
+        assert!(
+            VersionSpec::parse(r#"{"type":"as_of","branch":"main","at":"yesterday"}"#)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn commit_options() {
+        let spec = CommitSpec::parse(
+            r#"{"metadata":{"author":"ian","n":1},"allow_empty":true}"#,
+        )
+        .unwrap();
+        assert!(spec.allow_empty);
+        let metadata = spec.metadata.unwrap();
+        assert_eq!(metadata.get("author"), Some(&serde_json::json!("ian")));
+        assert_eq!(metadata.get("n"), Some(&serde_json::json!(1)));
+        let defaults = CommitSpec::parse(r#"{"allow_empty":false}"#).unwrap();
+        assert!(defaults.metadata.is_none() && !defaults.allow_empty);
     }
 }

@@ -13,10 +13,6 @@ final class Native {
     static final int CREATE = 1;
     static final int OPEN_OR_CREATE = 2;
 
-    static final int VERSION_BRANCH = 0;
-    static final int VERSION_TAG = 1;
-    static final int VERSION_SNAPSHOT = 2;
-
     static final long RANGE_BOUNDED = 1;
     static final long RANGE_FROM = 2;
     static final long RANGE_SUFFIX = 3;
@@ -32,6 +28,8 @@ final class Native {
     private Native() {}
 
     static native void close(long handle);
+
+    static native void initializeLogs(String filter);
 
     static native long storageOpen(String specJson);
 
@@ -53,15 +51,21 @@ final class Native {
 
     static native void repositoryDeleteBranch(long repository, String name);
 
-    static native void repositoryResetBranch(long repository, String name, String snapshot);
+    static native void repositoryResetBranch(long repository, String name, String to, String from);
 
     static native void repositoryCreateTag(long repository, String name, String snapshot);
 
     static native void repositoryDeleteTag(long repository, String name);
 
-    static native String[] repositoryAncestry(long repository, int kind, String value);
+    static native String repositoryAncestry(long repository, String versionJson);
 
-    static native long repositoryReadonlySession(long repository, int kind, String value);
+    static native String repositoryLookupSnapshot(long repository, String id);
+
+    static native String repositoryResolveVersion(long repository, String versionJson);
+
+    static native String repositoryDiff(long repository, String fromJson, String toJson);
+
+    static native long repositoryReadonlySession(long repository, String versionJson);
 
     static native long repositoryWritableSession(long repository, String branch);
 
@@ -73,7 +77,9 @@ final class Native {
 
     static native boolean sessionHasUncommittedChanges(long session);
 
-    static native String sessionCommit(long session, String message);
+    static native String sessionCommit(long session, String message, String optionsJson);
+
+    static native String sessionStatus(long session);
 
     static native void sessionDiscardChanges(long session);
 
@@ -95,6 +101,10 @@ final class Native {
     static native void storeDelete(long store, String key);
 
     static native void storeDeleteDir(long store, String prefix);
+
+    static native long storeGetSizePrefix(long store, String prefix);
+
+    static native void storeClear(long store);
 
     static native boolean storeIsEmpty(long store, String prefix);
 

@@ -1,12 +1,15 @@
 package io.earthmover.icechunk;
 
+import java.math.BigInteger;
+import java.util.Collection;
 import java.util.Map;
 
 /**
  * Builds the JSON documents the native layer reads to configure storage and repositories.
  *
  * <p>The documents only contain strings, numbers, booleans and nested objects, so a few dozen lines replace a JSON
- * library dependency. Null values are omitted, which the native side reads as "not set".
+ * library dependency. Null values are omitted, which the native side reads as "not set". {@link #putValue} also writes
+ * arbitrary JSON values, such as commit metadata, where null is kept.
  */
 final class Json {
     private final StringBuilder out = new StringBuilder("{");
@@ -50,6 +53,80 @@ final class Json {
             put(name, nested);
         }
         return this;
+    }
+
+    /**
+     * Write {@code value} as JSON: a {@code String}, {@code Boolean}, {@code Map} with string keys, {@code Collection},
+     * null, or a number of type {@code Integer}, {@code Long}, {@code Short}, {@code Byte}, {@code Double},
+     * {@code Float} or {@code BigInteger}, with maps and collections nested at most {@value #MAX_DEPTH} deep.
+     *
+     * @throws IllegalArgumentException for any other type, deeper nesting, a non-finite number, or a
+     *     {@code BigInteger} outside the range of a 64-bit signed or unsigned integer, which the native side would
+     *     round to a double
+     */
+    Json putValue(String name, Object value) {
+        writeValue(key(name), value, 0);
+        return this;
+    }
+
+    /** serde_json stops parsing at 128 levels; this leaves room for the documents that contain the value. */
+    static final int MAX_DEPTH = 100;
+
+    private static final BigInteger LONG_MIN = BigInteger.valueOf(Long.MIN_VALUE);
+    private static final BigInteger UNSIGNED_LONG_MAX =
+            BigInteger.ONE.shiftLeft(64).subtract(BigInteger.ONE);
+
+    private static void writeValue(StringBuilder out, Object value, int depth) {
+        if (depth > MAX_DEPTH) {
+            throw new IllegalArgumentException("JSON values nest deeper than " + MAX_DEPTH + " levels");
+        }
+        if (value == null) {
+            out.append("null");
+        } else if (value instanceof String) {
+            quote(out, (String) value);
+        } else if (value instanceof Boolean) {
+            out.append(value);
+        } else if (value instanceof Double || value instanceof Float) {
+            double d = ((Number) value).doubleValue();
+            if (Double.isNaN(d) || Double.isInfinite(d)) {
+                throw new IllegalArgumentException("JSON has no representation for " + value);
+            }
+            out.append(value);
+        } else if (value instanceof Long
+                || value instanceof Integer
+                || value instanceof Short
+                || value instanceof Byte) {
+            out.append(value);
+        } else if (value instanceof BigInteger) {
+            BigInteger integer = (BigInteger) value;
+            if (integer.compareTo(LONG_MIN) < 0 || integer.compareTo(UNSIGNED_LONG_MAX) > 0) {
+                throw new IllegalArgumentException("integer out of the 64-bit range: " + value);
+            }
+            out.append(value);
+        } else if (value instanceof Map) {
+            Json nested = object();
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+                if (!(entry.getKey() instanceof String)) {
+                    throw new IllegalArgumentException("JSON object keys must be strings: " + entry.getKey());
+                }
+                writeValue(nested.key((String) entry.getKey()), entry.getValue(), depth + 1);
+            }
+            out.append(nested);
+        } else if (value instanceof Collection) {
+            out.append('[');
+            boolean first = true;
+            for (Object element : (Collection<?>) value) {
+                if (!first) {
+                    out.append(',');
+                }
+                first = false;
+                writeValue(out, element, depth + 1);
+            }
+            out.append(']');
+        } else {
+            throw new IllegalArgumentException(
+                    "not a JSON value: " + value.getClass().getName());
+        }
     }
 
     /** Insert an already serialized JSON value. */

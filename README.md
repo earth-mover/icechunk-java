@@ -97,7 +97,8 @@ configuration overrides.
 
 ### Reading a version
 
-A session reads one version of the repository: the tip of a branch, a tag, or a snapshot.
+A session reads one version of the repository: the tip of a branch, a tag, a snapshot, or a branch as it was at a
+point in time.
 
 ```java
 try (Session session = repo.readonlySession(Version.branch("main"))) {
@@ -109,7 +110,11 @@ try (Session session = repo.readonlySession(Version.branch("main"))) {
 
 repo.readonlySession(Version.tag("v1.0"));
 repo.readonlySession(Version.snapshot(SnapshotId.of("GQQFH5G3AXKWZR5H33M0")));
+repo.readonlySession(Version.asOf("main", Instant.parse("2026-03-01T00:00:00Z")));
 ```
+
+`Version.asOf` picks the newest snapshot on the branch committed at or before that time. `repo.resolveVersion(version)`
+returns the snapshot a version refers to without opening a session.
 
 `Store` works with raw Zarr keys. To read arrays, wrap the session in an `IcechunkZarrStore` and use zarr-java:
 
@@ -126,11 +131,20 @@ for more changes.
 ```java
 try (Session session = repo.writableSession("main")) {
     // write through session.store() or an IcechunkZarrStore
+    Diff pending = session.status();  // the uncommitted changes
     SnapshotId id = session.commit("Add March data");
 } catch (ConflictException e) {
     // someone else committed to main first: open a new session and redo the writes
 }
 ```
+
+`CommitOptions` attaches metadata to the snapshot, or lets a commit with no changes succeed:
+
+```java
+session.commit("Add March data", CommitOptions.builder().metadata("source", "era5").build());
+```
+
+Metadata values are JSON values: strings, booleans, numbers, lists, maps with string keys, and null.
 
 ### Large values and memory
 
@@ -147,13 +161,20 @@ try (Session session = repo.writableSession("main")) {
 
 ```java
 for (SnapshotInfo snapshot : repo.ancestry(Version.branch("main"))) {
-    System.out.println(snapshot.id() + " " + snapshot.writtenAt() + " " + snapshot.message());
+    System.out.println(snapshot.id() + " " + snapshot.writtenAt() + " " + snapshot.message() + " " + snapshot.metadata());
 }
 
 SnapshotId tip = repo.lookupBranch("main");
 repo.createBranch("experiment", tip);
 repo.createTag("v1.0", tip);
+
+SnapshotId parent = repo.lookupSnapshot(tip).parentId().get();
+Diff lastCommit = repo.diff(Version.snapshot(parent), Version.branch("main"));
+repo.resetBranch("experiment", parent, tip);  // ConflictException unless experiment still points to tip
 ```
+
+`diff(from, to)` lists the changes made after `from` up to `to`, so `from` must be an earlier snapshot in `to`'s
+history.
 
 ### Closing and threads
 
@@ -172,12 +193,13 @@ Using a closed object throws `IllegalStateException`.
 - **Not on Maven Central.** Jars come from GitHub releases or a source build.
 - **zarr-java covers numeric data types only.** It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
-- **Missing APIs.** There is no diff, garbage collection, snapshot expiration, rebase, node move, or writing of
-  virtual references yet, and repository configuration is passed as a JSON document rather than typed builders.
+- **Missing APIs.** There is no garbage collection, snapshot expiration, rebase, node move, or writing of virtual
+  references yet, and repository configuration is passed as a JSON document rather than typed builders.
 - **Fixed credentials only.** Credentials cannot refresh through a Java callback. The native HTTP client does not use
   the JVM's proxy settings or trust store.
-- **Blocking calls only.** There is no `CompletableFuture` API, and icechunk's log output is not forwarded to a
-  Java logging framework.
+- **Blocking calls only.** There is no `CompletableFuture` API.
+- **Logs go to standard error.** `Logging.initialize()` turns on icechunk's own log output, filtered by the
+  `ICECHUNK_LOG` environment variable; it is not forwarded to a Java logging framework.
 
 ## Further reading
 

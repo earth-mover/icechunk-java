@@ -4,8 +4,10 @@ use icechunk::Store;
 use jni::objects::JString;
 use jni::sys::{jboolean, jlong};
 
-use crate::call::{block_on, native, optional_string, text};
+use crate::call::{block_on, json_string, native, optional_string, text};
 use crate::handles::{self, Object};
+use crate::results::DiffResult;
+use crate::spec::CommitSpec;
 
 native! { fn sessionSnapshotId(env, session: jlong) -> JString<'l> {
     let session = handles::session(session)?;
@@ -29,11 +31,28 @@ native! { fn sessionHasUncommittedChanges(_, session: jlong) -> jboolean {
     block_on(async { session.read().await.has_uncommitted_changes() })
 }}
 
-native! { fn sessionCommit(env, session: jlong, message: JString<'l>) -> JString<'l> {
+native! { fn sessionCommit(
+    env, session: jlong, message: JString<'l>, options: JString<'l>
+) -> JString<'l> {
     let session = handles::session(session)?;
     let message = text(env, &message)?;
-    let id = block_on(async { session.write().await.commit(message).execute().await })??;
+    let CommitSpec { metadata, allow_empty } = CommitSpec::parse(&text(env, &options)?)?;
+    let id = block_on(async {
+        let mut session = session.write().await;
+        let mut commit = session.commit(message).allow_empty(allow_empty);
+        if let Some(metadata) = metadata {
+            commit = commit.properties(metadata);
+        }
+        commit.execute().await
+    })??;
     Ok(env.new_string(id.to_string())?)
+}}
+
+// A `DiffResult` document for the uncommitted changes.
+native! { fn sessionStatus(env, session: jlong) -> JString<'l> {
+    let session = handles::session(session)?;
+    let diff = block_on(async { session.read().await.status().await })??;
+    json_string(env, &DiffResult::from(&diff))
 }}
 
 native! { fn sessionDiscardChanges(_, session: jlong) -> () {

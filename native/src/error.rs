@@ -1,5 +1,6 @@
 use std::fmt;
 
+use icechunk::refs::RefErrorKind;
 use icechunk::repository::{RepositoryError, RepositoryErrorKind};
 use icechunk::session::{SessionError, SessionErrorKind};
 use icechunk::storage::StorageError;
@@ -76,14 +77,16 @@ impl From<jni::errors::Error> for NativeError {
 
 impl From<serde_json::Error> for NativeError {
     fn from(err: serde_json::Error) -> Self {
-        Self::invalid_argument(format!("malformed options from Java: {err}"))
+        Self::invalid_argument(format!("invalid JSON document from Java: {err}"))
     }
 }
 
 impl From<RepositoryError> for NativeError {
     fn from(err: RepositoryError) -> Self {
         match &err.kind {
-            RepositoryErrorKind::Conflict { .. } => {
+            // Spec version 1 repositories report a moved branch as a ref conflict.
+            RepositoryErrorKind::Conflict { .. }
+            | RepositoryErrorKind::Ref(RefErrorKind::Conflict { .. }) => {
                 Self::new(ErrorKind::Conflict, err.to_string())
             }
             _ => Self::icechunk(&err),

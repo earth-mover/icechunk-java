@@ -1,7 +1,5 @@
 package io.earthmover.icechunk;
 
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -146,8 +144,18 @@ public final class Repository extends NativeHandle {
 
     /** Move {@code branch} to {@code snapshot}, which may be any snapshot in the repository. */
     public void resetBranch(String branch, SnapshotId snapshot) {
+        resetBranch(branch, snapshot, null);
+    }
+
+    /**
+     * Move {@code branch} to {@code snapshot}, only if it still points to {@code expected}.
+     *
+     * @throws ConflictException if the branch has moved away from {@code expected}
+     */
+    public void resetBranch(String branch, SnapshotId snapshot, SnapshotId expected) {
+        String from = expected == null ? null : expected.toString();
         try {
-            Native.repositoryResetBranch(handle(), branch, snapshot.toString());
+            Native.repositoryResetBranch(handle(), branch, snapshot.toString(), from);
         } finally {
             HandleCleaner.reachabilityFence(this);
         }
@@ -172,28 +180,59 @@ public final class Repository extends NativeHandle {
 
     /** The history leading to {@code version}, newest first, ending with the repository's first snapshot. */
     public List<SnapshotInfo> ancestry(Version version) {
-        String[] fields;
+        String json;
         try {
-            fields = Native.repositoryAncestry(handle(), version.kind(), version.value());
+            json = Native.repositoryAncestry(handle(), version.toJson());
         } finally {
             HandleCleaner.reachabilityFence(this);
         }
-        List<SnapshotInfo> history = new ArrayList<>(fields.length / 4);
-        for (int i = 0; i + 3 < fields.length; i += 4) {
-            String parent = fields[i + 1];
-            history.add(new SnapshotInfo(
-                    SnapshotId.of(fields[i]),
-                    parent.isEmpty() ? null : SnapshotId.of(parent),
-                    Instant.parse(fields[i + 2]),
-                    fields[i + 3]));
+        return SnapshotInfo.listFromJson(json);
+    }
+
+    /**
+     * The details of one snapshot.
+     *
+     * @throws IcechunkException if there is no such snapshot
+     */
+    public SnapshotInfo lookupSnapshot(SnapshotId snapshot) {
+        String json;
+        try {
+            json = Native.repositoryLookupSnapshot(handle(), snapshot.toString());
+        } finally {
+            HandleCleaner.reachabilityFence(this);
         }
-        return Collections.unmodifiableList(history);
+        return SnapshotInfo.fromJson(JsonReader.readObject(json));
+    }
+
+    /** The snapshot {@code version} refers to now. */
+    public SnapshotId resolveVersion(Version version) {
+        try {
+            return SnapshotId.of(Native.repositoryResolveVersion(handle(), version.toJson()));
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
+    /**
+     * The changes made after {@code from}, up to and including {@code to}.
+     *
+     * @throws IcechunkException unless {@code from} is an earlier snapshot in the history of {@code to}; two versions
+     *     that resolve to the same snapshot also throw
+     */
+    public Diff diff(Version from, Version to) {
+        String json;
+        try {
+            json = Native.repositoryDiff(handle(), from.toJson(), to.toJson());
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+        return Diff.fromJson(json);
     }
 
     /** Open a session that reads {@code version} and cannot write. */
     public Session readonlySession(Version version) {
         try {
-            return new Session(Native.repositoryReadonlySession(handle(), version.kind(), version.value()));
+            return new Session(Native.repositoryReadonlySession(handle(), version.toJson()));
         } finally {
             HandleCleaner.reachabilityFence(this);
         }

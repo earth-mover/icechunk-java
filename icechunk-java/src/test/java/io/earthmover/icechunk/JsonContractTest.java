@@ -2,6 +2,7 @@ package io.earthmover.icechunk;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -43,6 +44,35 @@ class JsonContractTest {
                         + "{\"type\":\"s3\",\"credentials\":{\"type\":\"anonymous\"}},\"file:///data/\":"
                         + "{\"type\":\"local_filesystem\"}},\"check_clean_root\":false}",
                 json);
+    }
+
+    /** The same strings appear in the {@code versions} test in {@code spec.rs}. */
+    @Test
+    void versions() {
+        assertEquals(
+                "{\"type\":\"branch\",\"name\":\"main\"}",
+                Version.branch("main").toJson());
+        assertEquals("{\"type\":\"tag\",\"name\":\"v1\"}", Version.tag("v1").toJson());
+        assertEquals(
+                "{\"type\":\"snapshot_id\",\"id\":\"1CECHNKREP0F1RSTCMT0\"}",
+                Version.snapshot(SnapshotId.of("1CECHNKREP0F1RSTCMT0")).toJson());
+        assertEquals(
+                "{\"type\":\"as_of\",\"branch\":\"main\",\"at\":\"2026-01-02T03:04:05.000006Z\"}",
+                Version.asOf("main", Instant.parse("2026-01-02T03:04:05.000006Z"))
+                        .toJson());
+    }
+
+    @Test
+    void commitOptions() {
+        assertEquals(
+                "{\"metadata\":{\"author\":\"ian\",\"n\":1},\"allow_empty\":true}",
+                CommitOptions.builder()
+                        .metadata("author", "ian")
+                        .metadata("n", 1)
+                        .allowEmpty(true)
+                        .build()
+                        .toJson());
+        assertEquals("{\"allow_empty\":false}", CommitOptions.defaults().toJson());
     }
 
     @Test

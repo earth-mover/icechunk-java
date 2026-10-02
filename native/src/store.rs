@@ -1,6 +1,7 @@
 use bytes::Bytes;
 use futures::TryStreamExt as _;
 use icechunk::format::ByteRange;
+use icechunk::session::SessionErrorKind;
 use icechunk::store::{StoreError, StoreErrorKind};
 use jni::Env;
 use jni::objects::{JByteArray, JByteBuffer, JLongArray, JObjectArray, JString};
@@ -192,6 +193,40 @@ native! { fn storeDeleteDir(env, store: jlong, prefix: JString<'l>) -> () {
     let store = handles::store(store)?;
     let prefix = text(env, &prefix)?;
     Ok(block_on(store.delete_dir(&prefix))??)
+}}
+
+native! { fn storeGetSizePrefix(env, store: jlong, prefix: JString<'l>) -> jlong {
+    let store = handles::store(store)?;
+    let prefix = text(env, &prefix)?;
+    // icechunk's `getsize_prefix` takes a second read lock on the session while holding
+    // the first, which deadlocks once a writer queues between them. Listing and then
+    // sizing each key takes every lock on its own.
+    let size = block_on(async {
+        let keys: Vec<String> = store.list_prefix(&prefix).await?.try_collect().await?;
+        let mut total = 0u64;
+        for key in keys {
+            match store.getsize(&key).await {
+                Ok(size) => total += size,
+                // Deleted by another thread since the listing.
+                Err(StoreError {
+                    kind:
+                        StoreErrorKind::NotFound(_)
+                        | StoreErrorKind::SessionError(SessionErrorKind::NodeNotFound {
+                            ..
+                        }),
+                    ..
+                }) => {}
+                Err(err) => return Err(err),
+            }
+        }
+        Ok::<_, StoreError>(total)
+    })??;
+    i64::try_from(size).map_err(|_| NativeError::invalid_argument("prefix size exceeds a Java long"))
+}}
+
+native! { fn storeClear(_, store: jlong) -> () {
+    let store = handles::store(store)?;
+    Ok(block_on(store.clear())??)
 }}
 
 native! { fn storeIsEmpty(env, store: jlong, prefix: JString<'l>) -> jboolean {

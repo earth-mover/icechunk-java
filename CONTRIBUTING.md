@@ -33,9 +33,10 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 | `native/src/contract_tests.rs` | Checks that constants and error kinds shared with the Java side agree. |
 | `native/src/handles.rs` | The handle table. |
 | `native/src/runtime.rs` | The process-wide tokio runtime. |
-| `native/src/spec.rs` | The JSON formats the Java builders send. |
-| `native/src/{storage,repository,session,store}.rs` | Native methods, one module per Java class. |
-| `icechunk-java/` | The public Java API and its internals (`Native`, `NativeHandle`, `NativeLoader`, `Json`). |
+| `native/src/spec.rs` | The JSON formats the Java classes send. |
+| `native/src/results.rs` | The JSON formats of record results the Java classes read. |
+| `native/src/{storage,repository,session,store,logging}.rs` | Native methods, one module per Java class. |
+| `icechunk-java/` | The public Java API and its internals (`Native`, `NativeHandle`, `NativeLoader`, `Json`, `JsonReader`). |
 | `benchmarks/` | JMH benchmarks of the Store API. |
 | `icechunk-zarr-java/` | The zarr-java adapter, and the zarr-java, fixture and Python interop tests. |
 | `examples/` | Runnable examples. |
@@ -54,9 +55,12 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
    `HandleCleaner.reachabilityFence(this)` in the `finally` block.
 4. If it takes a new kind of option, add it to the Java builder and to `spec.rs`, and extend both `JsonContractTest`
    and the `spec.rs` tests with the same JSON string.
-5. Constants shared by both sides (`Native.RANGE_*`, `Native.VERSION_*` and so on) are defined twice. Change both;
+5. If it returns a record, add a borrowing struct to `results.rs` and a reader on the Java class using `JsonReader`'s
+   field accessors, and extend both the `results.rs` tests and `ResultsContractTest` with the same JSON string. Return
+   scalars and lists of strings directly.
+6. Constants shared by both sides (`Native.RANGE_*`, `Native.LIST_*` and so on) are defined twice. Change both;
    `contract_tests.rs` fails if they disagree, and also needs a line for any new constant.
-6. If it is on a hot path, add a case to `benchmarks/` and compare before and after with `pixi run bench`.
+7. If it is on a hot path, add a case to `benchmarks/` and compare before and after with `pixi run bench`.
 
 ## Updating icechunk
 
