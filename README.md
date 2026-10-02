@@ -61,7 +61,14 @@ pixi run example                 # run examples/.../Quickstart.java
 pixi run example ReadPublicData  # read ERA5 data from a public S3 bucket
 ```
 
-The jars run on Java 8 or later. The build itself needs JDK 21.
+The jars target Java 8, so libraries that compile for Java 8, such as n5-ij and n5-universe, can depend on them. The
+build itself needs JDK 21.
+
+`icechunk-java` is a multi-release jar: on Java 9 and later the JVM loads newer versions of a few internal classes from
+`META-INF/versions/`, with no change to the API. Today that adds one thing: an object you forget to close is released
+by a `java.lang.ref.Cleaner` once it becomes unreachable, where on Java 8 it stays open until the JVM exits. If you
+shade the jar into an uber-jar, keep `Multi-Release: true` in the merged manifest, or every JVM gets the Java 8
+classes. [DESIGN.md](DESIGN.md#handles) has the details.
 
 A development build loads the native library from `native/target/debug`, which the Maven build points to with the
 `icechunk.native.dir` system property. Set the same property when you use the jars from your own project, for
