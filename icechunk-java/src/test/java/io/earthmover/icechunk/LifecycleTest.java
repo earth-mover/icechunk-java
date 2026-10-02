@@ -4,6 +4,7 @@ import static io.earthmover.icechunk.RepositoryTest.GROUP;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -90,5 +91,34 @@ class LifecycleTest {
         } finally {
             pool.shutdownNow();
         }
+    }
+
+    /**
+     * Only the multi-release jar on Java 9 or later carries the cleaner; the class directory and Java 8 use the class
+     * that never releases on its own.
+     */
+    @Test
+    void cleanerMatchesTheRuntime() {
+        boolean fromJar = HandleCleaner.class
+                .getProtectionDomain()
+                .getCodeSource()
+                .getLocation()
+                .getPath()
+                .endsWith(".jar");
+        boolean java9OrLater = !System.getProperty("java.specification.version").startsWith("1.");
+        assertEquals(fromJar && java9OrLater, HandleCleaner.releasesUnreachable());
+    }
+
+    @Test
+    void cleanerRunsReleaseForUnreachableOwners() throws InterruptedException {
+        assumeTrue(HandleCleaner.releasesUnreachable());
+        AtomicInteger released = new AtomicInteger();
+        HandleCleaner.register(new Object(), released::incrementAndGet);
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (released.get() == 0 && System.nanoTime() < deadline) {
+            System.gc();
+            Thread.sleep(10);
+        }
+        assertEquals(1, released.get());
     }
 }

@@ -3,7 +3,9 @@ package io.earthmover.icechunk.zarr;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -49,7 +51,7 @@ final class TestEnvironment {
             Process process = new ProcessBuilder("uv", "--version")
                     .redirectErrorStream(true)
                     .start();
-            process.getInputStream().readAllBytes();
+            readAll(process.getInputStream());
             return process.waitFor() == 0;
         } catch (IOException e) {
             return false;
@@ -57,5 +59,15 @@ final class TestEnvironment {
             Thread.currentThread().interrupt();
             return false;
         }
+    }
+
+    static byte[] readAll(InputStream in) throws IOException {
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        byte[] buffer = new byte[8192];
+        int n;
+        while ((n = in.read(buffer)) != -1) {
+            out.write(buffer, 0, n);
+        }
+        return out.toByteArray();
     }
 }

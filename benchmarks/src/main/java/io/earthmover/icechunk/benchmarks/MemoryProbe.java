@@ -49,7 +49,7 @@ public final class MemoryProbe {
                 try (Session session = repo.readonlySession(Version.branch("main"))) {
                     Store store = session.store();
                     for (int i = 0; i < chunks; i++) {
-                        checksum += store.get(Fixtures.key(i)).orElseThrow()[i % chunkBytes];
+                        checksum += store.get(Fixtures.key(i)).get()[i % chunkBytes];
                     }
                 }
             } else {

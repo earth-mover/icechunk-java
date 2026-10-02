@@ -55,13 +55,13 @@ class StoreTest {
 
     @Test
     void getWholeAndRanges() {
-        assertArrayEquals(CHUNK, store.get("data/c/0").orElseThrow());
+        assertArrayEquals(CHUNK, store.get("data/c/0").get());
         assertArrayEquals(
-                new byte[] {11, 12}, store.get("data/c/0", ByteRange.of(1, 3)).orElseThrow());
+                new byte[] {11, 12}, store.get("data/c/0", ByteRange.of(1, 3)).get());
         assertArrayEquals(
-                new byte[] {12, 13}, store.get("data/c/0", ByteRange.from(2)).orElseThrow());
+                new byte[] {12, 13}, store.get("data/c/0", ByteRange.from(2)).get());
         assertArrayEquals(
-                new byte[] {13}, store.get("data/c/0", ByteRange.suffix(1)).orElseThrow());
+                new byte[] {13}, store.get("data/c/0", ByteRange.suffix(1)).get());
     }
 
     @Test
@@ -84,17 +84,17 @@ class StoreTest {
                 Arrays.asList("data/c/0", "data/c/9", "zarr.json"),
                 Arrays.asList(ByteRange.suffix(2), ByteRange.all(), ByteRange.all()));
         assertEquals(3, values.size());
-        assertArrayEquals(new byte[] {12, 13}, values.get(0).orElseThrow());
+        assertArrayEquals(new byte[] {12, 13}, values.get(0).get());
         assertEquals(Optional.empty(), values.get(1));
-        assertArrayEquals(GROUP, values.get(2).orElseThrow());
+        assertArrayEquals(GROUP, values.get(2).get());
     }
 
     @Test
     void listing() {
-        assertEquals(List.of("data/c/0", "data/zarr.json", "zarr.json"), sorted(store.list()));
-        assertEquals(List.of("data/c/0", "data/zarr.json"), sorted(store.listPrefix("data")));
-        assertEquals(List.of("data", "zarr.json"), sorted(store.listDir("")));
-        assertEquals(List.of("c", "zarr.json"), sorted(store.listDir("data")));
+        assertEquals(Arrays.asList("data/c/0", "data/zarr.json", "zarr.json"), sorted(store.list()));
+        assertEquals(Arrays.asList("data/c/0", "data/zarr.json"), sorted(store.listPrefix("data")));
+        assertEquals(Arrays.asList("data", "zarr.json"), sorted(store.listDir("")));
+        assertEquals(Arrays.asList("c", "zarr.json"), sorted(store.listDir("data")));
         assertFalse(store.isEmpty("data"));
         assertTrue(store.isEmpty("nothing"));
     }
@@ -111,7 +111,7 @@ class StoreTest {
     @Test
     void setIfNotExistsKeepsTheOldValue() {
         store.setIfNotExists("data/c/0", ByteBuffer.wrap(new byte[] {1, 1, 1, 1}));
-        assertArrayEquals(CHUNK, store.get("data/c/0").orElseThrow());
+        assertArrayEquals(CHUNK, store.get("data/c/0").get());
     }
 
     @Test
@@ -130,6 +130,6 @@ class StoreTest {
     private static List<String> sorted(List<String> keys) {
         String[] array = keys.toArray(new String[0]);
         Arrays.sort(array);
-        return List.of(array);
+        return Arrays.asList(array);
     }
 }

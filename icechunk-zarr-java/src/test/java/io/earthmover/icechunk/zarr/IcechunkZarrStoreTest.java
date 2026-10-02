@@ -15,6 +15,7 @@ import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.Storage;
 import io.earthmover.icechunk.Version;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.List;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -107,12 +108,12 @@ class IcechunkZarrStoreTest {
                                     .build())
                     .write(ucar.ma2.Array.factory(ucar.ma2.DataType.UBYTE, new int[] {4}, new byte[] {1, 2, 3, 4}));
 
-            assertEquals(List.of("a", "zarr.json"), sorted(store.listChildren()));
+            assertEquals(Arrays.asList("a", "zarr.json"), sorted(store.listChildren()));
             assertEquals(
-                    List.of("b/c/0", "b/c/1", "b/zarr.json", "zarr.json"),
+                    Arrays.asList("b/c/0", "b/c/1", "b/zarr.json", "zarr.json"),
                     sorted(store.list(new String[] {"a"}).map(k -> String.join("/", k))));
             assertEquals(
-                    List.of("0", "1"),
+                    Arrays.asList("0", "1"),
                     sorted(store.list(new String[] {"a", "b", "c"}).map(k -> String.join("/", k))),
                     "a prefix below an array lists that array's keys under it");
             assertEquals(0, store.list(new String[] {"nothing", "here"}).count());

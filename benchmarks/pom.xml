@@ -18,6 +18,8 @@
 		<maven.install.skip>true</maven.install.skip>
 		<maven.deploy.skip>true</maven.deploy.skip>
 		<jmh.version>1.37</jmh.version>
+		<!-- Not published, and MemoryProbe uses ProcessHandle. -->
+		<maven.compiler.release>21</maven.compiler.release>
 	</properties>
 
 	<dependencies>
@@ -68,6 +70,10 @@
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 									<mainClass>org.openjdk.jmh.Main</mainClass>
+									<!-- Keeps icechunk-java's Java 9 classes in use; shading drops its manifest. -->
+									<manifestEntries>
+										<Multi-Release>true</Multi-Release>
+									</manifestEntries>
 								</transformer>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
 							</transformers>

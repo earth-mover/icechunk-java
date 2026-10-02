@@ -16,6 +16,7 @@ import io.earthmover.icechunk.Version;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -36,13 +37,13 @@ class CompatibilityFixturesTest {
     void readsOldRepositories(String name) throws Exception {
         try (Storage storage = Storage.localFilesystem(TestEnvironment.fixture(name, tmp));
                 Repository repo = Repository.open(storage)) {
-            assertEquals(Set.of("main", "my-branch"), repo.listBranches());
-            assertEquals(Set.of("it also works!", "it works!"), repo.listTags());
+            assertEquals(setOf("main", "my-branch"), repo.listBranches());
+            assertEquals(setOf("it also works!", "it works!"), repo.listTags());
             assertThrows(IcechunkException.class, () -> repo.readonlySession(Version.tag("deleted")));
 
             List<String> mainHistory =
-                    List.of("set virtual chunk", "fill data", "empty structure", "Repository initialized");
-            List<String> branchHistory = new ArrayList<>(List.of("some more structure", "delete a chunk"));
+                    Arrays.asList("set virtual chunk", "fill data", "empty structure", "Repository initialized");
+            List<String> branchHistory = new ArrayList<>(Arrays.asList("some more structure", "delete a chunk"));
             branchHistory.addAll(mainHistory);
             assertEquals(mainHistory, messages(repo.ancestry(Version.branch("main"))));
             assertEquals(branchHistory, messages(repo.ancestry(Version.branch("my-branch"))));
@@ -52,10 +53,11 @@ class CompatibilityFixturesTest {
 
             try (Session session = repo.readonlySession(Version.branch("my-branch"))) {
                 Store store = session.store();
-                assertEquals(List.of("group1", "group2", "zarr.json"), sorted(store.listDir("")));
-                assertEquals(List.of("big_chunks", "small_chunks", "zarr.json"), sorted(store.listDir("group1")));
-                assertEquals(List.of("group3", "zarr.json"), sorted(store.listDir("group2")));
-                assertEquals(List.of("c", "zarr.json"), sorted(store.listDir("group2/group3/group4/group5/inner")));
+                assertEquals(Arrays.asList("group1", "group2", "zarr.json"), sorted(store.listDir("")));
+                assertEquals(Arrays.asList("big_chunks", "small_chunks", "zarr.json"), sorted(store.listDir("group1")));
+                assertEquals(Arrays.asList("group3", "zarr.json"), sorted(store.listDir("group2")));
+                assertEquals(
+                        Arrays.asList("c", "zarr.json"), sorted(store.listDir("group2/group3/group4/group5/inner")));
 
                 IcechunkZarrStore zarr = new IcechunkZarrStore(session);
 
@@ -88,5 +90,9 @@ class CompatibilityFixturesTest {
         String[] array = keys.toArray(new String[0]);
         Arrays.sort(array);
         return Arrays.asList(array);
+    }
+
+    private static Set<String> setOf(String... items) {
+        return new HashSet<>(Arrays.asList(items));
     }
 }

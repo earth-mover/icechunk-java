@@ -1,6 +1,5 @@
 package io.earthmover.icechunk;
 
-import java.lang.ref.Reference;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -35,7 +34,7 @@ public final class Repository extends NativeHandle {
         try {
             return new Repository(Native.repositoryOpen(storage.handle(), mode, json));
         } finally {
-            Reference.reachabilityFence(storage);
+            HandleCleaner.reachabilityFence(storage);
         }
     }
 
@@ -79,7 +78,7 @@ public final class Repository extends NativeHandle {
         try {
             return Native.repositoryExists(storage.handle());
         } finally {
-            Reference.reachabilityFence(storage);
+            HandleCleaner.reachabilityFence(storage);
         }
     }
 
@@ -88,7 +87,7 @@ public final class Repository extends NativeHandle {
         try {
             return Native.repositoryConfig(handle());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -97,7 +96,7 @@ public final class Repository extends NativeHandle {
         try {
             return sortedSet(Native.repositoryListBranches(handle()));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -106,7 +105,7 @@ public final class Repository extends NativeHandle {
         try {
             return sortedSet(Native.repositoryListTags(handle()));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -115,7 +114,7 @@ public final class Repository extends NativeHandle {
         try {
             return SnapshotId.of(Native.repositoryLookupBranch(handle(), branch));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -124,7 +123,7 @@ public final class Repository extends NativeHandle {
         try {
             return SnapshotId.of(Native.repositoryLookupTag(handle(), tag));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -133,7 +132,7 @@ public final class Repository extends NativeHandle {
         try {
             Native.repositoryCreateBranch(handle(), branch, snapshot.toString());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -141,7 +140,7 @@ public final class Repository extends NativeHandle {
         try {
             Native.repositoryDeleteBranch(handle(), branch);
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -150,7 +149,7 @@ public final class Repository extends NativeHandle {
         try {
             Native.repositoryResetBranch(handle(), branch, snapshot.toString());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -159,7 +158,7 @@ public final class Repository extends NativeHandle {
         try {
             Native.repositoryCreateTag(handle(), tag, snapshot.toString());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -167,7 +166,7 @@ public final class Repository extends NativeHandle {
         try {
             Native.repositoryDeleteTag(handle(), tag);
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -177,7 +176,7 @@ public final class Repository extends NativeHandle {
         try {
             fields = Native.repositoryAncestry(handle(), version.kind(), version.value());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
         List<SnapshotInfo> history = new ArrayList<>(fields.length / 4);
         for (int i = 0; i + 3 < fields.length; i += 4) {
@@ -196,7 +195,7 @@ public final class Repository extends NativeHandle {
         try {
             return new Session(Native.repositoryReadonlySession(handle(), version.kind(), version.value()));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -205,7 +204,7 @@ public final class Repository extends NativeHandle {
         try {
             return new Session(Native.repositoryWritableSession(handle(), branch));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 

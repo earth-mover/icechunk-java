@@ -51,7 +51,7 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
    In the body, look up the handle, drive the icechunk future with `block_on`, and convert the result. Return errors
    with `?`; they are thrown as Java exceptions.
 3. Call it from the public class as `Native.thingList(handle(), prefix)` inside `try`, with
-   `Reference.reachabilityFence(this)` in the `finally` block.
+   `HandleCleaner.reachabilityFence(this)` in the `finally` block.
 4. If it takes a new kind of option, add it to the Java builder and to `spec.rs`, and extend both `JsonContractTest`
    and the `spec.rs` tests with the same JSON string.
 5. Constants shared by both sides (`Native.RANGE_*`, `Native.VERSION_*` and so on) are defined twice. Change both;

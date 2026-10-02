@@ -6,7 +6,7 @@ changing the binding. For using it, see the [README](README.md).
 ## The decision
 
 The binding is hand-written JNI, using the [`jni`](https://docs.rs/jni) crate (jni-rs 0.22) on the Rust side. The
-compiled jars target Java 11.
+compiled jars target Java 8, as a multi-release jar that swaps in Java 9 classes where they help.
 
 ### Why JNI
 
@@ -14,6 +14,11 @@ The binding has to run on the JVMs its likely users have. Fiji's recommended dow
 ([downloads](https://imagej.net/software/fiji/downloads)), Paintera builds for Java 25
 ([pom](https://github.com/saalfeldlab/paintera/blob/master/pom.xml)), and libraries in the SciJava ecosystem, such as
 BigDataViewer and N5, compile for Java 8 or 11 through pom-scijava. JNI works on all of them.
+
+The bytecode target is set by the libraries that must compile against these jars, since javac rejects class files
+newer than its own target. n5-universe and n5-ij, which load OME-Zarr in Fiji, compile for Java 8
+([n5-ij pom](https://github.com/saalfeldlab/n5-ij/blob/master/pom.xml)), and n5-universe compiles directly against
+each storage backend it supports. A Java 8 target also runs on Fiji-Stable, which still bundles Java 8.
 
 Rust libraries with similar needs made the same choice. [Apache OpenDAL](https://github.com/apache/opendal/tree/main/bindings/java),
 an object storage library on tokio, and [Lance](https://github.com/lance-format/lance/tree/main/java) both bind to
@@ -119,8 +124,14 @@ was pinned when it closed has unpinned, so a long call delays freeing objects cl
 freed memory. Closing hands the object to crossbeam's global queue at once, so it is freed by the next collection
 after those threads unpin, not after many more closes on the same thread.
 
-Objects that were never closed are released by a `java.lang.ref.Cleaner` when they become unreachable. This is a
-backstop; native objects hold connections and caches, so code should close them.
+On Java 9 and later, objects that were never closed are released by a `java.lang.ref.Cleaner` when they become
+unreachable. This is a backstop; native objects hold connections and caches, so code should close them. Java 8 has no
+`Reference.reachabilityFence`, without which the JIT may collect an object while a native call is still using its
+handle, so on Java 8 an unclosed object stays open until the JVM exits. `HandleCleaner` holds both behaviours: the
+Java 8 class in `src/main/java`, the Java 9 one in `src/main/java9`, which the jar places under
+`META-INF/versions/9`. A JVM reads that directory only from a jar, so `icechunk-java` runs its tests twice, against
+the class directory and against the packaged jar. An application that shades the jar must keep
+`Multi-Release: true` in its manifest, or it gets the Java 8 behaviour; `benchmarks/pom.xml` shows how.
 
 Ownership between objects follows the Rust side: a `Repository` holds its own reference to its storage, and a
 `Session` to its repository, so closing a parent does not break its children. The one exception is a session's

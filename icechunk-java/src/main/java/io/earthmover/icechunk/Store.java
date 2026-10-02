@@ -1,6 +1,5 @@
 package io.earthmover.icechunk;
 
-import java.lang.ref.Reference;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,7 +46,7 @@ public final class Store extends NativeHandle {
         try {
             return Optional.ofNullable(Native.storeGet(handle(), key, range.kind(), range.a(), range.b()));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -80,7 +79,7 @@ public final class Store extends NativeHandle {
         try {
             values = Native.storeGetPartialValues(handle(), keys.toArray(new String[0]), triples);
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
         List<Optional<byte[]>> result = new ArrayList<>(values.length);
         for (byte[] value : values) {
@@ -121,7 +120,7 @@ public final class Store extends NativeHandle {
                 Native.storeSet(handle(), key, copy, 0, copy.length, onlyIfNew);
             }
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -129,7 +128,7 @@ public final class Store extends NativeHandle {
         try {
             return Native.storeExists(handle(), key);
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -139,7 +138,7 @@ public final class Store extends NativeHandle {
         try {
             size = Native.storeGetSize(handle(), key);
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
         return size < 0 ? OptionalLong.empty() : OptionalLong.of(size);
     }
@@ -149,7 +148,7 @@ public final class Store extends NativeHandle {
         try {
             Native.storeDelete(handle(), key);
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -158,7 +157,7 @@ public final class Store extends NativeHandle {
         try {
             Native.storeDeleteDir(handle(), prefix);
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -167,7 +166,7 @@ public final class Store extends NativeHandle {
         try {
             return Native.storeIsEmpty(handle(), prefix);
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -193,7 +192,7 @@ public final class Store extends NativeHandle {
         try {
             return Collections.unmodifiableList(Arrays.asList(Native.storeList(handle(), mode, prefix)));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -201,7 +200,7 @@ public final class Store extends NativeHandle {
         try {
             return Native.storeReadOnly(handle());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 }

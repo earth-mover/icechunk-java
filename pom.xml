@@ -29,9 +29,9 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<!-- The bytecode level. Java 11 matches the pom-scijava default, so libraries built
-		     on it (N5, BigDataViewer) can depend on these jars. -->
-		<maven.compiler.release>11</maven.compiler.release>
+		<!-- The bytecode level. n5-universe and n5-ij compile for Java 8, and they must be able
+		     to depend on these jars. -->
+		<maven.compiler.release>8</maven.compiler.release>
 		<!-- Directory holding the native library for tests; overridden in CI. -->
 		<icechunk.native.dir>${maven.multiModuleProjectDirectory}/native/target/debug</icechunk.native.dir>
 		<!-- icechunk's compatibility repositories, fetched by scripts/fetch-icechunk-fixtures.sh. -->
@@ -72,6 +72,8 @@
 					<configuration>
 						<compilerArgs>
 							<arg>-Xlint:all</arg>
+							<!-- JDK 21 warns that release 8 is obsolete. -->
+							<arg>-Xlint:-options</arg>
 							<arg>-Werror</arg>
 							<arg>-XDcompilePolicy=simple</arg>
 							<arg>-XDaddTypeAnnotationsToSymbol=true</arg>
@@ -120,7 +122,7 @@
 						</goals>
 						<configuration>
 							<rules>
-								<!-- Error Prone needs a JDK 21 compiler; the output still targets 11. -->
+								<!-- Error Prone needs a JDK 21 compiler; the output still targets 8. -->
 								<requireJavaVersion>
 									<version>[21,)</version>
 								</requireJavaVersion>

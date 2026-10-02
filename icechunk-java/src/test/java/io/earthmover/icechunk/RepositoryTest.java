@@ -9,6 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -24,7 +27,7 @@ class RepositoryTest {
         SnapshotId first;
         try (Storage storage = Storage.localFilesystem(dir);
                 Repository repo = Repository.create(storage)) {
-            assertEquals(Set.of("main"), repo.listBranches());
+            assertEquals(setOf("main"), repo.listBranches());
             try (Session session = repo.writableSession("main")) {
                 assertFalse(session.isReadOnly());
                 assertEquals(Optional.of("main"), session.branch());
@@ -41,7 +44,7 @@ class RepositoryTest {
                 Repository repo = Repository.open(storage);
                 Session session = repo.readonlySession(Version.branch("main"))) {
             assertTrue(session.isReadOnly());
-            assertArrayEquals(GROUP, session.store().get("zarr.json").orElseThrow());
+            assertArrayEquals(GROUP, session.store().get("zarr.json").get());
         }
     }
 
@@ -64,7 +67,7 @@ class RepositoryTest {
 
             List<SnapshotInfo> history = repo.ancestry(Version.branch("main"));
             assertEquals(
-                    List.of("v2", "v1", "Repository initialized"),
+                    Arrays.asList("v2", "v1", "Repository initialized"),
                     history.stream().map(SnapshotInfo::message).collect(Collectors.toList()));
             assertEquals(v2, history.get(0).id());
             assertEquals(Optional.of(v1), history.get(0).parentId());
@@ -74,8 +77,8 @@ class RepositoryTest {
                     .isAfter(history.get(1).writtenAt().minusSeconds(1)));
             assertEquals(2, repo.ancestry(Version.tag("v1")).size());
 
-            assertEquals(Set.of("dev", "main"), repo.listBranches());
-            assertEquals(Set.of("v1"), repo.listTags());
+            assertEquals(setOf("dev", "main"), repo.listBranches());
+            assertEquals(setOf("v1"), repo.listTags());
             assertEquals(v1, repo.lookupTag("v1"));
 
             try (Session old = repo.readonlySession(Version.tag("v1"))) {
@@ -93,8 +96,8 @@ class RepositoryTest {
             assertEquals(v2, repo.lookupBranch("dev"));
             repo.deleteBranch("dev");
             repo.deleteTag("v1");
-            assertEquals(Set.of("main"), repo.listBranches());
-            assertEquals(Set.of(), repo.listTags());
+            assertEquals(setOf("main"), repo.listBranches());
+            assertEquals(Collections.emptySet(), repo.listTags());
         }
     }
 
@@ -125,7 +128,7 @@ class RepositoryTest {
             Repository.openOrCreate(storage).close();
             assertTrue(Repository.exists(storage));
             try (Repository repo = Repository.openOrCreate(storage)) {
-                assertEquals(Set.of("main"), repo.listBranches());
+                assertEquals(setOf("main"), repo.listBranches());
             }
         }
     }
@@ -159,5 +162,9 @@ class RepositoryTest {
                                 .build())) {
             assertTrue(repo.configJson().contains("\"inline_chunk_threshold_bytes\":12"), repo.configJson());
         }
+    }
+
+    private static Set<String> setOf(String... items) {
+        return new HashSet<>(Arrays.asList(items));
     }
 }

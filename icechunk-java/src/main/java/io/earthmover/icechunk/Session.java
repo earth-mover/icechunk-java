@@ -1,6 +1,5 @@
 package io.earthmover.icechunk;
 
-import java.lang.ref.Reference;
 import java.util.Optional;
 
 /**
@@ -27,7 +26,7 @@ public final class Session extends NativeHandle {
         try {
             return SnapshotId.of(Native.sessionSnapshotId(handle()));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -36,7 +35,7 @@ public final class Session extends NativeHandle {
         try {
             return Optional.ofNullable(Native.sessionBranch(handle()));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -44,7 +43,7 @@ public final class Session extends NativeHandle {
         try {
             return Native.sessionReadOnly(handle());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -52,7 +51,7 @@ public final class Session extends NativeHandle {
         try {
             return Native.sessionHasUncommittedChanges(handle());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -67,7 +66,7 @@ public final class Session extends NativeHandle {
                 try {
                     store = new Store(Native.sessionStore(handle()));
                 } finally {
-                    Reference.reachabilityFence(this);
+                    HandleCleaner.reachabilityFence(this);
                 }
             }
             return store;
@@ -87,7 +86,7 @@ public final class Session extends NativeHandle {
         try {
             return SnapshotId.of(Native.sessionCommit(handle(), message));
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 
@@ -96,7 +95,7 @@ public final class Session extends NativeHandle {
         try {
             Native.sessionDiscardChanges(handle());
         } finally {
-            Reference.reachabilityFence(this);
+            HandleCleaner.reachabilityFence(this);
         }
     }
 

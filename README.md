@@ -61,7 +61,7 @@ pixi run example                 # run examples/.../Quickstart.java
 pixi run example ReadPublicData  # read ERA5 data from a public S3 bucket
 ```
 
-The jars run on Java 11 or later. The build itself needs JDK 21.
+The jars run on Java 8 or later. The build itself needs JDK 21.
 
 A development build loads the native library from `native/target/debug`, which the Maven build points to with the
 `icechunk.native.dir` system property. Set the same property when you use the jars from your own project, for

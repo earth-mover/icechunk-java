@@ -58,7 +58,7 @@ class BufferTest {
         direct.position(10);
         store.set("big/c/0", direct);
         assertEquals(10, direct.position(), "the caller's position is unchanged");
-        assertArrayEquals(big, store.get("big/c/0").orElseThrow());
+        assertArrayEquals(big, store.get("big/c/0").get());
     }
 
     @Test
@@ -68,14 +68,14 @@ class BufferTest {
         ByteBuffer smallDirect = ByteBuffer.allocateDirect(4).put(new byte[] {4, 3, 2, 1});
         smallDirect.flip();
         store.set("small/c/0", smallDirect);
-        assertArrayEquals(new byte[] {4, 3, 2, 1}, store.get("small/c/0").orElseThrow());
+        assertArrayEquals(new byte[] {4, 3, 2, 1}, store.get("small/c/0").get());
 
         ByteBuffer heapSlice =
                 ByteBuffer.wrap(new byte[] {9, 9, 1, 2, 3, 4, 9}, 2, 4).slice();
         store.set("small/c/0", heapSlice);
-        assertArrayEquals(new byte[] {1, 2, 3, 4}, store.get("small/c/0").orElseThrow());
+        assertArrayEquals(new byte[] {1, 2, 3, 4}, store.get("small/c/0").get());
 
         store.set("small/c/0", ByteBuffer.wrap(new byte[] {5, 6, 7, 8}).asReadOnlyBuffer());
-        assertArrayEquals(new byte[] {5, 6, 7, 8}, store.get("small/c/0").orElseThrow());
+        assertArrayEquals(new byte[] {5, 6, 7, 8}, store.get("small/c/0").get());
     }
 }

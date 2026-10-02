@@ -15,6 +15,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -77,7 +78,7 @@ class PythonInteropTest {
     }
 
     private static String python(String script, Path repo) throws Exception {
-        List<String> command = new ArrayList<>(List.of(
+        List<String> command = new ArrayList<>(Arrays.asList(
                 "uv", "run", "--no-project", "--with", "icechunk", "--with", "zarr", "--with", "numpy", "python"));
         command.add(SCRIPTS.resolve(script).toString());
         command.add(repo.toString());
@@ -85,7 +86,7 @@ class PythonInteropTest {
         try {
             Process process =
                     new ProcessBuilder(command).redirectError(stderr.toFile()).start();
-            String output = new String(process.getInputStream().readAllBytes(), UTF_8);
+            String output = new String(TestEnvironment.readAll(process.getInputStream()), UTF_8);
             int status = process.waitFor();
             assertEquals(0, status, () -> script + " failed:\n" + output + readQuietly(stderr));
             return output;
