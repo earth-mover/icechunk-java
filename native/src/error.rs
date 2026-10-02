@@ -88,9 +88,12 @@ impl From<serde_json::Error> for NativeError {
 impl From<RepositoryError> for NativeError {
     fn from(err: RepositoryError) -> Self {
         match &err.kind {
-            // Spec version 1 repositories report a moved branch as a ref conflict.
+            // Spec version 1 repositories report a moved branch as a ref conflict. On spec
+            // version 2, `RepoInfoUpdated` means another writer kept winning until icechunk
+            // ran out of retries.
             RepositoryErrorKind::Conflict { .. }
-            | RepositoryErrorKind::Ref(RefErrorKind::Conflict { .. }) => {
+            | RepositoryErrorKind::Ref(RefErrorKind::Conflict { .. })
+            | RepositoryErrorKind::RepoInfoUpdated => {
                 Self::new(ErrorKind::Conflict, err.to_string())
             }
             _ => Self::icechunk(&err),
@@ -145,5 +148,20 @@ impl From<GCError> for NativeError {
             GCError::StorageError(err) => err.into(),
             GCError::FormatError(err) => Self::icechunk(&err),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lost_repo_info_races_are_conflicts() {
+        let err = RepositoryError::capture(RepositoryErrorKind::RepoInfoUpdated);
+        assert_eq!(NativeError::from(err).kind, ErrorKind::Conflict);
+        let gc = GCError::Repository(RepositoryError::capture(
+            RepositoryErrorKind::RepoInfoUpdated,
+        ));
+        assert_eq!(NativeError::from(gc).kind, ErrorKind::Conflict);
     }
 }
