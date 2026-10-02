@@ -154,4 +154,17 @@ class LifecycleTest {
             pool.shutdownNow();
         }
     }
+
+    @Test
+    void extensionHandlesCloseTheNativeObject() {
+        Storage storage = Storage.inMemory();
+        NativeExtensions.Handle handle = NativeExtensions.handle(storage.handle(), "Thing");
+        assertEquals(storage.handle(), handle.get());
+        handle.close();
+        assertTrue(handle.isClosed());
+        IllegalStateException e = assertThrows(IllegalStateException.class, handle::get);
+        assertEquals("Thing is closed", e.getMessage());
+        assertThrows(IllegalStateException.class, () -> Repository.create(storage));
+        storage.close();
+    }
 }

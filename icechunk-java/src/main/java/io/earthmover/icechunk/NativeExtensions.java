@@ -26,6 +26,47 @@ public final class NativeExtensions {
         Native.close(handle);
     }
 
+    /**
+     * Take ownership of a handle the extension registered for one of its own objects. The handle is closed by
+     * {@link Handle#close}, and on Java 9 and later also once the {@code Handle} is unreachable, as this library's own
+     * objects are.
+     *
+     * @param name what the handle holds, for the message when it is used after closing
+     */
+    public static Handle handle(long handle, String name) {
+        return new Handle(handle, name);
+    }
+
+    /**
+     * Keep {@code handle} reachable until this call. An extension calls it in a {@code finally} block after every
+     * native method that takes {@link Handle#get()}, so the handle cannot be released while the call uses it.
+     */
+    public static void reachabilityFence(Handle handle) {
+        HandleCleaner.reachabilityFence(handle);
+    }
+
+    /** An extension object's entry in the native handle table. */
+    public static final class Handle extends NativeHandle {
+        private final String name;
+
+        private Handle(long handle, String name) {
+            super(handle);
+            this.name = name;
+        }
+
+        /**
+         * The handle to pass to a native method.
+         *
+         * @throws IllegalStateException if the handle is closed
+         */
+        public long get() {
+            if (isClosed()) {
+                throw new IllegalStateException(name + " is closed");
+            }
+            return handle();
+        }
+    }
+
     /** The JSON form of {@code options}, which the native side parses with {@code icechunk_jni::ext::repository_options}. */
     public static String toJson(RepositoryOptions options) {
         return options.toJson();
