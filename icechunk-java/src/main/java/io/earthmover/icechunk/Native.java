@@ -17,7 +17,6 @@ final class Native {
     static final int VERSION_TAG = 1;
     static final int VERSION_SNAPSHOT = 2;
 
-    static final long RANGE_ALL = 0;
     static final long RANGE_BOUNDED = 1;
     static final long RANGE_FROM = 2;
     static final long RANGE_SUFFIX = 3;
@@ -82,25 +81,7 @@ final class Native {
 
     static native byte[] storeGet(long store, String key, long rangeKind, long a, long b);
 
-    /** Fills {@code out} with the buffer's owner and the bytes outstanding, see {@link NativeBuffers}. */
-    static native ByteBuffer storeGetBuffer(long store, String key, long rangeKind, long a, long b, long[] out);
-
-    /** Returns bytes written, -1 if the key is missing, or {@code -2 - size} if the value does not fit. */
-    static native long storeGetInto(
-            long store,
-            String key,
-            long rangeKind,
-            long a,
-            long b,
-            ByteBuffer direct,
-            byte[] array,
-            int offset,
-            int capacity);
-
-    static native byte[][] storeGetMany(long store, String[] keys, long[] ranges);
-
-    /** Fills {@code out} with one owner per key, then the bytes outstanding. */
-    static native ByteBuffer[] storeGetManyBuffers(long store, String[] keys, long[] ranges, long[] out);
+    static native byte[][] storeGetPartialValues(long store, String[] keys, long[] ranges);
 
     static native void storeSet(long store, String key, byte[] value, int offset, int length, boolean onlyIfNew);
 
@@ -109,7 +90,7 @@ final class Native {
 
     static native boolean storeExists(long store, String key);
 
-    static native long storeSize(long store, String key);
+    static native long storeGetSize(long store, String key);
 
     static native void storeDelete(long store, String key);
 
@@ -120,8 +101,4 @@ final class Native {
     static native String[] storeList(long store, int mode, String prefix);
 
     static native boolean storeReadOnly(long store);
-
-    static native void bufferRelease(long owner);
-
-    static native long bufferOutstanding();
 }

@@ -14,7 +14,11 @@ public final class NativeExtensions {
 
     /** Load the native library, if it is not loaded yet. Call before the first extension native method. */
     public static void ensureLoaded() {
-        Native.bufferOutstanding();
+        try {
+            Class.forName(Native.class.getName(), true, Native.class.getClassLoader());
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** Close a handle the extension registered for one of its own objects. Closing twice is harmless. */

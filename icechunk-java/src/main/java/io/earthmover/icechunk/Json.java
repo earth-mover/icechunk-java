@@ -43,17 +43,10 @@ final class Json {
         return this;
     }
 
-    Json put(String name, Map<String, ?> values) {
+    Json put(String name, Map<String, String> values) {
         if (values != null) {
             Json nested = object();
-            for (Map.Entry<String, ?> entry : values.entrySet()) {
-                Object value = entry.getValue();
-                if (value instanceof Json) {
-                    nested.put(entry.getKey(), (Json) value);
-                } else {
-                    nested.put(entry.getKey(), (String) value);
-                }
-            }
+            values.forEach(nested::put);
             put(name, nested);
         }
         return this;

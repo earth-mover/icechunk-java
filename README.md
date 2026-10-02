@@ -134,14 +134,12 @@ try (Session session = repo.writableSession("main")) {
 
 ### Large values and memory
 
-- `Store.get` copies each value into a new `byte[]` and frees icechunk's copy at once. It is the default, and what
-  `IcechunkZarrStore` uses.
-- `Store.getInto(key, dst)` copies into a buffer you provide and can reuse, allocating nothing. Use it to stream large
-  amounts of data in constant memory.
-- `Store.getBuffer` returns a read-only buffer over icechunk's own memory, with no copy. That memory is freed only when
-  the buffer is garbage collected, so use it for data you keep, not for streaming.
-- `Store.set(String, ByteBuffer)` reads a direct buffer of more than 64 KiB in place, without copying. Do not modify it
-  afterwards.
+- `Store.get` copies each value into a new `byte[]` and frees icechunk's copy before returning, so reading through many
+  chunks keeps memory bounded.
+- `Store.getPartialValues(keys)` fetches many values in one call, concurrently. Use it for object storage, where each
+  separate `get` pays a network round trip.
+- `Store.set(key, buffer)` takes a `ByteBuffer`. Wrap arrays with `ByteBuffer.wrap`. A direct buffer of more than
+  64 KiB is read in place, without copying; do not modify it afterwards.
 
 [DESIGN.md](DESIGN.md#bytes) has the measurements behind these choices.
 

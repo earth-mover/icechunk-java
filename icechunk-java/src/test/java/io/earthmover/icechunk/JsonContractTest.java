@@ -33,8 +33,8 @@ class JsonContractTest {
     void repositoryOptions() {
         String json = RepositoryOptions.builder()
                 .configJson("{\"inline_chunk_threshold_bytes\":12}")
-                .authorizeVirtualChunkAccess("s3://bucket/", ContainerCredentials.s3(S3Credentials.anonymous()))
-                .authorizeVirtualChunkAccess("file:///data/", ContainerCredentials.localFilesystem())
+                .authorizeVirtualChunkAccess("s3://bucket/", Credentials.s3(S3Credentials.anonymous()))
+                .authorizeVirtualChunkAccess("file:///data/", Credentials.localFilesystem())
                 .checkCleanRoot(false)
                 .build()
                 .toJson();

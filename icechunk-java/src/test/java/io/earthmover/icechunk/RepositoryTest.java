@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
@@ -27,7 +28,7 @@ class RepositoryTest {
             try (Session session = repo.writableSession("main")) {
                 assertFalse(session.isReadOnly());
                 assertEquals(Optional.of("main"), session.branch());
-                session.store().set("zarr.json", GROUP);
+                session.store().set("zarr.json", ByteBuffer.wrap(GROUP));
                 assertTrue(session.hasUncommittedChanges());
                 first = session.commit("root group");
                 assertFalse(session.hasUncommittedChanges());
@@ -51,13 +52,13 @@ class RepositoryTest {
             SnapshotId v1;
             SnapshotId v2;
             try (Session session = repo.writableSession("main")) {
-                session.store().set("zarr.json", GROUP);
+                session.store().set("zarr.json", ByteBuffer.wrap(GROUP));
                 v1 = session.commit("v1");
             }
             repo.createTag("v1", v1);
             repo.createBranch("dev", v1);
             try (Session session = repo.writableSession("main")) {
-                session.store().set("a/zarr.json", GROUP);
+                session.store().set("a/zarr.json", ByteBuffer.wrap(GROUP));
                 v2 = session.commit("v2");
             }
 
@@ -103,8 +104,8 @@ class RepositoryTest {
                 Repository repo = Repository.create(storage);
                 Session first = repo.writableSession("main");
                 Session second = repo.writableSession("main")) {
-            first.store().set("zarr.json", GROUP);
-            second.store().set("zarr.json", GROUP);
+            first.store().set("zarr.json", ByteBuffer.wrap(GROUP));
+            second.store().set("zarr.json", ByteBuffer.wrap(GROUP));
             first.commit("first");
             assertThrows(ConflictException.class, () -> second.commit("second"));
         }
@@ -134,7 +135,7 @@ class RepositoryTest {
         try (Storage storage = Storage.inMemory();
                 Repository repo = Repository.create(storage);
                 Session session = repo.readonlySession(Version.branch("main"))) {
-            assertThrows(IcechunkException.class, () -> session.store().set("zarr.json", GROUP));
+            assertThrows(IcechunkException.class, () -> session.store().set("zarr.json", ByteBuffer.wrap(GROUP)));
         }
     }
 

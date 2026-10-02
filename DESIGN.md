@@ -36,19 +36,21 @@ Java with jni-rs and a tokio runtime. OpenDAL's binding is the model for the run
 
 ### What JNI costs
 
-Each native method is written by hand, in Rust and in Java. The surface is 36 methods today. Two choices keep
-that cost down:
+Each native method is written by hand, in Rust and in Java. Three choices keep that cost down:
 
 - Configuration crosses the boundary as JSON, not as field-by-field JNI calls (see
   [Configuration as JSON](#configuration-as-json)).
-- Every native method follows the same shape (see [Calls](#calls)), so a new method is mostly copying an existing one.
+- Every native method follows the same shape (see [Calls](#calls)), and a `native!` macro in `call.rs` writes the
+  JNI boilerplate, so a native method is mostly its body.
+- A Rust test reads `Native.java` and `IcechunkException.java` and checks that the constants and error kinds both sides
+  define still agree.
 
 ## Layers
 
 ```
 Java API         Storage  Repository  Session  Store        public classes, io.earthmover.icechunk
                     │         │          │        │
-Java internals   NativeHandle (owns a long)   NativeBuffers (lent memory)
+Java internals   NativeHandle (owns a long)   NativeLoader
                     │
 Native           Native.java  ⇄  icechunk_jni (Rust cdylib)
                                     │
@@ -65,14 +67,20 @@ per Java class: `storage.rs`, `repository.rs`, `session.rs`, `store.rs`.
 A native method runs on the calling Java thread from start to finish:
 
 1. It reads its arguments and looks up the handle.
-2. It drives the icechunk future to completion with tokio's `Handle::block_on`, on the calling thread.
+2. It drives the icechunk future to completion on the calling thread, with the `futures` executor. The thread enters
+   the tokio runtime's context once, on its first call, so that icechunk's I/O registers with the runtime.
 3. It converts the result to a Java value and returns it, or throws.
 
 The runtime's own threads only poll I/O and run tasks icechunk spawns internally. They never call into Java.
 
-The alternative is to run each call as a task on a runtime thread and wake the waiting Java thread with the result.
-Measured with the benchmarks in `benchmarks/`, that handoff costs about 18 µs per call, and about 50 µs per call with 8
-threads, for operations whose own work takes a few microseconds.
+Both choices come from measurements with the benchmarks in `benchmarks/`:
+
+- Running each call as a task on a runtime thread and waking the Java thread with the result cost about 18 µs per
+  call, and about 50 µs with 8 threads, for operations whose own work takes a few microseconds. Running on the calling
+  thread brings the fixed cost to about 0.15 µs.
+- tokio's own `Handle::block_on` enters the runtime context on every call, which updates a reference count shared by
+  every thread. With 8 threads that cost about 1 µs per call; entering once per thread and using the `futures`
+  executor costs a few nanoseconds.
 
 Consequences:
 
@@ -92,17 +100,21 @@ arrive.
 ## Handles
 
 Java never holds a pointer. Each Java object holds a `long` handle: a slot index in a native table plus the slot's
-generation number. Every native call looks the handle up and takes a clone of the slot's `Arc` for the duration of the
-call. Closing a handle empties the slot and bumps its generation.
+generation number. Closing a handle empties the slot and bumps its generation.
 
 So closing an object while another thread is using it is safe:
 
-- a call already running keeps its own `Arc` and finishes normally;
+- a call already running keeps using the object and finishes normally;
 - a later call with the closed handle finds an empty slot or a new generation, and throws `IllegalStateException`;
 - a reused slot never answers to an old handle.
 
 `LifecycleTest.closeRacesWithReads` exercises this. With raw pointers, as OpenDAL uses, the same race is a
 use-after-free that crashes the JVM.
+
+Lookups take no lock and write no shared memory. A lock or a reference count would be updated by every thread on
+every call; with 8 threads, a `std::sync::RwLock` read alone measured about 2.4 µs. Instead a lookup pins the thread
+with `crossbeam_epoch`, which is thread-local, and borrows the object. A closed object is freed once every thread that
+was pinned when it closed has unpinned, so a long call delays freeing closed objects, but never touches freed memory.
 
 Objects that were never closed are released by a `java.lang.ref.Cleaner` when they become unreachable. This is a
 backstop; native objects hold connections and caches, so code should close them.
@@ -140,41 +152,32 @@ dependencies to conflict with an application's.
 
 ## Bytes
 
-Chunks can be large, so how values cross the boundary matters for both speed and memory. The numbers below come from
-`benchmarks/` (see [Benchmarks](#benchmarks)).
+Chunks can be large, so the binding copies as little as icechunk's ownership rules allow. The measurements below come
+from `benchmarks/` and are from a laptop in use, so treat them as rough.
 
-**Reads** come in three forms:
+**Reads** copy once, from icechunk's buffer into a new `byte[]`. icechunk's buffer is freed before the call returns, so
+both copies exist only during the copy, and the array is ordinary heap garbage. Streaming 1 GiB of 4 MiB chunks this
+way peaked at about 100 MiB above baseline.
 
-- **`get` copies into a new `byte[]`.** icechunk's buffer is freed as soon as the call returns, so the two copies
-  coexist only during the memcpy, and the array is ordinary heap garbage. Streaming 1 GiB of 4 MiB chunks this way
-  peaks at about 100 MiB above baseline. This is the default, and what `IcechunkZarrStore` uses.
-- **`getInto` copies into a buffer the caller owns.** It allocates nothing, so a caller that reuses one buffer streams
-  any amount of data in constant memory.
-- **`getBuffer` lends icechunk's buffer itself,** as a read-only direct `ByteBuffer` released by a `Cleaner` when it is
-  collected. Slices, duplicates and the read-only view all keep the original reachable, so the memory cannot be
-  released while any view exists.
+Lending icechunk's buffer to Java as a direct `ByteBuffer` would avoid that copy, but was measured and rejected:
 
-Lending saves the copy, but it ties native memory to garbage collection, and the collector cannot see that memory.
-Since a lending read allocates almost nothing on the heap, collections stop happening: streaming the same 1 GiB with
-`getBuffer` and only the JDK's default rule (collect when lent memory passes the maximum heap) peaked at 1 GiB above
-baseline. `NativeBuffers` therefore counts the bytes lent out and requests a collection past
-`icechunk.buffers.limitBytes`, 64 MiB by default. That bounds memory, but each request is a full collection, which
-is cheap on a small heap and can take seconds on a large one with much live data. `getBuffer` is for data the caller
-keeps anyway, not for streaming.
+- **It saved no time.** A 1 MiB read from in-memory storage took about 200 µs either way, because icechunk copies
+  every chunk it fetches (`async_reader_to_bytes` in icechunk's `asset_manager.rs`). Removing that copy upstream would
+  speed up every client.
+- **It held memory far longer.** Lent memory is freed only when the garbage collector collects the buffer, and a
+  lending read allocates almost nothing on the heap, so collections stop happening. Streaming the same 1 GiB peaked at
+  1 GiB above baseline. Bounding it meant requesting full collections, which can take seconds on a large heap.
 
-zarr-java's compression codecs copy their input into a `byte[]` (`Utils.toArray`) whatever the store returns, which
-is why the adapter uses `get`. For a 1 MiB value from in-memory storage, `get` and `getBuffer` take the same time, so
-icechunk copies internally and the binding's copy is not the bottleneck.
+**Writes** take a `ByteBuffer`. The bytes of a heap buffer are copied once into icechunk: the JVM may move heap arrays,
+so Rust cannot keep a pointer to them, and icechunk keeps the bytes it is given as owned memory. A direct buffer larger
+than 64 KiB is read in place instead: the native side wraps the buffer's memory as `Bytes` holding a global reference
+to the buffer. icechunk drops materialized chunks once they are written, but in-memory storage keeps the bytes it was
+given, and values below the repository's inline threshold stay in the session's change set until commit. So the
+caller must not modify a buffer after passing it to `set`. Values of 64 KiB or less are always copied. A 1 MiB write
+to in-memory storage took 7 µs from a direct buffer and about 670 µs from a heap buffer.
 
-**Writes.** A `byte[]` or heap buffer is copied once into Rust: the JVM may move heap arrays, so Rust cannot keep a
-pointer to them. A direct `ByteBuffer` larger than 64 KiB is read in place: the native side wraps the buffer's memory
-as a `Bytes` that holds a global reference to the buffer. icechunk drops materialized chunks once they are written,
-but in-memory storage keeps the bytes it was given, and small values stay in the session's change set until commit.
-So the caller must not modify a buffer after passing it to `set`. Values of 64 KiB or less are always copied. Writes
-peak at a few MiB above baseline either way, because each chunk is released once written.
-
-`Store.getMany` batches reads into one native call, which icechunk runs concurrently. Use it when reading many chunks
-from object storage; one `get` per chunk pays the network latency each time.
+`Store.getPartialValues` batches reads into one native call, which icechunk runs concurrently. Use it when reading many
+chunks from object storage; one `get` per chunk pays the network latency each time.
 
 ## zarr-java adapter
 
@@ -184,7 +187,8 @@ follow zarr-java's conventions:
 - In `get(keys, start, end)`, `end` is exclusive and a negative value means "to the end". A negative `start` means "the
   last `-start` bytes"; the sharding codec uses this to read the shard index.
 - `getSize` returns -1 for a missing key. icechunk reports a missing chunk of an existing array as size 0, so
-  `Store.size` checks existence first.
+  `Store.getSize` checks existence when it sees a 0. Once icechunk reports missing chunks as missing, that second
+  check can go.
 
 zarr-java's own abstract store tests (`StoreTest`, `WritableStoreTest`) write arbitrary keys, which an icechunk store
 does not accept, so the adapter has its own tests instead.
@@ -246,7 +250,7 @@ so it belongs on a dedicated machine; numbers from a laptop in use are only a ro
 
 Contention between threads comes mostly from icechunk itself: every `Store` call takes the session's tokio `RwLock`,
 and `set` takes it three times, once for writing. With 8 threads writing small values to one session, each `set`
-waits on the others.
+waited about 170 µs on the others.
 
 ## Open questions
 

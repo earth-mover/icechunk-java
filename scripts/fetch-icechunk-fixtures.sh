@@ -1,17 +1,22 @@
 #!/usr/bin/env bash
 # Fetch icechunk's checked-in compatibility repositories at the revision the native
-# crate is pinned to, so the Java tests read the same repositories icechunk's own
+# crate resolves to, so the Java tests read the same repositories icechunk's own
 # test_can_read_old.py does.
 set -euo pipefail
 
 root="$(cd "$(dirname "$0")/.." && pwd)"
-rev="$(sed -n 's/^icechunk = .*rev = "\([0-9a-f]*\)".*/\1/p' "$root/native/Cargo.toml")"
 dest="$root/target/icechunk-fixtures"
 
-if [ -z "$rev" ]; then
-    echo "cannot find the icechunk rev in native/Cargo.toml" >&2
-    exit 1
-fi
+# The resolved icechunk package in Cargo.lock: a git source ends in "#<commit>", and a
+# registry release is tagged "v<version>" in the icechunk repository.
+package="$(awk '/^\[\[package\]\]/ { found = 0 } /^name = "icechunk"$/ { found = 1 } found' "$root/native/Cargo.lock")"
+source="$(printf '%s\n' "$package" | sed -n 's/^source = "\(.*\)"$/\1/p')"
+version="$(printf '%s\n' "$package" | sed -n 's/^version = "\(.*\)"$/\1/p')"
+case "$source" in
+    git+*) rev="${source##*#}" ;;
+    registry+*) rev="v$version" ;;
+    *) echo "cannot find the icechunk package in native/Cargo.lock" >&2; exit 1 ;;
+esac
 if [ -f "$dest/REV" ] && [ "$(cat "$dest/REV")" = "$rev" ]; then
     exit 0
 fi

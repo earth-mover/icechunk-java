@@ -66,8 +66,6 @@ jobs:
   package:
     needs: native
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v5
@@ -104,11 +102,57 @@ jobs:
           path: |
             icechunk-java/target/icechunk-java-*.jar
             icechunk-zarr-java/target/icechunk-zarr-java-*.jar
+            icechunk-java/target/classes/io/earthmover/icechunk/native/
+
+  # Each platform's library was built on that platform, but only Linux x86_64 loaded it from
+  # the jar above. Run the tests once per platform against the bundled libraries.
+  test-bundled:
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          name: jars
+          path: jars
+      - name: Put the bundled libraries on the test classpath
+        shell: bash
+        run: |
+          mkdir -p icechunk-java/src/main/resources/io/earthmover/icechunk
+          cp -R "$(find jars -type d -name native -path '*io/earthmover/icechunk/native' | head -1)" \
+            icechunk-java/src/main/resources/io/earthmover/icechunk/
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: astral-sh/setup-uv@v6
+      - name: Test against the bundled library
+        shell: bash
+        run: |
+          scripts/fetch-icechunk-fixtures.sh
+          mvn -B verify -Dicechunk.native.dir= -Dicechunk.tests.strict=true
+
+  release:
+    needs: [package, test-bundled]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v5
+        with:
+          name: jars
+          path: jars
       - name: Create a draft release
-        if: startsWith(github.ref, 'refs/tags/v')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
             --notes "Experimental, unofficial build. See the README." \
-            icechunk-java/target/icechunk-java-*.jar icechunk-zarr-java/target/icechunk-zarr-java-*.jar
+            $(find jars -name 'icechunk-*.jar')

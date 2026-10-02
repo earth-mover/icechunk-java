@@ -7,7 +7,6 @@ import io.earthmover.icechunk.Session;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -58,25 +57,28 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
     }
 
     /**
-     * Translate zarr-java's range convention. {@code end} is exclusive, and a negative {@code end} means the end of the
-     * value. A negative {@code start} counts back from the end of the value; with a negative {@code end} that is a
-     * suffix read, which needs no size lookup.
+     * Read the part of the value zarr-java's range arguments select, or empty if the key does not exist. {@code end}
+     * is exclusive, and a negative {@code end} means the end of the value. A negative {@code start} counts back from
+     * the end of the value; with a negative {@code end} that is a suffix read, which needs no size lookup.
+     *
      */
-    private ByteRange range(String key, long start, long end) {
+    private Optional<byte[]> read(String[] keys, long start, long end) {
+        String key = key(keys);
+        ByteRange range;
         if (start < 0 && end < 0) {
-            return ByteRange.suffix(-start);
-        }
-        if (start < 0) {
-            OptionalLong size = store.size(key);
+            range = ByteRange.suffix(-start);
+        } else if (start < 0) {
+            OptionalLong size = store.getSize(key);
             if (!size.isPresent()) {
-                return null;
+                return Optional.empty();
             }
-            return ByteRange.of(Math.max(0, size.getAsLong() + start), end);
+            range = ByteRange.of(Math.max(0, size.getAsLong() + start), end);
+        } else if (end < 0) {
+            range = ByteRange.from(start);
+        } else {
+            range = ByteRange.of(start, end);
         }
-        if (end < 0) {
-            return start == 0 ? ByteRange.all() : ByteRange.from(start);
-        }
-        return ByteRange.of(start, end);
+        return store.get(key, range);
     }
 
     @Override
@@ -94,19 +96,9 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
         return get(keys, start, -1);
     }
 
-    /**
-     * Returns a heap buffer over a copy of the value. zarr-java's codecs copy their input again, so lending icechunk's
-     * memory directly would save little, and would hold it until a garbage collection; see
-     * {@link io.earthmover.icechunk.Store} for the trade-off.
-     */
     @Override
     public ByteBuffer get(String[] keys, long start, long end) {
-        String key = key(keys);
-        ByteRange range = range(key, start, end);
-        if (range == null) {
-            return null;
-        }
-        return store.get(key, range).map(ByteBuffer::wrap).orElse(null);
+        return read(keys, start, end).map(ByteBuffer::wrap).orElse(null);
     }
 
     @Override
@@ -126,29 +118,25 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
 
     @Override
     public InputStream getInputStream(String[] keys, long start, long end) {
-        String key = key(keys);
-        ByteRange range = range(key, start, end);
-        if (range == null) {
-            return null;
-        }
-        Optional<byte[]> value = store.get(key, range);
-        return value.map(ByteArrayInputStream::new).orElse(null);
+        return read(keys, start, end).map(ByteArrayInputStream::new).orElse(null);
     }
 
     @Override
     public long getSize(String[] keys) {
-        OptionalLong size = store.size(key(keys));
+        OptionalLong size = store.getSize(key(keys));
         return size.isPresent() ? size.getAsLong() : -1;
     }
 
     @Override
     public Stream<String[]> list(String[] prefix) {
         String base = key(prefix);
-        List<String> keys = base.isEmpty() ? store.list() : store.listPrefix(base);
-        int strip = base.isEmpty() ? 0 : base.length() + 1;
-        return keys.stream()
-                .filter(k -> base.isEmpty() || k.startsWith(base + "/"))
-                .map(k -> k.substring(strip).split("/"));
+        if (base.isEmpty()) {
+            return store.list().stream().map(k -> k.split("/"));
+        }
+        // icechunk only accepts group and array paths as prefixes, so every key it returns
+        // starts with the prefix and a separator.
+        int strip = base.length() + 1;
+        return store.listPrefix(base).stream().map(k -> k.substring(strip).split("/"));
     }
 
     @Override

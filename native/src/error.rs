@@ -21,8 +21,6 @@ pub enum ErrorKind {
     Closed,
     /// A blocking call was made from one of the runtime's own threads.
     RuntimeThread,
-    /// Rust code panicked while running the operation.
-    Panic,
     /// A JNI call failed.
     Jni,
 }
@@ -35,7 +33,6 @@ impl ErrorKind {
             ErrorKind::InvalidArgument => "INVALID_ARGUMENT",
             ErrorKind::Closed => "CLOSED",
             ErrorKind::RuntimeThread => "RUNTIME_THREAD",
-            ErrorKind::Panic => "PANIC",
             ErrorKind::Jni => "JNI",
         }
     }

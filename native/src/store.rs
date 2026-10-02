@@ -1,32 +1,26 @@
-#![allow(
-    unreachable_pub,
-    reason = "JNI exports are found by symbol name, not Rust paths"
-)]
-
 use bytes::Bytes;
 use futures::TryStreamExt as _;
 use icechunk::format::ByteRange;
 use icechunk::store::{StoreError, StoreErrorKind};
-use jni::objects::{JByteArray, JClass, JLongArray, JObject, JObjectArray, JString};
+use jni::Env;
+use jni::objects::{JByteArray, JByteBuffer, JLongArray, JObjectArray, JString};
 use jni::sys::{jboolean, jint, jlong};
-use jni::{Env, EnvUnowned, jni_str};
 
 use crate::buffers;
-use crate::call::{self, block_on, jsize, strings, text};
+use crate::call::{block_on, native, strings, text};
 use crate::error::{NativeError, NativeResult};
 use crate::handles;
 
 /// Byte range kinds; the values match the `Native.RANGE_*` constants. Each range
 /// travels as a `(kind, a, b)` triple of longs.
-const RANGE_ALL: jlong = 0;
-const RANGE_BOUNDED: jlong = 1;
-const RANGE_FROM: jlong = 2;
-const RANGE_SUFFIX: jlong = 3;
+pub(crate) const RANGE_BOUNDED: jlong = 1;
+pub(crate) const RANGE_FROM: jlong = 2;
+pub(crate) const RANGE_SUFFIX: jlong = 3;
 
 /// List modes; the values match the `Native.LIST_*` constants.
-const LIST_ALL: jint = 0;
-const LIST_PREFIX: jint = 1;
-const LIST_DIR: jint = 2;
+pub(crate) const LIST_ALL: jint = 0;
+pub(crate) const LIST_PREFIX: jint = 1;
+pub(crate) const LIST_DIR: jint = 2;
 
 fn byte_range(kind: jlong, a: jlong, b: jlong) -> NativeResult<ByteRange> {
     let offset = |v: jlong| {
@@ -37,7 +31,6 @@ fn byte_range(kind: jlong, a: jlong, b: jlong) -> NativeResult<ByteRange> {
         })
     };
     match kind {
-        RANGE_ALL => Ok(ByteRange::From(0)),
         RANGE_BOUNDED => {
             let (start, end) = (offset(a)?, offset(b)?);
             if end < start {
@@ -45,7 +38,7 @@ fn byte_range(kind: jlong, a: jlong, b: jlong) -> NativeResult<ByteRange> {
                     "byte range end {end} is before start {start}"
                 )));
             }
-            Ok(ByteRange::Bounded(start..end))
+            Ok(ByteRange::bounded(start, end))
         }
         RANGE_FROM => Ok(ByteRange::From(offset(a)?)),
         RANGE_SUFFIX => Ok(ByteRange::Last(offset(a)?)),
@@ -72,7 +65,7 @@ fn get(store: jlong, key: &str, range: &ByteRange) -> NativeResult<Option<Bytes>
 fn get_many(
     env: &mut Env<'_>,
     store: jlong,
-    keys: &JObjectArray<'_>,
+    keys: &JObjectArray<'_, JString<'_>>,
     ranges: &JLongArray<'_>,
 ) -> NativeResult<Vec<Option<Bytes>>> {
     let store = handles::store(store)?;
@@ -87,8 +80,6 @@ fn get_many(
     let mut requests = Vec::with_capacity(count);
     for (index, triple) in triples.chunks_exact(3).enumerate() {
         let key = keys.get_element(env, index)?;
-        // SAFETY: the Java signature declares `keys` as a `String[]`.
-        let key = unsafe { JString::from_raw(env, key.into_raw()) };
         requests.push((text(env, &key)?, byte_range(triple[0], triple[1], triple[2])?));
         env.delete_local_ref(key);
     }
@@ -96,175 +87,34 @@ fn get_many(
     values.into_iter().map(found).collect()
 }
 
-/// Copying read: a new `byte[]`, or null when the key does not exist.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeGet<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    key: JString<'l>,
-    range_kind: jlong,
-    a: jlong,
-    b: jlong,
+// A new `byte[]` with the value, or null when the key does not exist.
+native! { fn storeGet(
+    env, store: jlong, key: JString<'l>, range_kind: jlong, a: jlong, b: jlong
 ) -> JByteArray<'l> {
-    call::run(env, |env| {
-        let key = text(env, &key)?;
-        match get(store, &key, &byte_range(range_kind, a, b)?)? {
-            Some(bytes) => Ok(env.byte_array_from_slice(&bytes)?),
-            None => Ok(JByteArray::default()),
-        }
-    })
-}
+    let key = text(env, &key)?;
+    match get(store, &key, &byte_range(range_kind, a, b)?)? {
+        Some(bytes) => Ok(env.byte_array_from_slice(&bytes)?),
+        None => Ok(JByteArray::default()),
+    }
+}}
 
-/// Zero-copy read: a direct `ByteBuffer` over icechunk's memory, or null when the key
-/// does not exist. `out[0]` receives the owner to pass to `bufferRelease`, and `out[1]`
-/// the total bytes currently lent to Java.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeGetBuffer<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    key: JString<'l>,
-    range_kind: jlong,
-    a: jlong,
-    b: jlong,
-    out: JLongArray<'l>,
-) -> JObject<'l> {
-    call::run(env, |env| {
-        let key = text(env, &key)?;
-        let Some(bytes) = get(store, &key, &byte_range(range_kind, a, b)?)? else {
-            return Ok(JObject::null());
-        };
-        let (buffer, owner) = buffers::lend(env, bytes)?;
-        out.set_region(env, 0, &[owner, buffers::outstanding()])?;
-        Ok(JObject::from(buffer))
-    })
-}
-
-/// Read into a buffer Java owns: the direct buffer `direct`, or else `array`, starting at
-/// `offset` with room for `capacity` bytes. Returns the number of bytes written, -1 when
-/// the key does not exist, or `-2 - size` when the value does not fit, in which case
-/// nothing is written.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeGetInto<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    key: JString<'l>,
-    range_kind: jlong,
-    a: jlong,
-    b: jlong,
-    direct: JObject<'l>,
-    array: JByteArray<'l>,
-    offset: jint,
-    capacity: jint,
-) -> jlong {
-    call::run(env, |env| {
-        let key = text(env, &key)?;
-        let Some(bytes) = get(store, &key, &byte_range(range_kind, a, b)?)? else {
-            return Ok(-1);
-        };
-        let (Ok(offset), Ok(capacity)) =
-            (usize::try_from(offset), usize::try_from(capacity))
-        else {
-            return Err(NativeError::invalid_argument("negative offset or capacity"));
-        };
-        let len = bytes.len();
-        if len > capacity {
-            return Ok(-2 - len as jlong);
+// Batch read: a `byte[][]` with null for missing keys, fetched concurrently by icechunk.
+native! { fn storeGetPartialValues(
+    env, store: jlong, keys: JObjectArray<'l, JString<'l>>, ranges: JLongArray<'l>
+) -> JObjectArray<'l, JByteArray<'l>> {
+    let values = get_many(env, store, &keys, &ranges)?;
+    let array = JObjectArray::<JByteArray<'_>>::new(env, values.len(), JByteArray::default())?;
+    // Consume the values so each Rust buffer is freed right after its copy, instead of
+    // all of them staying alive until the whole batch is copied.
+    for (index, value) in values.into_iter().enumerate() {
+        if let Some(bytes) = value {
+            let bytes = env.byte_array_from_slice(&bytes)?;
+            array.set_element(env, index, &bytes)?;
+            env.delete_local_ref(bytes);
         }
-        if direct.is_null() {
-            // SAFETY: `i8` and `u8` have the same size and alignment.
-            let view =
-                unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<i8>(), len) };
-            array.set_region(env, offset as i32, view)?;
-        } else {
-            let target = buffers::direct_region(env, &direct, offset, len)?;
-            // SAFETY: `direct_region` checked that `len` bytes at `target` lie inside the
-            // buffer, and the source is a separate Rust allocation.
-            unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), target, len) };
-        }
-        Ok(len as jlong)
-    })
-}
-
-/// Copying batch read: a `byte[][]` with null for missing keys.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeGetMany<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    keys: JObjectArray<'l>,
-    ranges: JLongArray<'l>,
-) -> JObjectArray<'l> {
-    call::run(env, |env| {
-        let values = get_many(env, store, &keys, &ranges)?;
-        let array =
-            env.new_object_array(jsize(values.len())?, jni_str!("[B"), JObject::null())?;
-        for (index, value) in values.iter().enumerate() {
-            if let Some(bytes) = value {
-                let bytes = env.byte_array_from_slice(bytes)?;
-                array.set_element(env, index, &bytes)?;
-                env.delete_local_ref(bytes);
-            }
-        }
-        Ok(array)
-    })
-}
-
-/// Zero-copy batch read: a `ByteBuffer[]` with null for missing keys. `out[i]` receives
-/// the owner of element `i`, and `out[n]` the total bytes currently lent to Java.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeGetManyBuffers<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    keys: JObjectArray<'l>,
-    ranges: JLongArray<'l>,
-    out: JLongArray<'l>,
-) -> JObjectArray<'l> {
-    call::run(env, |env| {
-        let values = get_many(env, store, &keys, &ranges)?;
-        let array = env.new_object_array(
-            jsize(values.len())?,
-            jni_str!("java/nio/ByteBuffer"),
-            JObject::null(),
-        )?;
-        let mut owners = vec![0; values.len() + 1];
-        for (index, value) in values.into_iter().enumerate() {
-            if let Some(bytes) = value {
-                let (buffer, owner) = buffers::lend(env, bytes)?;
-                owners[index] = owner;
-                array.set_element(env, index, &buffer)?;
-                env.delete_local_ref(buffer);
-            }
-        }
-        if let Some(last) = owners.last_mut() {
-            *last = buffers::outstanding();
-        }
-        out.set_region(env, 0, &owners)?;
-        Ok(array)
-    })
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_bufferRelease<'l>(
-    _env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    owner: jlong,
-) {
-    // SAFETY: `owner` comes from `storeGetBuffer` or `storeGetManyBuffers`, and the Java
-    // `Cleaner` registered for it runs at most once.
-    unsafe { buffers::release(owner) };
-}
-
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_bufferOutstanding<'l>(
-    _env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-) -> jlong {
-    buffers::outstanding()
-}
+    }
+    Ok(array)
+}}
 
 fn set(store: jlong, key: &str, value: Bytes, only_if_new: bool) -> NativeResult<()> {
     let store = handles::store(store)?;
@@ -276,177 +126,105 @@ fn set(store: jlong, key: &str, value: Bytes, only_if_new: bool) -> NativeResult
     Ok(())
 }
 
-/// Write `length` bytes of `value` starting at `offset`. The bytes are copied.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeSet<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    key: JString<'l>,
-    value: JByteArray<'l>,
-    offset: jint,
-    length: jint,
-    only_if_new: jboolean,
-) {
-    call::run(env, |env| {
-        let key = text(env, &key)?;
-        let len = usize::try_from(length)
-            .map_err(|_| NativeError::invalid_argument("negative length"))?;
-        let mut data = vec![0u8; len];
-        // SAFETY: `i8` and `u8` have the same size and alignment, so the slice can be
-        // viewed as either.
-        let view = unsafe {
-            std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<i8>(), len)
-        };
-        value.get_region(env, offset, view)?;
-        set(store, &key, Bytes::from(data), only_if_new)
-    });
-}
+// Write `length` bytes of the heap array `value` starting at `offset`, for a heap
+// `ByteBuffer`. The bytes are copied: the JVM may move the array.
+native! { fn storeSet(
+    env, store: jlong, key: JString<'l>, value: JByteArray<'l>, offset: jint, length: jint,
+    only_if_new: jboolean
+) -> () {
+    let key = text(env, &key)?;
+    let len =
+        usize::try_from(length).map_err(|_| NativeError::invalid_argument("negative length"))?;
+    let mut data = Vec::<u8>::with_capacity(len);
+    // SAFETY: the view covers the vector's allocated but uninitialised capacity, as
+    // `i8`, which has the same size and alignment as `u8`. `get_region` fills all of it
+    // or fails, and the length is only set after it succeeds.
+    let view = unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<i8>(), len) };
+    value.get_region(env, offset, view)?;
+    // SAFETY: `get_region` initialised all `len` bytes.
+    unsafe { data.set_len(len) };
+    set(store, &key, Bytes::from(data), only_if_new)
+}}
 
-/// Write `length` bytes of the direct buffer `value` starting at `position`. Large
-/// values are read in place; the caller must not modify that region afterwards.
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeSetBuffer<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    key: JString<'l>,
-    value: JObject<'l>,
-    position: jint,
-    length: jint,
-    only_if_new: jboolean,
-) {
-    call::run(env, |env| {
-        let key = text(env, &key)?;
-        let (Ok(position), Ok(len)) =
-            (usize::try_from(position), usize::try_from(length))
-        else {
-            return Err(NativeError::invalid_argument("negative position or length"));
-        };
-        let bytes = buffers::borrow(env, &value, position, len)?;
-        set(store, &key, bytes, only_if_new)
-    });
-}
+// Write `length` bytes of the direct buffer `value` starting at `position`. Large values
+// are read in place; the caller must not modify that region afterwards.
+native! { fn storeSetBuffer(
+    env, store: jlong, key: JString<'l>, value: JByteBuffer<'l>, position: jint,
+    length: jint, only_if_new: jboolean
+) -> () {
+    let key = text(env, &key)?;
+    let (Ok(position), Ok(len)) = (usize::try_from(position), usize::try_from(length)) else {
+        return Err(NativeError::invalid_argument("negative position or length"));
+    };
+    let bytes = buffers::borrow(env, &value, position, len)?;
+    set(store, &key, bytes, only_if_new)
+}}
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeExists<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    key: JString<'l>,
-) -> jboolean {
-    call::run(env, |env| {
-        let store = handles::store(store)?;
-        let key = text(env, &key)?;
-        Ok(block_on(store.exists(&key))??)
-    })
-}
+native! { fn storeExists(env, store: jlong, key: JString<'l>) -> jboolean {
+    let store = handles::store(store)?;
+    let key = text(env, &key)?;
+    Ok(block_on(store.exists(&key))??)
+}}
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeSize<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    key: JString<'l>,
-) -> jlong {
-    call::run(env, |env| {
-        let store = handles::store(store)?;
-        let key = text(env, &key)?;
-        let size = block_on(async {
-            // icechunk reports a missing chunk as size 0, so existence is checked
-            // separately to tell "missing" from "empty".
-            if !store.exists(&key).await? {
-                return Ok(None);
-            }
-            found(store.getsize(&key).await)
-        })??;
-        match size {
-            Some(size) => i64::try_from(size).map_err(|_| {
-                NativeError::invalid_argument("object size exceeds a Java long")
-            }),
-            None => Ok(-1),
+native! { fn storeGetSize(env, store: jlong, key: JString<'l>) -> jlong {
+    let store = handles::store(store)?;
+    let key = text(env, &key)?;
+    let size = block_on(async {
+        let size = found(store.getsize(&key).await)?;
+        // icechunk reports a missing chunk as size 0 rather than as missing, so a 0 needs
+        // a second look to tell "missing" from "empty".
+        if size == Some(0) && !store.exists(&key).await? {
+            return Ok(None);
         }
-    })
-}
+        Ok::<_, NativeError>(size)
+    })??;
+    match size {
+        Some(size) => i64::try_from(size)
+            .map_err(|_| NativeError::invalid_argument("object size exceeds a Java long")),
+        None => Ok(-1),
+    }
+}}
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeDelete<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    key: JString<'l>,
-) {
-    call::run(env, |env| {
-        let store = handles::store(store)?;
-        let key = text(env, &key)?;
-        Ok(block_on(store.delete(&key))??)
-    });
-}
+native! { fn storeDelete(env, store: jlong, key: JString<'l>) -> () {
+    let store = handles::store(store)?;
+    let key = text(env, &key)?;
+    Ok(block_on(store.delete(&key))??)
+}}
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeDeleteDir<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    prefix: JString<'l>,
-) {
-    call::run(env, |env| {
-        let store = handles::store(store)?;
-        let prefix = text(env, &prefix)?;
-        Ok(block_on(store.delete_dir(&prefix))??)
-    });
-}
+native! { fn storeDeleteDir(env, store: jlong, prefix: JString<'l>) -> () {
+    let store = handles::store(store)?;
+    let prefix = text(env, &prefix)?;
+    Ok(block_on(store.delete_dir(&prefix))??)
+}}
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeIsEmpty<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    prefix: JString<'l>,
-) -> jboolean {
-    call::run(env, |env| {
-        let store = handles::store(store)?;
-        let prefix = text(env, &prefix)?;
-        Ok(block_on(store.is_empty(&prefix))??)
-    })
-}
+native! { fn storeIsEmpty(env, store: jlong, prefix: JString<'l>) -> jboolean {
+    let store = handles::store(store)?;
+    let prefix = text(env, &prefix)?;
+    Ok(block_on(store.is_empty(&prefix))??)
+}}
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeList<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-    mode: jint,
-    prefix: JString<'l>,
-) -> JObjectArray<'l> {
-    call::run(env, |env| {
-        let store = handles::store(store)?;
-        let prefix = text(env, &prefix)?;
-        let keys: Vec<String> = block_on(async {
-            match mode {
-                LIST_ALL => store.list().await?.try_collect().await,
-                LIST_PREFIX => store.list_prefix(&prefix).await?.try_collect().await,
-                LIST_DIR => store.list_dir(&prefix).await?.try_collect().await,
-                other => Err(StoreError::capture(StoreErrorKind::Other(format!(
-                    "unknown list mode {other}"
-                )))),
-            }
-        })??;
-        strings(env, keys.iter())
-    })
-}
+native! { fn storeList(
+    env, store: jlong, mode: jint, prefix: JString<'l>
+) -> JObjectArray<'l, JString<'l>> {
+    let store = handles::store(store)?;
+    let prefix = text(env, &prefix)?;
+    let keys: Vec<String> = block_on(async {
+        match mode {
+            LIST_ALL => store.list().await?.try_collect().await,
+            LIST_PREFIX => store.list_prefix(&prefix).await?.try_collect().await,
+            LIST_DIR => store.list_dir(&prefix).await?.try_collect().await,
+            other => Err(StoreError::capture(StoreErrorKind::Other(format!(
+                "unknown list mode {other}"
+            )))),
+        }
+    })??;
+    strings(env, keys.iter())
+}}
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storeReadOnly<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    store: jlong,
-) -> jboolean {
-    call::run(env, |_| {
-        let store = handles::store(store)?;
-        block_on(store.read_only())
-    })
-}
+native! { fn storeReadOnly(_, store: jlong) -> jboolean {
+    let store = handles::store(store)?;
+    block_on(store.read_only())
+}}
 
 #[cfg(test)]
 mod tests {
@@ -454,8 +232,7 @@ mod tests {
 
     #[test]
     fn ranges() {
-        assert_eq!(byte_range(RANGE_ALL, 0, 0).unwrap(), ByteRange::From(0));
-        assert_eq!(byte_range(RANGE_BOUNDED, 2, 5).unwrap(), ByteRange::Bounded(2..5));
+        assert_eq!(byte_range(RANGE_BOUNDED, 2, 5).unwrap(), ByteRange::bounded(2, 5));
         assert_eq!(byte_range(RANGE_FROM, 7, 0).unwrap(), ByteRange::From(7));
         assert_eq!(byte_range(RANGE_SUFFIX, 4, 0).unwrap(), ByteRange::Last(4));
         assert!(byte_range(RANGE_BOUNDED, 5, 2).is_err());

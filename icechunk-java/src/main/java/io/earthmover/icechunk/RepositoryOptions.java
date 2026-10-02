@@ -9,7 +9,7 @@ import java.util.Objects;
  *
  * <pre>{@code
  * RepositoryOptions options = RepositoryOptions.builder()
- *         .authorizeVirtualChunkAccess("s3://source-bucket/", ContainerCredentials.s3(S3Credentials.anonymous()))
+ *         .authorizeVirtualChunkAccess("s3://source-bucket/", Credentials.s3(S3Credentials.anonymous()))
  *         .build();
  * }</pre>
  */
@@ -19,7 +19,7 @@ public final class RepositoryOptions {
     private final String json;
 
     private RepositoryOptions(Builder builder) {
-        Map<String, Json> credentials = new LinkedHashMap<>();
+        Json credentials = Json.object();
         builder.credentials.forEach((prefix, value) -> credentials.put(prefix, value.toJson()));
         this.json = Json.object()
                 .putRaw("config", builder.configJson)
@@ -43,7 +43,7 @@ public final class RepositoryOptions {
 
     public static final class Builder {
         private String configJson;
-        private final Map<String, ContainerCredentials> credentials = new LinkedHashMap<>();
+        private final Map<String, Credentials> credentials = new LinkedHashMap<>();
         private Integer specVersion;
         private boolean checkCleanRoot = true;
 
@@ -59,7 +59,7 @@ public final class RepositoryOptions {
         }
 
         /** Allow reading virtual chunks from the container whose URL starts with {@code urlPrefix}. */
-        public Builder authorizeVirtualChunkAccess(String urlPrefix, ContainerCredentials credentials) {
+        public Builder authorizeVirtualChunkAccess(String urlPrefix, Credentials credentials) {
             this.credentials.put(
                     Objects.requireNonNull(urlPrefix, "urlPrefix"), Objects.requireNonNull(credentials, "credentials"));
             return this;

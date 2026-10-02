@@ -15,7 +15,8 @@ import java.util.Optional;
  */
 public final class Session extends NativeHandle {
     private final Object storeLock = new Object();
-    private Store store;
+    // Volatile so the common case, an open store, is returned without taking the lock.
+    private volatile Store store;
 
     Session(long handle) {
         super(handle);
@@ -57,6 +58,10 @@ public final class Session extends NativeHandle {
 
     /** The Zarr store for this session. The same store is returned on every call. */
     public Store store() {
+        Store current = store;
+        if (current != null && !current.isClosed()) {
+            return current;
+        }
         synchronized (storeLock) {
             if (store == null || store.isClosed()) {
                 try {

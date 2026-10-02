@@ -29,12 +29,13 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 | Path | Contents |
 |---|---|
 | `native/src/call.rs` | Running a native method: `run`, `block_on`, and errors as Java exceptions. |
-| `native/src/buffers.rs` | Lending icechunk's memory to Java, and borrowing Java's direct buffers. |
+| `native/src/buffers.rs` | Reading Java's direct buffers in place on write. |
+| `native/src/contract_tests.rs` | Checks that constants and error kinds shared with the Java side agree. |
 | `native/src/handles.rs` | The handle table. |
 | `native/src/runtime.rs` | The process-wide tokio runtime. |
 | `native/src/spec.rs` | The JSON formats the Java builders send. |
 | `native/src/{storage,repository,session,store}.rs` | Native methods, one module per Java class. |
-| `icechunk-java/` | The public Java API and its internals (`Native`, `NativeHandle`, `NativeBuffers`, `NativeLoader`, `Json`). |
+| `icechunk-java/` | The public Java API and its internals (`Native`, `NativeHandle`, `NativeLoader`, `Json`). |
 | `benchmarks/` | JMH benchmarks of the Store API. |
 | `icechunk-zarr-java/` | The zarr-java adapter, and the zarr-java, fixture and Python interop tests. |
 | `examples/` | Runnable examples. |
@@ -45,14 +46,16 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 
 1. Declare it in `Native.java`, taking the handle as a `long` and returning the result directly:
    `static native String[] thingList(long handle, String prefix)`.
-2. Implement `Java_io_earthmover_icechunk_Native_thingList` in the matching Rust module. Copy an existing method: wrap
-   the body in `call::run`, look up the handle, drive the icechunk future with `block_on`, and convert the result.
-   Return errors with `?`; `call::run` throws them as Java exceptions.
+2. Implement it in the matching Rust module with the `native!` macro, which writes the JNI export:
+   `native! { fn thingList(env, handle: jlong, prefix: JString<'l>) -> JObjectArray<'l, JString<'l>> { ... } }`.
+   In the body, look up the handle, drive the icechunk future with `block_on`, and convert the result. Return errors
+   with `?`; they are thrown as Java exceptions.
 3. Call it from the public class as `Native.thingList(handle(), prefix)` inside `try`, with
    `Reference.reachabilityFence(this)` in the `finally` block.
 4. If it takes a new kind of option, add it to the Java builder and to `spec.rs`, and extend both `JsonContractTest`
    and the `spec.rs` tests with the same JSON string.
-5. Constants shared by both sides (`Native.RANGE_*`, `Native.VERSION_*` and so on) are defined twice. Change both.
+5. Constants shared by both sides (`Native.RANGE_*`, `Native.VERSION_*` and so on) are defined twice. Change both;
+   `contract_tests.rs` fails if they disagree, and also needs a line for any new constant.
 6. If it is on a hot path, add a case to `benchmarks/` and compare before and after with `pixi run bench`.
 
 ## Updating icechunk

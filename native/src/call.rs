@@ -8,12 +8,31 @@
 use std::future::Future;
 
 use jni::errors::ErrorPolicy;
-use jni::objects::{JObject, JObjectArray, JString, JThrowable, JValue};
+use jni::objects::{JObjectArray, JString, JThrowable, JValue};
 use jni::strings::JNIString;
 use jni::{Env, EnvUnowned, jni_sig, jni_str};
 
 use crate::error::{ErrorKind, NativeError, NativeResult};
 use crate::runtime;
+
+/// Define the export `Java_io_earthmover_icechunk_Native_<name>` for the static native
+/// method `Native.<name>`, running `body` through [`run`]. `$env` names (or ignores) the
+/// `&mut Env` the body receives; the remaining arguments follow the Java signature.
+macro_rules! native {
+    (fn $name:ident($env:pat $(, $arg:ident: $ty:ty)* $(,)?) -> $ret:ty $body:block) => {
+        #[allow(non_snake_case, reason = "JNI export names follow the Java method names")]
+        #[allow(unreachable_pub, reason = "the JVM finds exports by symbol name")]
+        #[unsafe(export_name = concat!("Java_io_earthmover_icechunk_Native_", stringify!($name)))]
+        pub extern "system" fn $name<'l>(
+            env: ::jni::EnvUnowned<'l>,
+            _class: ::jni::objects::JClass<'l>,
+            $($arg: $ty),*
+        ) -> $ret {
+            $crate::call::run(env, |$env| $body)
+        }
+    };
+}
+pub(crate) use native;
 
 /// Run `future` to completion on the calling thread.
 ///
@@ -53,7 +72,7 @@ pub fn text(env: &Env<'_>, value: &JString<'_>) -> NativeResult<String> {
 /// Throws an `IcechunkException` (or the subclass `IcechunkException.fromNative` picks
 /// for the error kind) for an error, and a `RuntimeException` for a panic.
 #[derive(Debug)]
-pub enum ThrowIcechunk {}
+pub(crate) enum ThrowIcechunk {}
 
 impl<T: Default> ErrorPolicy<T, NativeError> for ThrowIcechunk {
     type Captures<'unowned_env_local: 'native_method, 'native_method> = ();
@@ -115,10 +134,8 @@ fn to_exception<'local>(
 pub fn strings<'local>(
     env: &mut Env<'local>,
     values: impl ExactSizeIterator<Item = impl AsRef<str>>,
-) -> NativeResult<JObjectArray<'local>> {
-    let len = jsize(values.len())?;
-    let array =
-        env.new_object_array(len, jni_str!("java/lang/String"), JObject::null())?;
+) -> NativeResult<JObjectArray<'local, JString<'local>>> {
+    let array = JObjectArray::<JString<'_>>::new(env, values.len(), JString::null())?;
     for (index, value) in values.enumerate() {
         let value = env.new_string(value)?;
         array.set_element(env, index, &value)?;
@@ -130,7 +147,7 @@ pub fn strings<'local>(
 }
 
 /// A Java `String`, or null.
-pub fn optional_string<'local>(
+pub(crate) fn optional_string<'local>(
     env: &mut Env<'local>,
     value: Option<&str>,
 ) -> NativeResult<JString<'local>> {
@@ -138,9 +155,4 @@ pub fn optional_string<'local>(
         Some(value) => Ok(env.new_string(value)?),
         None => Ok(JString::null()),
     }
-}
-
-pub(crate) fn jsize(len: usize) -> NativeResult<i32> {
-    i32::try_from(len)
-        .map_err(|_| NativeError::invalid_argument("result too large for a Java array"))
 }

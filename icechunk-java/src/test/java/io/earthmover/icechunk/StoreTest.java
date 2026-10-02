@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -35,9 +36,9 @@ class StoreTest {
         repo = Repository.create(storage);
         session = repo.writableSession("main");
         store = session.store();
-        store.set("zarr.json", GROUP);
-        store.set("data/zarr.json", ARRAY);
-        store.set("data/c/0", CHUNK);
+        store.set("zarr.json", ByteBuffer.wrap(GROUP));
+        store.set("data/zarr.json", ByteBuffer.wrap(ARRAY));
+        store.set("data/c/0", ByteBuffer.wrap(CHUNK));
     }
 
     @AfterEach
@@ -68,18 +69,18 @@ class StoreTest {
         assertEquals(Optional.empty(), store.get("data/c/1"));
         assertEquals(Optional.empty(), store.get("nope/zarr.json"));
         assertFalse(store.exists("data/c/1"));
-        assertEquals(OptionalLong.empty(), store.size("data/c/1"));
+        assertEquals(OptionalLong.empty(), store.getSize("data/c/1"));
     }
 
     @Test
     void sizes() {
-        assertEquals(OptionalLong.of(4), store.size("data/c/0"));
-        assertEquals(OptionalLong.of(ARRAY.length), store.size("data/zarr.json"));
+        assertEquals(OptionalLong.of(4), store.getSize("data/c/0"));
+        assertEquals(OptionalLong.of(ARRAY.length), store.getSize("data/zarr.json"));
     }
 
     @Test
-    void getMany() {
-        List<Optional<byte[]>> values = store.getMany(
+    void getPartialValues() {
+        List<Optional<byte[]>> values = store.getPartialValues(
                 Arrays.asList("data/c/0", "data/c/9", "zarr.json"),
                 Arrays.asList(ByteRange.suffix(2), ByteRange.all(), ByteRange.all()));
         assertEquals(3, values.size());
@@ -109,7 +110,7 @@ class StoreTest {
 
     @Test
     void setIfNotExistsKeepsTheOldValue() {
-        store.setIfNotExists("data/c/0", new byte[] {1, 1, 1, 1});
+        store.setIfNotExists("data/c/0", ByteBuffer.wrap(new byte[] {1, 1, 1, 1}));
         assertArrayEquals(CHUNK, store.get("data/c/0").orElseThrow());
     }
 

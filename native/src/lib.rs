@@ -12,6 +12,8 @@ use jni::sys::{JNI_VERSION_1_8, jint};
 
 mod buffers;
 mod call;
+#[cfg(test)]
+mod contract_tests;
 mod error;
 mod handles;
 mod repository;
@@ -30,8 +32,9 @@ mod store;
 pub mod ext {
     use std::sync::Arc;
 
-    pub use crate::call::{ThrowIcechunk, block_on, optional_string, run, strings, text};
+    pub use crate::call::{block_on, run, strings, text};
     pub use crate::error::{ErrorKind, NativeError, NativeResult};
+    pub use crate::handles::Ref;
 
     use crate::handles::{self, Object};
 
@@ -45,11 +48,10 @@ pub mod ext {
         handles::insert(Object::Extension(Arc::new(object)))
     }
 
-    /// Look up an object registered with [`insert_extension`].
-    pub fn extension<T: Send + Sync + 'static>(handle: i64) -> NativeResult<Arc<T>> {
-        handles::extension(handle)?.downcast::<T>().map_err(|_| {
-            NativeError::invalid_argument("handle refers to a different extension type")
-        })
+    /// Look up an object registered with [`insert_extension`], borrowed for as long as
+    /// the returned [`Ref`] lives.
+    pub fn extension<T: Send + Sync + 'static>(handle: i64) -> NativeResult<Ref<T>> {
+        handles::extension::<T>(handle)
     }
 
     /// The runtime icechunk's futures run on, for extensions that spawn their own tasks.

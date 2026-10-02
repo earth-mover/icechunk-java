@@ -1,17 +1,11 @@
-#![allow(
-    unreachable_pub,
-    reason = "JNI exports are found by symbol name, not Rust paths"
-)]
-
 use icechunk::storage::{
     new_azure_blob_storage, new_gcs_storage, new_http_storage, new_in_memory_storage,
     new_local_filesystem_storage, new_s3_storage,
 };
-use jni::EnvUnowned;
-use jni::objects::{JClass, JString};
+use jni::objects::JString;
 use jni::sys::jlong;
 
-use crate::call::{self, block_on, text};
+use crate::call::{block_on, native, text};
 use crate::error::NativeResult;
 use crate::handles::{self, Object, StorageRef};
 use crate::spec::StorageSpec;
@@ -57,24 +51,13 @@ async fn open(spec: StorageSpec) -> NativeResult<StorageRef> {
     Ok(storage)
 }
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_storageOpen<'l>(
-    env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    spec: JString<'l>,
-) -> jlong {
-    call::run(env, |env| {
-        let spec: StorageSpec = serde_json::from_str(&text(env, &spec)?)?;
-        let storage = block_on(open(spec))??;
-        handles::insert(Object::Storage(storage))
-    })
-}
+native! { fn storageOpen(env, spec: JString<'l>) -> jlong {
+    let spec: StorageSpec = serde_json::from_str(&text(env, &spec)?)?;
+    let storage = block_on(open(spec))??;
+    handles::insert(Object::Storage(storage))
+}}
 
-#[unsafe(no_mangle)]
-pub extern "system" fn Java_io_earthmover_icechunk_Native_close<'l>(
-    _env: EnvUnowned<'l>,
-    _class: JClass<'l>,
-    handle: jlong,
-) {
+native! { fn close(_, handle: jlong) -> () {
     handles::remove(handle);
-}
+    Ok(())
+}}

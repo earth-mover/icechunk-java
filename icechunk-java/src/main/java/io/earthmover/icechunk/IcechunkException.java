@@ -25,7 +25,6 @@ public class IcechunkException extends RuntimeException {
             case "INVALID_ARGUMENT":
                 return new IllegalArgumentException(message);
             case "CLOSED":
-                return new IllegalStateException(message);
             case "RUNTIME_THREAD":
                 return new IllegalStateException(message);
             default:

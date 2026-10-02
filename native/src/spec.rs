@@ -16,7 +16,9 @@ use icechunk::config::{
 };
 use serde::Deserialize;
 
-use crate::error::NativeResult;
+use icechunk::format::format_constants::SpecVersionBin;
+
+use crate::error::{NativeError, NativeResult};
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -238,7 +240,7 @@ pub(crate) struct RepositoryOptionsSpec {
 pub struct RepositoryOptions {
     pub config: Option<RepositoryConfig>,
     pub virtual_chunk_credentials: HashMap<String, Option<Credentials>>,
-    pub spec_version: Option<u8>,
+    pub spec_version: Option<SpecVersionBin>,
     pub check_clean_root: bool,
 }
 
@@ -253,7 +255,16 @@ impl RepositoryOptionsSpec {
                 .into_iter()
                 .map(|(prefix, credentials)| (prefix, Some(credentials.into())))
                 .collect(),
-            spec_version: spec.spec_version,
+            spec_version: spec
+                .spec_version
+                .map(|v| {
+                    SpecVersionBin::try_from(v).map_err(|err| {
+                        NativeError::invalid_argument(format!(
+                            "unsupported spec version {v}: {err}"
+                        ))
+                    })
+                })
+                .transpose()?,
             check_clean_root: spec.check_clean_root.unwrap_or(true),
         })
     }
@@ -263,8 +274,8 @@ impl RepositoryOptionsSpec {
 mod tests {
     use super::*;
 
-    // The JSON literals below are what the Java builders emit; see the matching tests in
-    // `StorageTest` and `RepositoryOptionsTest`.
+    // The JSON literals below are what the Java builders emit; `JsonContractTest` checks
+    // the Java side produces the same strings.
 
     #[test]
     fn local_filesystem() {

@@ -10,21 +10,19 @@ import io.earthmover.icechunk.Version;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Comparator;
+import java.nio.file.Paths;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.stream.Stream;
 
 /**
  * Peak resident memory while streaming a fixed volume of chunks through each read and write path.
  *
  * <p>JMH's allocation profiler sees only the Java heap. This measures the whole process, so it also counts the native
- * memory icechunk holds and the memory lent to Java as direct buffers. Each mode runs in a fresh JVM: {@code java -cp
+ * memory icechunk holds. Each mode runs in a fresh JVM: {@code java -cp
  * benchmarks.jar io.earthmover.icechunk.benchmarks.MemoryProbe MODE [chunkMiB] [totalMiB]}, with MODE one of
- * {@code get}, {@code getInto}, {@code getBuffer}, {@code set}, {@code setDirect}.
+ * {@code get}, {@code set}, {@code setDirect}.
  */
 public final class MemoryProbe {
     public static void main(String[] args) throws Exception {
@@ -38,39 +36,27 @@ public final class MemoryProbe {
         ThreadLocalRandom.current().nextBytes(payload);
         try (Storage storage = Storage.localFilesystem(dir);
                 Repository repo = Repository.create(storage)) {
-            boolean reading = mode.startsWith("get");
+            boolean reading = mode.equals("get");
             if (reading) {
-                write(repo, chunks, chunkBytes, payload, false);
+                Fixtures.writeArray(repo, chunks, payload, false);
             }
             System.gc();
             long baseline = rssBytes();
-            Sampler sampler = new Sampler();
-            sampler.start();
+            PeakMemory peak = PeakMemory.start();
             long start = System.nanoTime();
             long checksum = 0;
             if (reading) {
                 try (Session session = repo.readonlySession(Version.branch("main"))) {
                     Store store = session.store();
-                    ByteBuffer scratch = ByteBuffer.allocateDirect(chunkBytes);
                     for (int i = 0; i < chunks; i++) {
-                        String key = "a/c/" + i;
-                        if (mode.equals("get")) {
-                            checksum += store.get(key).orElseThrow()[i % chunkBytes];
-                        } else if (mode.equals("getInto")) {
-                            scratch.clear();
-                            store.getInto(key, scratch);
-                            checksum += scratch.get(i % chunkBytes);
-                        } else {
-                            checksum += store.getBuffer(key).orElseThrow().get(i % chunkBytes);
-                        }
+                        checksum += store.get(Fixtures.key(i)).orElseThrow()[i % chunkBytes];
                     }
                 }
             } else {
-                write(repo, chunks, chunkBytes, payload, mode.equals("setDirect"));
+                Fixtures.writeArray(repo, chunks, payload, mode.equals("setDirect"));
             }
             double seconds = (System.nanoTime() - start) / 1e9;
-            sampler.interrupt();
-            sampler.join();
+            long peakBytes = peak.stop();
             System.out.printf(
                     "%-9s %4d x %3d MiB  %6.2f s  %7.1f MiB/s  peak RSS above baseline %6.0f MiB  (checksum %d)%n",
                     mode,
@@ -78,35 +64,10 @@ public final class MemoryProbe {
                     chunkBytes >> 20,
                     seconds,
                     (totalBytes >> 20) / seconds,
-                    (sampler.peak.get() - baseline) / 1048576.0,
+                    (peakBytes - baseline) / 1048576.0,
                     checksum);
         } finally {
-            try (Stream<Path> paths = Files.walk(dir)) {
-                paths.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
-            }
-        }
-    }
-
-    private static void write(Repository repo, int chunks, int chunkBytes, byte[] payload, boolean direct) {
-        ByteBuffer directPayload = null;
-        if (direct) {
-            directPayload = ByteBuffer.allocateDirect(chunkBytes).put(payload);
-            directPayload.flip();
-        }
-        try (Session session = repo.writableSession("main")) {
-            Store store = session.store();
-            store.set("zarr.json", "{\"zarr_format\":3,\"node_type\":\"group\",\"attributes\":{}}".getBytes(UTF_8));
-            store.set(
-                    "a/zarr.json",
-                    StoreBenchmark.arrayMetadata(chunkBytes, chunks).getBytes(UTF_8));
-            for (int i = 0; i < chunks; i++) {
-                if (direct) {
-                    store.set("a/c/" + i, directPayload.duplicate());
-                } else {
-                    store.set("a/c/" + i, payload);
-                }
-            }
-            session.commit("write");
+            Fixtures.deleteTree(dir);
         }
     }
 
@@ -124,6 +85,43 @@ public final class MemoryProbe {
         }
     }
 
+    /**
+     * Peak resident memory over a stretch of the run. On Linux the kernel tracks it exactly: writing 5 to
+     * {@code /proc/self/clear_refs} resets the high-water mark, and {@code VmHWM} reports it. Elsewhere a thread samples
+     * {@code ps}, which can miss short peaks and costs a process spawn per sample.
+     */
+    private abstract static class PeakMemory {
+        abstract long stop() throws IOException, InterruptedException;
+
+        static PeakMemory start() throws IOException {
+            Path clearRefs = Paths.get("/proc/self/clear_refs");
+            if (Files.isWritable(clearRefs)) {
+                Files.write(clearRefs, "5".getBytes(UTF_8));
+                return new PeakMemory() {
+                    @Override
+                    long stop() throws IOException {
+                        for (String line : Files.readAllLines(Paths.get("/proc/self/status"), UTF_8)) {
+                            if (line.startsWith("VmHWM:")) {
+                                return Long.parseLong(line.replaceAll("[^0-9]", "")) * 1024;
+                            }
+                        }
+                        throw new IOException("no VmHWM in /proc/self/status");
+                    }
+                };
+            }
+            Sampler sampler = new Sampler();
+            sampler.start();
+            return new PeakMemory() {
+                @Override
+                long stop() throws InterruptedException {
+                    sampler.interrupt();
+                    sampler.join();
+                    return sampler.peak.get();
+                }
+            };
+        }
+    }
+
     private static final class Sampler extends Thread {
         final AtomicLong peak = new AtomicLong();
 
@@ -137,9 +135,7 @@ public final class MemoryProbe {
                 try {
                     peak.accumulateAndGet(rssBytes(), Math::max);
                     Thread.sleep(20);
-                } catch (IOException e) {
-                    return;
-                } catch (InterruptedException e) {
+                } catch (IOException | InterruptedException e) {
                     return;
                 }
             }

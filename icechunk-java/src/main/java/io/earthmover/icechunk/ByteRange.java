@@ -2,7 +2,7 @@ package io.earthmover.icechunk;
 
 /** The part of a stored value to read. */
 public final class ByteRange {
-    private static final ByteRange ALL = new ByteRange(Native.RANGE_ALL, 0, 0);
+    private static final ByteRange ALL = new ByteRange(Native.RANGE_FROM, 0, 0);
 
     private final long kind;
     private final long a;
@@ -14,7 +14,7 @@ public final class ByteRange {
         this.b = b;
     }
 
-    /** The whole value. */
+    /** The whole value; the same as {@code from(0)}. */
     public static ByteRange all() {
         return ALL;
     }
@@ -75,7 +75,7 @@ public final class ByteRange {
 
     @Override
     public String toString() {
-        if (kind == Native.RANGE_ALL) {
+        if (kind == Native.RANGE_FROM && a == 0) {
             return "all";
         } else if (kind == Native.RANGE_BOUNDED) {
             return "[" + a + ", " + b + ")";

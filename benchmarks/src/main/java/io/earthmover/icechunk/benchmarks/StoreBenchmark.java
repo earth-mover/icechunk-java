@@ -1,7 +1,5 @@
 package io.earthmover.icechunk.benchmarks;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
-
 import io.earthmover.icechunk.ByteRange;
 import io.earthmover.icechunk.Repository;
 import io.earthmover.icechunk.Session;
@@ -13,12 +11,10 @@ import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Stream;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -36,8 +32,9 @@ import org.openjdk.jmh.annotations.Warmup;
 /**
  * Per-operation cost of the Store API.
  *
- * <p>Reads go to a committed snapshot through a read-only session, writes to a writable session. Each read picks one of
- * {@link #CHUNKS} chunks at random so the benchmark does not measure a single hot key.
+ * <p>Reads go to a committed snapshot through a read-only session. Each read picks one of {@link #CHUNKS} chunks at
+ * random so the benchmark does not measure a single hot key. Writes go to a writable session over a fresh storage
+ * each iteration, so the values written in earlier iterations do not pile up and skew later ones.
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.AverageTime)
@@ -54,81 +51,82 @@ public class StoreBenchmark {
     @Param({"64", "65536", "1048576"})
     public int chunkBytes;
 
-    private Path dir;
-    private Storage store;
-    private Repository repo;
-    private Session reader;
-    private Session writer;
-    private Store readStore;
-    private Store writeStore;
     private byte[] payload;
     private ByteBuffer directPayload;
     private List<String> allKeys;
 
-    @Setup(Level.Trial)
-    public void setUp() throws IOException {
-        if (storage.equals("local")) {
-            dir = Files.createTempDirectory("icechunk-bench");
-            store = Storage.localFilesystem(dir);
-        } else {
-            store = Storage.inMemory();
+    private Fixture reads;
+    private Session reader;
+    private Store readStore;
+
+    private Fixture writes;
+    private Session writer;
+    private Store writeStore;
+
+    /** A storage and repository, in memory or in a temporary directory. */
+    private final class Fixture implements AutoCloseable {
+        final Path dir;
+        final Storage storage;
+        final Repository repo;
+
+        Fixture() throws IOException {
+            if (StoreBenchmark.this.storage.equals("local")) {
+                dir = Files.createTempDirectory("icechunk-bench");
+                storage = Storage.localFilesystem(dir);
+            } else {
+                dir = null;
+                storage = Storage.inMemory();
+            }
+            repo = Repository.create(storage);
         }
-        repo = Repository.create(store);
+
+        @Override
+        public void close() throws IOException {
+            repo.close();
+            storage.close();
+            if (dir != null) {
+                Fixtures.deleteTree(dir);
+            }
+        }
+    }
+
+    @Setup(Level.Trial)
+    public void setUpReads() throws IOException {
         payload = new byte[chunkBytes];
         ThreadLocalRandom.current().nextBytes(payload);
-        directPayload = ByteBuffer.allocateDirect(chunkBytes).put(payload);
-        directPayload.flip();
-        try (Session session = repo.writableSession("main")) {
-            Store s = session.store();
-            s.set("zarr.json", "{\"zarr_format\":3,\"node_type\":\"group\",\"attributes\":{}}".getBytes(UTF_8));
-            s.set("a/zarr.json", arrayMetadata(chunkBytes).getBytes(UTF_8));
-            for (int i = 0; i < CHUNKS; i++) {
-                s.set(key(i), payload);
-            }
-            session.commit("setup");
-        }
-        reader = repo.readonlySession(Version.branch("main"));
-        readStore = reader.store();
-        writer = repo.writableSession("main");
-        writeStore = writer.store();
+        directPayload = Fixtures.directCopy(payload);
         allKeys = new ArrayList<>();
         for (int i = 0; i < CHUNKS; i++) {
-            allKeys.add(key(i));
+            allKeys.add(Fixtures.key(i));
         }
+        reads = new Fixture();
+        Fixtures.writeArray(reads.repo, CHUNKS, payload, false);
+        reader = reads.repo.readonlySession(Version.branch("main"));
+        readStore = reader.store();
     }
 
     @TearDown(Level.Trial)
-    public void tearDown() throws IOException {
-        writer.close();
+    public void tearDownReads() throws IOException {
         reader.close();
-        repo.close();
-        store.close();
-        if (dir != null) {
-            try (Stream<Path> paths = Files.walk(dir)) {
-                paths.sorted(Comparator.reverseOrder()).forEach(p -> p.toFile().delete());
-            }
-        }
+        reads.close();
     }
 
-    static String key(int i) {
-        return "a/c/" + i;
+    @Setup(Level.Iteration)
+    public void setUpWrites() throws IOException {
+        writes = new Fixture();
+        writer = writes.repo.writableSession("main");
+        writeStore = writer.store();
+        Fixtures.writeMetadata(writeStore, chunkBytes, CHUNKS);
     }
 
-    static String arrayMetadata(int chunkBytes) {
-        return arrayMetadata(chunkBytes, CHUNKS);
-    }
-
-    /** A 1-d uint8 array with one chunk per key, so every key is a valid chunk. */
-    static String arrayMetadata(int chunkBytes, int chunks) {
-        return "{\"zarr_format\":3,\"node_type\":\"array\",\"shape\":[" + (long) chunkBytes * chunks
-                + "],\"data_type\":\"uint8\",\"chunk_grid\":{\"name\":\"regular\",\"configuration\":"
-                + "{\"chunk_shape\":[" + chunkBytes + "]}},\"chunk_key_encoding\":{\"name\":\"default\","
-                + "\"configuration\":{\"separator\":\"/\"}},\"fill_value\":0,\"codecs\":[{\"name\":\"bytes\"}],"
-                + "\"attributes\":{}}";
+    @TearDown(Level.Iteration)
+    public void tearDownWrites() throws IOException {
+        writer.close();
+        writes.close();
     }
 
     private static String randomKey() {
-        return key(ThreadLocalRandom.current().nextInt(CHUNKS));
+        return Fixtures.key(ThreadLocalRandom.current().nextInt(CHUNKS));
     }
 
     /** The cheapest call there is: the fixed cost of crossing into native code and back. */
@@ -140,30 +138,6 @@ public class StoreBenchmark {
     @Benchmark
     public Optional<byte[]> get() {
         return readStore.get(randomKey());
-    }
-
-    /** As {@link #get}, without copying: a buffer over icechunk's memory. */
-    @Benchmark
-    public Optional<ByteBuffer> getBuffer() {
-        return readStore.getBuffer(randomKey());
-    }
-
-    /** As {@link #get}, copying into a reused buffer instead of allocating. */
-    @Benchmark
-    public int getInto(Scratch scratch) {
-        scratch.buffer.clear();
-        return readStore.getInto(randomKey(), scratch.buffer);
-    }
-
-    /** A per-thread destination buffer for {@link #getInto}. */
-    @State(Scope.Thread)
-    public static class Scratch {
-        ByteBuffer buffer;
-
-        @Setup
-        public void allocate(StoreBenchmark benchmark) {
-            buffer = ByteBuffer.allocateDirect(benchmark.chunkBytes);
-        }
     }
 
     @Benchmark
@@ -178,13 +152,13 @@ public class StoreBenchmark {
 
     /** All {@link #CHUNKS} chunks in one call; divide by 64 for the per-chunk cost. */
     @Benchmark
-    public List<Optional<byte[]>> getMany() {
-        return readStore.getMany(allKeys);
+    public List<Optional<byte[]>> getPartialValues() {
+        return readStore.getPartialValues(allKeys);
     }
 
     @Benchmark
     public void set() {
-        writeStore.set(randomKey(), payload);
+        writeStore.set(randomKey(), ByteBuffer.wrap(payload));
     }
 
     /** As {@link #set}, from a direct buffer, which large values are read from in place. */

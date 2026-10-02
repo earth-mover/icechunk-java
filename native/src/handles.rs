@@ -123,9 +123,15 @@ pub(crate) fn insert(object: Object) -> NativeResult<i64> {
 }
 
 /// A borrowed object, valid while this value lives.
-pub(crate) struct Ref<T: 'static> {
+pub struct Ref<T: 'static> {
     _guard: Guard,
     value: *const T,
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for Ref<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Debug::fmt(&**self, f)
+    }
 }
 
 impl<T> Deref for Ref<T> {
@@ -205,15 +211,13 @@ pub(crate) fn store(handle: i64) -> NativeResult<Ref<StoreRef>> {
     get(handle, |o| if let Object::Store(s) = o { Some(s) } else { None }, "Store")
 }
 
-pub(crate) fn extension(handle: i64) -> NativeResult<Arc<dyn Any + Send + Sync>> {
-    let found = get(
+pub(crate) fn extension<T: 'static>(handle: i64) -> NativeResult<Ref<T>> {
+    get(
         handle,
-        |o| if let Object::Extension(e) = o { Some(e) } else { None },
-        "extension",
-    )?;
-    Ok(Arc::clone(&found))
+        |o| if let Object::Extension(e) = o { e.downcast_ref::<T>() } else { None },
+        "matching extension",
+    )
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,13 +241,19 @@ mod tests {
     #[test]
     fn closed_and_reused_handles_are_rejected() {
         let first = insert(extension_object(1)).unwrap();
-        assert_eq!(*extension(first).unwrap().downcast::<u64>().unwrap(), 1);
+        assert_eq!(*extension::<u64>(first).unwrap(), 1);
         remove(first);
         remove(first);
-        assert_eq!(extension(first).map(|_| ()).unwrap_err().kind, ErrorKind::Closed);
+        assert_eq!(
+            extension::<u64>(first).map(|_| ()).unwrap_err().kind,
+            ErrorKind::Closed
+        );
         let second = insert(extension_object(2)).unwrap();
-        assert_eq!(extension(first).map(|_| ()).unwrap_err().kind, ErrorKind::Closed);
-        assert_eq!(*extension(second).unwrap().downcast::<u64>().unwrap(), 2);
+        assert_eq!(
+            extension::<u64>(first).map(|_| ()).unwrap_err().kind,
+            ErrorKind::Closed
+        );
+        assert_eq!(*extension::<u64>(second).unwrap(), 2);
         remove(second);
     }
 

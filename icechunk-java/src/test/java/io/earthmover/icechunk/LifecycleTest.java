@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -41,7 +42,7 @@ class LifecycleTest {
         try (Session session = repo.writableSession("main")) {
             repo.close();
             storage.close();
-            session.store().set("zarr.json", GROUP);
+            session.store().set("zarr.json", ByteBuffer.wrap(GROUP));
             assertTrue(session.store().exists("zarr.json"));
         }
     }
@@ -59,7 +60,7 @@ class LifecycleTest {
                         Repository repo = Repository.create(storage);
                         Session session = repo.writableSession("main")) {
                     Store store = session.store();
-                    store.set("zarr.json", GROUP);
+                    store.set("zarr.json", ByteBuffer.wrap(GROUP));
                     CountDownLatch start = new CountDownLatch(1);
                     AtomicInteger unexpected = new AtomicInteger();
                     List<Future<?>> readers = new ArrayList<>();

@@ -1,9 +1,7 @@
 package io.earthmover.icechunk;
 
 import java.lang.ref.Reference;
-import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.nio.ReadOnlyBufferException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -21,41 +19,27 @@ import java.util.OptionalLong;
  *
  * <pre>{@code
  * Store store = session.store();
- * Optional<ByteBuffer> chunk = store.getBuffer("temperature/c/0/0");
  * Optional<byte[]> metadata = store.get("temperature/zarr.json");
+ * Optional<byte[]> shardIndex = store.get("temperature/c/0/0", ByteRange.suffix(16));
+ * store.set("temperature/c/0/1", ByteBuffer.wrap(encodedChunk));
  * }</pre>
  *
- * <h2>Memory</h2>
- *
- * <p>There are three ways to read a value:
- *
- * <ul>
- *   <li>{@link #get} and {@link #getMany} copy it into a new {@code byte[]}. icechunk's copy is freed as soon as the
- *       call returns, and the array is ordinary heap garbage, so memory stays bounded when streaming through many
- *       values. This is the default choice.
- *   <li>{@link #getInto} copies it into a buffer the caller provides and can reuse. Nothing is allocated, so memory is
- *       whatever the caller decides. Use it for large streaming reads.
- *   <li>{@link #getBuffer} and {@link #getManyBuffers} return a read-only direct buffer over icechunk's own memory, with
- *       no copy. That memory is released only when the buffer is garbage collected, and since the reads allocate
- *       almost nothing on the heap, collections can be rare. Past a limit the binding requests a full collection (see
- *       {@code NativeBuffers}). Use these when the data is kept anyway, not for streaming.
- * </ul>
- *
- * <p>{@link #set(String, ByteBuffer)} with a direct buffer of more than 64 KiB lets icechunk read the buffer in place.
- * Do not modify that region afterwards: icechunk may still hold it, for example until a commit when the storage is in
- * memory. Heap buffers and arrays are copied.
+ * <p>Reads copy the value into a new array and free icechunk's copy before returning, so memory stays bounded when
+ * streaming through many values. Writes take a {@link ByteBuffer}. A heap buffer's bytes are copied once into
+ * icechunk. A direct buffer of more than 64 KiB is read in place instead; do not modify it afterwards, because
+ * icechunk may still hold it, for example until a commit when the storage is in memory.
  */
 public final class Store extends NativeHandle {
     Store(long handle) {
         super(handle);
     }
 
-    /** The value stored at {@code key}, copied into a new array, or empty if there is none. */
+    /** The value stored at {@code key}, or empty if there is none. */
     public Optional<byte[]> get(String key) {
         return get(key, ByteRange.all());
     }
 
-    /** The {@code range} of the value stored at {@code key}, copied into a new array, or empty if there is none. */
+    /** The {@code range} of the value stored at {@code key}, or empty if there is none. */
     public Optional<byte[]> get(String key, ByteRange range) {
         Objects.requireNonNull(key, "key");
         try {
@@ -66,120 +50,20 @@ public final class Store extends NativeHandle {
     }
 
     /**
-     * Copy the value at {@code key} into {@code dst}, starting at its position, and advance the position.
-     *
-     * @return the number of bytes copied, or -1 if the key does not exist
-     * @throws BufferOverflowException if the value is larger than {@code dst.remaining()}; nothing is copied
-     * @throws ReadOnlyBufferException if {@code dst} is read-only
+     * Fetch several whole values concurrently. The result has one element per key, in order, empty where the key does
+     * not exist. Use this rather than one {@link #get} per key when reading from object storage, where each request
+     * pays a network round trip.
      */
-    public int getInto(String key, ByteBuffer dst) {
-        return getInto(key, ByteRange.all(), dst);
-    }
-
-    /** As {@link #getInto(String, ByteBuffer)}, for the {@code range} of the value. */
-    public int getInto(String key, ByteRange range, ByteBuffer dst) {
-        Objects.requireNonNull(key, "key");
-        if (dst.isReadOnly()) {
-            throw new ReadOnlyBufferException();
-        }
-        boolean direct = dst.isDirect();
-        long result;
-        try {
-            result = Native.storeGetInto(
-                    handle(),
-                    key,
-                    range.kind(),
-                    range.a(),
-                    range.b(),
-                    direct ? dst : null,
-                    direct ? null : dst.array(),
-                    direct ? dst.position() : dst.arrayOffset() + dst.position(),
-                    dst.remaining());
-        } finally {
-            Reference.reachabilityFence(this);
-        }
-        if (result < -1) {
-            throw new BufferOverflowException();
-        }
-        if (result >= 0) {
-            dst.position(dst.position() + (int) result);
-        }
-        return (int) result;
-    }
-
-    /** The value stored at {@code key} as a read-only buffer over icechunk's memory, or empty if there is none. */
-    public Optional<ByteBuffer> getBuffer(String key) {
-        return getBuffer(key, ByteRange.all());
-    }
-
-    /** The {@code range} of the value at {@code key} as a read-only buffer over icechunk's memory. */
-    public Optional<ByteBuffer> getBuffer(String key, ByteRange range) {
-        Objects.requireNonNull(key, "key");
-        long[] out = new long[2];
-        ByteBuffer buffer;
-        try {
-            buffer = Native.storeGetBuffer(handle(), key, range.kind(), range.a(), range.b(), out);
-        } finally {
-            Reference.reachabilityFence(this);
-        }
-        if (buffer == null) {
-            return Optional.empty();
-        }
-        ByteBuffer view = NativeBuffers.adopt(buffer, out[0]);
-        NativeBuffers.afterLend(out[1]);
-        return Optional.of(view);
+    public List<Optional<byte[]>> getPartialValues(List<String> keys) {
+        return getPartialValues(keys, Collections.nCopies(keys.size(), ByteRange.all()));
     }
 
     /**
-     * Fetch several whole values concurrently, copied into new arrays. The result has one element per key, in order,
-     * empty where the key does not exist.
-     */
-    public List<Optional<byte[]>> getMany(List<String> keys) {
-        return getMany(keys, Collections.nCopies(keys.size(), ByteRange.all()));
-    }
-
-    /**
-     * Fetch {@code ranges.get(i)} of {@code keys.get(i)} for every {@code i}, concurrently, copied into new arrays.
+     * Fetch {@code ranges.get(i)} of {@code keys.get(i)} for every {@code i}, concurrently.
      *
      * @throws IllegalArgumentException if the lists differ in length
      */
-    public List<Optional<byte[]>> getMany(List<String> keys, List<ByteRange> ranges) {
-        byte[][] values;
-        try {
-            values = Native.storeGetMany(handle(), keys.toArray(new String[0]), triples(keys, ranges));
-        } finally {
-            Reference.reachabilityFence(this);
-        }
-        List<Optional<byte[]>> result = new ArrayList<>(values.length);
-        for (byte[] value : values) {
-            result.add(Optional.ofNullable(value));
-        }
-        return Collections.unmodifiableList(result);
-    }
-
-    /** As {@link #getMany(List)}, returning read-only buffers over icechunk's memory. */
-    public List<Optional<ByteBuffer>> getManyBuffers(List<String> keys) {
-        return getManyBuffers(keys, Collections.nCopies(keys.size(), ByteRange.all()));
-    }
-
-    /** As {@link #getMany(List, List)}, returning read-only buffers over icechunk's memory. */
-    public List<Optional<ByteBuffer>> getManyBuffers(List<String> keys, List<ByteRange> ranges) {
-        long[] out = new long[keys.size() + 1];
-        ByteBuffer[] buffers;
-        try {
-            buffers = Native.storeGetManyBuffers(handle(), keys.toArray(new String[0]), triples(keys, ranges), out);
-        } finally {
-            Reference.reachabilityFence(this);
-        }
-        List<Optional<ByteBuffer>> result = new ArrayList<>(buffers.length);
-        for (int i = 0; i < buffers.length; i++) {
-            result.add(buffers[i] == null ? Optional.empty() : Optional.of(NativeBuffers.adopt(buffers[i], out[i])));
-        }
-        NativeBuffers.afterLend(out[buffers.length]);
-        return Collections.unmodifiableList(result);
-    }
-
-    private static long[] triples(List<String> keys, List<ByteRange> ranges) {
+    public List<Optional<byte[]>> getPartialValues(List<String> keys, List<ByteRange> ranges) {
         if (keys.size() != ranges.size()) {
             throw new IllegalArgumentException("keys and ranges differ in length");
         }
@@ -190,12 +74,17 @@ public final class Store extends NativeHandle {
             triples[3 * i + 1] = range.a();
             triples[3 * i + 2] = range.b();
         }
-        return triples;
-    }
-
-    /** Store a copy of {@code value} at {@code key}, replacing any existing value. */
-    public void set(String key, byte[] value) {
-        write(key, value, 0, value.length, false);
+        byte[][] values;
+        try {
+            values = Native.storeGetPartialValues(handle(), keys.toArray(new String[0]), triples);
+        } finally {
+            Reference.reachabilityFence(this);
+        }
+        List<Optional<byte[]>> result = new ArrayList<>(values.length);
+        for (byte[] value : values) {
+            result.add(Optional.ofNullable(value));
+        }
+        return Collections.unmodifiableList(result);
     }
 
     /**
@@ -206,40 +95,31 @@ public final class Store extends NativeHandle {
         write(key, value, false);
     }
 
-    /** Store a copy of {@code value} at {@code key} unless the key already has a value. */
-    public void setIfNotExists(String key, byte[] value) {
-        write(key, value, 0, value.length, true);
-    }
-
-    /** As {@link #set(String, ByteBuffer)}, unless the key already has a value. */
+    /** As {@link #set}, unless the key already has a value. */
     public void setIfNotExists(String key, ByteBuffer value) {
         write(key, value, true);
     }
 
-    private void write(String key, byte[] value, int offset, int length, boolean onlyIfNew) {
-        Objects.requireNonNull(key, "key");
-        Objects.requireNonNull(value, "value");
-        try {
-            Native.storeSet(handle(), key, value, offset, length, onlyIfNew);
-        } finally {
-            Reference.reachabilityFence(this);
-        }
-    }
-
     private void write(String key, ByteBuffer value, boolean onlyIfNew) {
         Objects.requireNonNull(key, "key");
-        if (value.isDirect()) {
-            try {
+        try {
+            if (value.isDirect()) {
                 Native.storeSetBuffer(handle(), key, value, value.position(), value.remaining(), onlyIfNew);
-            } finally {
-                Reference.reachabilityFence(this);
+            } else if (value.hasArray()) {
+                Native.storeSet(
+                        handle(),
+                        key,
+                        value.array(),
+                        value.arrayOffset() + value.position(),
+                        value.remaining(),
+                        onlyIfNew);
+            } else {
+                byte[] copy = new byte[value.remaining()];
+                value.duplicate().get(copy);
+                Native.storeSet(handle(), key, copy, 0, copy.length, onlyIfNew);
             }
-        } else if (value.hasArray()) {
-            write(key, value.array(), value.arrayOffset() + value.position(), value.remaining(), onlyIfNew);
-        } else {
-            byte[] copy = new byte[value.remaining()];
-            value.duplicate().get(copy);
-            write(key, copy, 0, copy.length, onlyIfNew);
+        } finally {
+            Reference.reachabilityFence(this);
         }
     }
 
@@ -252,10 +132,10 @@ public final class Store extends NativeHandle {
     }
 
     /** The size in bytes of the value at {@code key}, or empty if there is none. */
-    public OptionalLong size(String key) {
+    public OptionalLong getSize(String key) {
         long size;
         try {
-            size = Native.storeSize(handle(), key);
+            size = Native.storeGetSize(handle(), key);
         } finally {
             Reference.reachabilityFence(this);
         }
@@ -294,7 +174,7 @@ public final class Store extends NativeHandle {
         return list(Native.LIST_ALL, "");
     }
 
-    /** Every key under {@code prefix}, as full keys. */
+    /** Every key under the group or array {@code prefix}, as full keys. */
     public List<String> listPrefix(String prefix) {
         return list(Native.LIST_PREFIX, prefix);
     }
