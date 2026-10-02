@@ -13,7 +13,7 @@ name = "icechunk_jni"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-icechunk = { git = "https://github.com/earth-mover/icechunk", rev = "468004ab7cc4e8c71d10df58510292eba64ceb5d" }
+icechunk = "=2.2.2"
 jni = "0.22.4"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "sync"] }
 bytes = "1.11.1"

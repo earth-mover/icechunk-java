@@ -60,8 +60,10 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 
 ## Updating icechunk
 
-Change the `rev` in `native/Cargo.toml`, run `cargo update -p icechunk --manifest-path native/Cargo.toml`, and run
-`pixi run test-strict`. The fixture script reads the new revision automatically.
+Change the icechunk version in `native/Cargo.toml`, run `cargo update -p icechunk --manifest-path native/Cargo.toml`,
+and run `pixi run test-strict`. The fixture script reads the new version from `Cargo.lock` and fetches the fixtures
+from its release tag. To test against an unreleased icechunk, point the dependency at a git revision instead; the
+script handles that too.
 
 ## Commits
 

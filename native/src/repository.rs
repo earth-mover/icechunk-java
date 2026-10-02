@@ -4,7 +4,7 @@ use chrono::SecondsFormat;
 use futures::TryStreamExt as _;
 use icechunk::Repository;
 use icechunk::format::SnapshotId;
-use icechunk::repository::{CreateMode, Mode, RepositoryBuilder, VersionInfo};
+use icechunk::repository::VersionInfo;
 use jni::objects::{JObjectArray, JString};
 use jni::sys::{jboolean, jint, jlong};
 
@@ -42,44 +42,38 @@ fn version(kind: jint, value: String) -> NativeResult<VersionInfo> {
     }
 }
 
-fn with_options<M: Mode>(
-    builder: RepositoryBuilder<M>,
-    options: &mut RepositoryOptions,
-) -> RepositoryBuilder<M> {
-    let builder = builder.authorize_virtual_chunk_access(std::mem::take(
-        &mut options.virtual_chunk_credentials,
-    ));
-    match options.config.take() {
-        Some(config) => builder.config(config),
-        None => builder,
-    }
-}
-
-fn with_create_options<M: CreateMode>(
-    builder: RepositoryBuilder<M>,
-    options: &RepositoryOptions,
-) -> RepositoryBuilder<M> {
-    let builder = builder.check_clean_root(options.check_clean_root);
-    match options.spec_version {
-        Some(version) => builder.spec_version(version),
-        None => builder,
-    }
-}
-
 async fn open(
     storage: handles::StorageRef,
     mode: jint,
-    mut options: RepositoryOptions,
+    options: RepositoryOptions,
 ) -> NativeResult<Repository> {
+    let RepositoryOptions {
+        config,
+        virtual_chunk_credentials,
+        spec_version,
+        check_clean_root,
+    } = options;
     let repository = match mode {
-        OPEN => with_options(Repository::open(storage), &mut options).execute().await?,
+        OPEN => Repository::open(config, storage, virtual_chunk_credentials).await?,
         CREATE => {
-            let builder = with_options(Repository::create(storage), &mut options);
-            with_create_options(builder, &options).execute().await?
+            Repository::create(
+                config,
+                storage,
+                virtual_chunk_credentials,
+                spec_version,
+                check_clean_root,
+            )
+            .await?
         }
         OPEN_OR_CREATE => {
-            let builder = with_options(Repository::open_or_create(storage), &mut options);
-            with_create_options(builder, &options).execute().await?
+            Repository::open_or_create(
+                config,
+                storage,
+                virtual_chunk_credentials,
+                spec_version,
+                check_clean_root,
+            )
+            .await?
         }
         other => {
             return Err(NativeError::invalid_argument(format!(

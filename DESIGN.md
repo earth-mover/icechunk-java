@@ -221,10 +221,17 @@ handles would mean nothing to the core.
 
 ## Dependency on icechunk
 
-`native/Cargo.toml` pins icechunk to a git revision, and `native/Cargo.lock` is committed, so builds are reproducible.
-`scripts/fetch-icechunk-fixtures.sh` reads the same revision to fetch matching test fixtures. An extension that pulls
-in icechunk from crates.io, as the `arraylake` crate does, needs both to resolve to one copy of icechunk; a
-crates.io version pin here would make that simpler than the git pin.
+`native/Cargo.toml` pins an exact icechunk release from crates.io, and `native/Cargo.lock` is committed, so builds
+are reproducible. `scripts/fetch-icechunk-fixtures.sh` reads the resolved version from `Cargo.lock` and fetches the
+test fixtures from the matching release tag.
+
+A released version, rather than a commit on icechunk's `main`, matters for extensions. The `arraylake` crate also
+depends on icechunk from crates.io, and the combined library must contain a single copy of icechunk, so both have to
+resolve to the same release.
+
+Only `open` in `native/src/repository.rs` depends on how icechunk opens and creates repositories, which changes
+between 2.2 (positional arguments) and the next release (`RepositoryBuilder`). Moving to a new icechunk version
+should not change the Java API.
 
 ## Testing
 
