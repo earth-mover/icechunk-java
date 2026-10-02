@@ -31,6 +31,7 @@ fn java_constants() -> HashMap<String, i64> {
 #[test]
 fn constants_match_native_java() {
     let rust: &[(&str, i64)] = &[
+        ("ABI_VERSION", crate::ABI_VERSION.into()),
         ("OPEN", repository::OPEN.into()),
         ("CREATE", repository::CREATE.into()),
         ("OPEN_OR_CREATE", repository::OPEN_OR_CREATE.into()),

@@ -9,6 +9,13 @@ import java.nio.ByteBuffer;
  * their counterparts in the Rust source.
  */
 final class Native {
+    /**
+     * The version of everything this class and the native library must agree on: the native methods' names and
+     * signatures, the constants below, and the JSON documents they exchange. A library built for another version
+     * would read arguments it does not understand, or crash the JVM, so loading checks it first.
+     */
+    static final int ABI_VERSION = 1;
+
     static final int OPEN = 0;
     static final int CREATE = 1;
     static final int OPEN_OR_CREATE = 2;
@@ -23,9 +30,29 @@ final class Native {
 
     static {
         NativeLoader.load();
+        checkAbiVersion();
     }
 
     private Native() {}
+
+    private static void checkAbiVersion() {
+        String found;
+        try {
+            int loaded = abiVersion();
+            if (loaded == ABI_VERSION) {
+                return;
+            }
+            found = "interface version " + loaded;
+        } catch (UnsatisfiedLinkError e) {
+            found = "no interface version";
+        }
+        throw new UnsatisfiedLinkError("the icechunk native library has " + found + " but this jar needs version "
+                + ABI_VERSION + ", so it was built from other sources; look for an old copy named by "
+                + "icechunk.native.path or icechunk.native.dir, or on java.library.path");
+    }
+
+    /** {@link #ABI_VERSION} as the native library defines it; libraries from before the check lack it. */
+    private static native int abiVersion();
 
     static native void close(long handle);
 

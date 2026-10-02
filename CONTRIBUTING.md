@@ -60,7 +60,10 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
    scalars and lists of strings directly.
 6. Constants shared by both sides (`Native.RANGE_*`, `Native.LIST_*` and so on) are defined twice. Change both;
    `contract_tests.rs` fails if they disagree, and also needs a line for any new constant.
-7. If it is on a hot path, add a case to `benchmarks/` and compare before and after with `pixi run bench`.
+7. If the change alters a native method's name or signature, a shared constant, or a JSON format, raise
+   `Native.ABI_VERSION` and `ABI_VERSION` in `native/src/lib.rs` together. Loading checks them, so a jar never runs
+   against a library built from other sources; a mismatched JNI signature would otherwise crash the JVM.
+8. If it is on a hot path, add a case to `benchmarks/` and compare before and after with `pixi run bench`.
 
 ## Updating icechunk
 

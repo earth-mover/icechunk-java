@@ -284,12 +284,15 @@ mod tests {
         let handle =
             insert(Object::Extension(Arc::new(Flag(Arc::clone(&dropped))))).unwrap();
         remove(handle);
-        // No thread holds a `Ref`, so the next few collections must run the destructor.
-        for _ in 0..1000 {
+        // No thread holds a `Ref` to it, so collections must run the destructor once
+        // tests on other threads unpin; a fixed number of tries can lose to them.
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+        while std::time::Instant::now() < deadline {
             if dropped.load(Ordering::SeqCst) {
                 return;
             }
             epoch::pin().flush();
+            std::thread::yield_now();
         }
         panic!("closed object was not released");
     }
