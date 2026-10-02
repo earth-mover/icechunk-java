@@ -97,13 +97,13 @@ impl AsRef<[u8]> for JavaBuffer {
     }
 }
 
-/// Read `len` bytes at `position` of a direct `ByteBuffer`, borrowing them when large.
-pub(crate) fn borrow(
+/// The address of `len` bytes at `position` in a direct `ByteBuffer`, bounds checked.
+pub(crate) fn direct_region(
     env: &mut Env<'_>,
     buffer: &JObject<'_>,
     position: usize,
     len: usize,
-) -> NativeResult<Bytes> {
+) -> NativeResult<*mut u8> {
     // SAFETY: `buffer` is a `java.nio.ByteBuffer`, checked to be direct on the Java side.
     let buffer = unsafe { JByteBuffer::from_raw(env, buffer.as_raw()) };
     let base = env.get_direct_buffer_address(&buffer)?;
@@ -112,13 +112,25 @@ pub(crate) fn borrow(
         return Err(NativeError::invalid_argument("buffer region out of bounds"));
     }
     // SAFETY: bounds checked against the buffer's capacity above.
-    let data = unsafe { base.add(position) };
+    Ok(unsafe { base.add(position) })
+}
+
+/// Read `len` bytes at `position` of a direct `ByteBuffer`, borrowing them when large.
+pub(crate) fn borrow(
+    env: &mut Env<'_>,
+    buffer: &JObject<'_>,
+    position: usize,
+    len: usize,
+) -> NativeResult<Bytes> {
+    let data = direct_region(env, buffer, position, len)?;
     if len <= BORROW_THRESHOLD {
         // SAFETY: as above, and the slice is copied before this call returns.
         return Ok(Bytes::copy_from_slice(unsafe {
             std::slice::from_raw_parts(data, len)
         }));
     }
+    // SAFETY: as in `direct_region`, `buffer` is a direct `java.nio.ByteBuffer`.
+    let buffer = unsafe { JByteBuffer::from_raw(env, buffer.as_raw()) };
     let global = env.new_global_ref(&buffer)?;
     Ok(Bytes::from_owner(JavaBuffer { _buffer: global, data, len }))
 }

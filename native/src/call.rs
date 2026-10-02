@@ -20,13 +20,17 @@ use crate::runtime;
 /// Fails instead of blocking when the caller is itself a runtime thread: blocking there
 /// would hold up the threads that have to drive the future.
 pub fn block_on<F: Future>(future: F) -> NativeResult<F::Output> {
-    if tokio::runtime::Handle::try_current().is_ok() {
+    if runtime::on_runtime_thread() {
         return Err(NativeError::new(
             ErrorKind::RuntimeThread,
             "icechunk was called from one of its own runtime threads",
         ));
     }
-    Ok(runtime::handle()?.block_on(future))
+    runtime::enter()?;
+    // The future runs on this thread; the runtime's workers drive the I/O it waits on.
+    // `futures`' executor parks this thread without touching memory shared with other
+    // callers, unlike tokio's `Handle::block_on`.
+    Ok(futures::executor::block_on(future))
 }
 
 /// Run a native method body, turning an error or panic into a pending Java exception.

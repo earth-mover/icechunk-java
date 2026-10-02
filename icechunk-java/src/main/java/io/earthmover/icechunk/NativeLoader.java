@@ -17,8 +17,8 @@ import java.util.Locale;
  * <p>The first match wins:
  *
  * <ol>
- *   <li>the file named by the {@code icechunk.native.path} system property;
- *   <li>the platform library file inside the directory named by {@code icechunk.native.dir};
+ *   <li>the file named by the {@code icechunk.native.path} system property, if set and not empty;
+ *   <li>the platform library file inside the directory named by {@code icechunk.native.dir}, if set and not empty;
  *   <li>an extended build of the library on the classpath under {@code /io/earthmover/icechunk/native-ext/<os>-<arch>/},
  *       shipped by an extension jar that adds its own native methods (see {@link NativeExtensions});
  *   <li>the copy bundled in this jar under {@code /io/earthmover/icechunk/native/<os>-<arch>/};
@@ -40,13 +40,13 @@ final class NativeLoader {
     private NativeLoader() {}
 
     static void load() {
-        String path = System.getProperty("icechunk.native.path");
-        if (path != null) {
+        String path = System.getProperty("icechunk.native.path", "");
+        if (!path.isEmpty()) {
             System.load(Paths.get(path).toAbsolutePath().toString());
             return;
         }
-        String dir = System.getProperty("icechunk.native.dir");
-        if (dir != null) {
+        String dir = System.getProperty("icechunk.native.dir", "");
+        if (!dir.isEmpty()) {
             System.load(Paths.get(dir, System.mapLibraryName(LIBRARY))
                     .toAbsolutePath()
                     .toString());

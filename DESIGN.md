@@ -140,31 +140,38 @@ dependencies to conflict with an application's.
 
 ## Bytes
 
-Chunks can be large, so the binding avoids copying them where it can.
+Chunks can be large, so how values cross the boundary matters for both speed and memory. The numbers below come from
+`benchmarks/` (see [Benchmarks](#benchmarks)).
 
-**Reads.** `Store.getBuffer` and `getManyBuffers` return a read-only direct `ByteBuffer` over icechunk's own buffer,
-with no copy. The native side boxes the `Bytes` and hands Java its address; a `Cleaner` releases it when the buffer
-becomes unreachable. Slices, duplicates and the read-only view all keep the original buffer reachable, so the memory
-cannot be released while any view exists, and a released buffer cannot be read.
+**Reads** come in three forms:
 
-The cost is that the garbage collector does not see that native memory. A program with a large heap and little
-allocation could keep gigabytes of unreachable buffers waiting for a collection. `NativeBuffers` counts the bytes lent
-out and, past a limit (the `icechunk.buffers.limitBytes` property, default the maximum heap size), requests a
-collection and waits briefly for cleaners to run. The JDK manages its own direct buffers the same way. After each
-attempt the limit rises by half, so a program that genuinely holds many buffers is not stalled by a collection on every
-read.
+- **`get` copies into a new `byte[]`.** icechunk's buffer is freed as soon as the call returns, so the two copies
+  coexist only during the memcpy, and the array is ordinary heap garbage. Streaming 1 GiB of 4 MiB chunks this way
+  peaks at about 100 MiB above baseline. This is the default, and what `IcechunkZarrStore` uses.
+- **`getInto` copies into a buffer the caller owns.** It allocates nothing, so a caller that reuses one buffer streams
+  any amount of data in constant memory.
+- **`getBuffer` lends icechunk's buffer itself,** as a read-only direct `ByteBuffer` released by a `Cleaner` when it is
+  collected. Slices, duplicates and the read-only view all keep the original reachable, so the memory cannot be
+  released while any view exists.
 
-`Store.get` and `getMany` copy into a new `byte[]` instead. That is cheaper for small values and needed by callers that
-want an array.
+Lending saves the copy, but it ties native memory to garbage collection, and the collector cannot see that memory.
+Since a lending read allocates almost nothing on the heap, collections stop happening: streaming the same 1 GiB with
+`getBuffer` and only the JDK's default rule (collect when lent memory passes the maximum heap) peaked at 1 GiB above
+baseline. `NativeBuffers` therefore counts the bytes lent out and requests a collection past
+`icechunk.buffers.limitBytes`, 64 MiB by default. That bounds memory, but each request is a full collection, which
+is cheap on a small heap and can take seconds on a large one with much live data. `getBuffer` is for data the caller
+keeps anyway, not for streaming.
+
+zarr-java's compression codecs copy their input into a `byte[]` (`Utils.toArray`) whatever the store returns, which
+is why the adapter uses `get`. For a 1 MiB value from in-memory storage, `get` and `getBuffer` take the same time, so
+icechunk copies internally and the binding's copy is not the bottleneck.
 
 **Writes.** A `byte[]` or heap buffer is copied once into Rust: the JVM may move heap arrays, so Rust cannot keep a
 pointer to them. A direct `ByteBuffer` larger than 64 KiB is read in place: the native side wraps the buffer's memory
 as a `Bytes` that holds a global reference to the buffer. icechunk drops materialized chunks once they are written,
 but in-memory storage keeps the bytes it was given, and small values stay in the session's change set until commit.
-So the caller must not modify a buffer after passing it to `set`. Values of 64 KiB or less are always copied.
-
-zarr-java's compression codecs copy their input into a `byte[]` (`Utils.toArray`), so for compressed arrays the
-zero-copy read saves one of two copies. For uncompressed data and for direct `Store` users it saves the only one.
+So the caller must not modify a buffer after passing it to `set`. Values of 64 KiB or less are always copied. Writes
+peak at a few MiB above baseline either way, because each chunk is released once written.
 
 `Store.getMany` batches reads into one native call, which icechunk runs concurrently. Use it when reading many chunks
 from object storage; one `get` per chunk pays the network latency each time.
@@ -184,15 +191,17 @@ does not accept, so the adapter has its own tests instead.
 
 ## Packaging
 
-Not built yet. The plan:
+`.github/workflows/release.yml` builds the native library on each platform, bundles all of them into the
+`icechunk-java` jar under `io/earthmover/icechunk/native/<os>-<arch>/`, runs the tests against that jar, and attaches
+the jars to a draft GitHub release. A single jar with every platform suits Fiji update sites and scripting tools that
+do not resolve Maven classifiers; per-platform classifier jars can be added for applications that care about size.
 
-- One jar per module, with the native library for every platform inside `icechunk-java`, under
-  `io/earthmover/icechunk/native/<os>-<arch>/`. A single jar suits Fiji update sites and scripting tools that do not
-  resolve Maven classifiers. Per-platform classifier jars can be added for applications that care about size.
-- Linux libraries built in manylinux containers, as icechunk-python's wheels are, so they load on older distributions.
+- Linux libraries are built in manylinux_2_28 containers, as icechunk-python's wheels are, so they load on older
+  distributions.
 - Platforms: Linux x86_64 and aarch64, macOS x86_64 and arm64, Windows x86_64.
+- Publishing to Maven Central needs a verified groupId namespace and signed artifacts, and is not set up.
 
-To check before shipping: macOS applications packaged with jpackage and hardened runtime may refuse an unsigned
+To check before relying on it: macOS applications packaged with jpackage and hardened runtime may refuse an unsigned
 dylib extracted to a temporary directory.
 
 ## Extensions
@@ -227,6 +236,17 @@ crates.io version pin here would make that simpler than the git pin.
 
 The last two need fixtures and `uv`. They skip when those are missing, unless `-Dicechunk.tests.strict=true`, which CI
 sets.
+
+## Benchmarks
+
+`pixi run bench` runs the JMH benchmarks in `benchmarks/` against a release build of the native library, with JMH's
+allocation profiler. `MemoryProbe` in the same module streams a fixed volume of chunks through each read and write
+path in a fresh JVM and reports peak resident memory, which JMH cannot see. The full grid takes about half an hour,
+so it belongs on a dedicated machine; numbers from a laptop in use are only a rough guide.
+
+Contention between threads comes mostly from icechunk itself: every `Store` call takes the session's tokio `RwLock`,
+and `set` takes it three times, once for writing. With 8 threads writing small values to one session, each `set`
+waits on the others.
 
 ## Open questions
 

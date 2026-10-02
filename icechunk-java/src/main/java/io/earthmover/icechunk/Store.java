@@ -1,7 +1,9 @@
 package io.earthmover.icechunk;
 
 import java.lang.ref.Reference;
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.nio.ReadOnlyBufferException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -25,10 +27,19 @@ import java.util.OptionalLong;
  *
  * <h2>Memory</h2>
  *
- * <p>{@link #getBuffer} and {@link #getManyBuffers} return read-only direct buffers over icechunk's own memory, with no
- * copy. That memory is released when the buffer, and every slice or duplicate of it, becomes unreachable and is
- * collected. {@link #get} and {@link #getMany} copy into a new {@code byte[]}, which suits small values and callers
- * that need an array.
+ * <p>There are three ways to read a value:
+ *
+ * <ul>
+ *   <li>{@link #get} and {@link #getMany} copy it into a new {@code byte[]}. icechunk's copy is freed as soon as the
+ *       call returns, and the array is ordinary heap garbage, so memory stays bounded when streaming through many
+ *       values. This is the default choice.
+ *   <li>{@link #getInto} copies it into a buffer the caller provides and can reuse. Nothing is allocated, so memory is
+ *       whatever the caller decides. Use it for large streaming reads.
+ *   <li>{@link #getBuffer} and {@link #getManyBuffers} return a read-only direct buffer over icechunk's own memory, with
+ *       no copy. That memory is released only when the buffer is garbage collected, and since the reads allocate
+ *       almost nothing on the heap, collections can be rare. Past a limit the binding requests a full collection (see
+ *       {@code NativeBuffers}). Use these when the data is kept anyway, not for streaming.
+ * </ul>
  *
  * <p>{@link #set(String, ByteBuffer)} with a direct buffer of more than 64 KiB lets icechunk read the buffer in place.
  * Do not modify that region afterwards: icechunk may still hold it, for example until a commit when the storage is in
@@ -52,6 +63,48 @@ public final class Store extends NativeHandle {
         } finally {
             Reference.reachabilityFence(this);
         }
+    }
+
+    /**
+     * Copy the value at {@code key} into {@code dst}, starting at its position, and advance the position.
+     *
+     * @return the number of bytes copied, or -1 if the key does not exist
+     * @throws BufferOverflowException if the value is larger than {@code dst.remaining()}; nothing is copied
+     * @throws ReadOnlyBufferException if {@code dst} is read-only
+     */
+    public int getInto(String key, ByteBuffer dst) {
+        return getInto(key, ByteRange.all(), dst);
+    }
+
+    /** As {@link #getInto(String, ByteBuffer)}, for the {@code range} of the value. */
+    public int getInto(String key, ByteRange range, ByteBuffer dst) {
+        Objects.requireNonNull(key, "key");
+        if (dst.isReadOnly()) {
+            throw new ReadOnlyBufferException();
+        }
+        boolean direct = dst.isDirect();
+        long result;
+        try {
+            result = Native.storeGetInto(
+                    handle(),
+                    key,
+                    range.kind(),
+                    range.a(),
+                    range.b(),
+                    direct ? dst : null,
+                    direct ? null : dst.array(),
+                    direct ? dst.position() : dst.arrayOffset() + dst.position(),
+                    dst.remaining());
+        } finally {
+            Reference.reachabilityFence(this);
+        }
+        if (result < -1) {
+            throw new BufferOverflowException();
+        }
+        if (result >= 0) {
+            dst.position(dst.position() + (int) result);
+        }
+        return (int) result;
     }
 
     /** The value stored at {@code key} as a read-only buffer over icechunk's memory, or empty if there is none. */

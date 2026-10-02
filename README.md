@@ -42,9 +42,15 @@ try (Storage storage = Storage.localFilesystem(Paths.get("/tmp/my-repo"));
 Programs that only move Zarr keys and bytes, such as a store adapter for another library, need only
 `icechunk-java`. Programs that work with arrays use `icechunk-zarr-java` with zarr-java.
 
+## Getting the jars
+
+Nothing is published to Maven Central. Tagged releases of this repository attach jars to a GitHub release, with the
+native library for Linux (x86_64, aarch64), macOS (x86_64, arm64) and Windows (x86_64) bundled inside `icechunk-java`.
+Put both jars on the classpath, plus zarr-java if you use `icechunk-zarr-java`.
+
 ## Building
 
-Nothing is published yet, so build from source. You need:
+To build from source you need:
 
 - [pixi](https://pixi.sh), which provides JDK 21 and Maven;
 - [rustup](https://rustup.rs). The pinned Rust toolchain installs on first build.
@@ -59,8 +65,8 @@ The jars run on Java 11 or later. The build itself needs JDK 21.
 
 A development build loads the native library from `native/target/debug`, which the Maven build points to with the
 `icechunk.native.dir` system property. Set the same property when you use the jars from your own project, for
-example `-Dicechunk.native.dir=/path/to/icechunk-java/native/target/release`. Jars that bundle the library for each
-platform are planned but not built yet; see [DESIGN.md](DESIGN.md#packaging).
+example `-Dicechunk.native.dir=/path/to/icechunk-java/native/target/release`. Release jars bundle the library and
+need no property; see [DESIGN.md](DESIGN.md#packaging).
 
 ## Using the API
 
@@ -126,12 +132,18 @@ try (Session session = repo.writableSession("main")) {
 }
 ```
 
-### Large values without copying
+### Large values and memory
 
-`Store.get` copies each value into a new `byte[]`. For large chunks, `Store.getBuffer` returns a read-only direct
-`ByteBuffer` over icechunk's own memory instead, released when the buffer is garbage collected. `IcechunkZarrStore`
-uses it. For writes, `Store.set(String, ByteBuffer)` reads a direct buffer of more than 64 KiB in place; do not modify
-it afterwards. [DESIGN.md](DESIGN.md#bytes) has the details.
+- `Store.get` copies each value into a new `byte[]` and frees icechunk's copy at once. It is the default, and what
+  `IcechunkZarrStore` uses.
+- `Store.getInto(key, dst)` copies into a buffer you provide and can reuse, allocating nothing. Use it to stream large
+  amounts of data in constant memory.
+- `Store.getBuffer` returns a read-only buffer over icechunk's own memory, with no copy. That memory is freed only when
+  the buffer is garbage collected, so use it for data you keep, not for streaming.
+- `Store.set(String, ByteBuffer)` reads a direct buffer of more than 64 KiB in place, without copying. Do not modify it
+  afterwards.
+
+[DESIGN.md](DESIGN.md#bytes) has the measurements behind these choices.
 
 ### History, branches and tags
 
@@ -159,7 +171,7 @@ Using a closed object throws `IllegalStateException`.
 
 ## Limitations
 
-- **No published artifacts.** Builds from source only, and only for the machine you build on.
+- **Not on Maven Central.** Jars come from GitHub releases or a source build.
 - **zarr-java covers numeric data types only.** It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
 - **Missing APIs.** There is no diff, garbage collection, snapshot expiration, rebase, node move, or writing of

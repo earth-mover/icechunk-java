@@ -148,6 +148,24 @@ public class StoreBenchmark {
         return readStore.getBuffer(randomKey());
     }
 
+    /** As {@link #get}, copying into a reused buffer instead of allocating. */
+    @Benchmark
+    public int getInto(Scratch scratch) {
+        scratch.buffer.clear();
+        return readStore.getInto(randomKey(), scratch.buffer);
+    }
+
+    /** A per-thread destination buffer for {@link #getInto}. */
+    @State(Scope.Thread)
+    public static class Scratch {
+        ByteBuffer buffer;
+
+        @Setup
+        public void allocate(StoreBenchmark benchmark) {
+            buffer = ByteBuffer.allocateDirect(benchmark.chunkBytes);
+        }
+    }
+
     @Benchmark
     public Optional<byte[]> getSuffix() {
         return readStore.get(randomKey(), ByteRange.suffix(16));

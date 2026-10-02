@@ -141,6 +141,53 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_storeGetBuffer<'l>(
     })
 }
 
+/// Read into a buffer Java owns: the direct buffer `direct`, or else `array`, starting at
+/// `offset` with room for `capacity` bytes. Returns the number of bytes written, -1 when
+/// the key does not exist, or `-2 - size` when the value does not fit, in which case
+/// nothing is written.
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_io_earthmover_icechunk_Native_storeGetInto<'l>(
+    env: EnvUnowned<'l>,
+    _class: JClass<'l>,
+    store: jlong,
+    key: JString<'l>,
+    range_kind: jlong,
+    a: jlong,
+    b: jlong,
+    direct: JObject<'l>,
+    array: JByteArray<'l>,
+    offset: jint,
+    capacity: jint,
+) -> jlong {
+    call::run(env, |env| {
+        let key = text(env, &key)?;
+        let Some(bytes) = get(store, &key, &byte_range(range_kind, a, b)?)? else {
+            return Ok(-1);
+        };
+        let (Ok(offset), Ok(capacity)) =
+            (usize::try_from(offset), usize::try_from(capacity))
+        else {
+            return Err(NativeError::invalid_argument("negative offset or capacity"));
+        };
+        let len = bytes.len();
+        if len > capacity {
+            return Ok(-2 - len as jlong);
+        }
+        if direct.is_null() {
+            // SAFETY: `i8` and `u8` have the same size and alignment.
+            let view =
+                unsafe { std::slice::from_raw_parts(bytes.as_ptr().cast::<i8>(), len) };
+            array.set_region(env, offset as i32, view)?;
+        } else {
+            let target = buffers::direct_region(env, &direct, offset, len)?;
+            // SAFETY: `direct_region` checked that `len` bytes at `target` lie inside the
+            // buffer, and the source is a separate Rust allocation.
+            unsafe { std::ptr::copy_nonoverlapping(bytes.as_ptr(), target, len) };
+        }
+        Ok(len as jlong)
+    })
+}
+
 /// Copying batch read: a `byte[][]` with null for missing keys.
 #[unsafe(no_mangle)]
 pub extern "system" fn Java_io_earthmover_icechunk_Native_storeGetMany<'l>(

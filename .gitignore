@@ -9,3 +9,4 @@ target/
 /tests/compat/.venv/
 /tests/compat/__pycache__/
 dependency-reduced-pom.xml
+/icechunk-java/src/main/resources/io/earthmover/icechunk/native/

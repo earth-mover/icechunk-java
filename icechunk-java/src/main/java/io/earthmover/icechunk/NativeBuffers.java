@@ -12,12 +12,13 @@ import java.nio.ByteBuffer;
  * limit, this class requests a collection and waits briefly for cleaners to run, the same way the JDK manages its own
  * direct buffers.
  *
- * <p>The limit is the {@code icechunk.buffers.limitBytes} system property, or the maximum heap size if unset.
+ * <p>The limit is the {@code icechunk.buffers.limitBytes} system property, 64 MiB by default. Each collection request
+ * is a full collection, so a higher limit means fewer, larger pauses and more memory held; on a large heap a full
+ * collection can take seconds.
  */
 final class NativeBuffers {
     private static final Cleaner CLEANER = Cleaner.create();
-    private static final long LIMIT =
-            Long.getLong("icechunk.buffers.limitBytes", Runtime.getRuntime().maxMemory());
+    private static final long LIMIT = Long.getLong("icechunk.buffers.limitBytes", 64L << 20);
 
     /** Outstanding bytes above which the next lend triggers a collection. Raised after each attempt. */
     private static volatile long threshold = LIMIT;

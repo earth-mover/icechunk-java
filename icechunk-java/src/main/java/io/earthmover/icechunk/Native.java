@@ -85,6 +85,18 @@ final class Native {
     /** Fills {@code out} with the buffer's owner and the bytes outstanding, see {@link NativeBuffers}. */
     static native ByteBuffer storeGetBuffer(long store, String key, long rangeKind, long a, long b, long[] out);
 
+    /** Returns bytes written, -1 if the key is missing, or {@code -2 - size} if the value does not fit. */
+    static native long storeGetInto(
+            long store,
+            String key,
+            long rangeKind,
+            long a,
+            long b,
+            ByteBuffer direct,
+            byte[] array,
+            int offset,
+            int capacity);
+
     static native byte[][] storeGetMany(long store, String[] keys, long[] ranges);
 
     /** Fills {@code out} with one owner per key, then the bytes outstanding. */

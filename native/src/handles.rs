@@ -1,17 +1,27 @@
 //! The table that maps the `long` handles Java holds to live Rust objects.
 //!
-//! Java never holds a pointer. A handle is a slot index plus a generation number, and
-//! every lookup returns a clone of the slot's `Arc`. Closing a handle empties the slot
-//! and bumps its generation, so:
+//! Java never holds a pointer. A handle is a slot index plus a generation number. Closing
+//! a handle empties its slot, and the slot is reused only with a new generation, so:
 //!
-//! - an operation already running keeps its own `Arc` and finishes normally;
+//! - an operation already running keeps using the object and finishes normally;
 //! - a later lookup with the old handle fails with `ErrorKind::Closed` instead of
 //!   touching freed memory;
 //! - a reused slot never answers to a handle from its previous occupant.
+//!
+//! Lookups take no lock and write no shared memory. Every Java thread looks up handles on
+//! every call, and with a lock or reference count those threads would contend on one
+//! cache line: with 8 threads, a `std::sync::RwLock` read costs microseconds. Instead a
+//! lookup pins the current thread with `crossbeam_epoch`, which is thread-local, and
+//! borrows the object for as long as the returned [`Ref`] lives. Closing a handle unlinks
+//! the object and defers freeing it until every thread that might still hold a `Ref` to
+//! it has unpinned.
 
 use std::any::Any;
-use std::sync::{Arc, PoisonError, RwLock};
+use std::ops::Deref;
+use std::sync::atomic::Ordering;
+use std::sync::{Arc, Mutex, OnceLock, PoisonError};
 
+use crossbeam_epoch::{self as epoch, Atomic, Guard, Owned};
 use icechunk::session::Session;
 use icechunk::{Repository, Storage, Store};
 
@@ -22,7 +32,6 @@ pub(crate) type RepositoryRef = Arc<Repository>;
 pub(crate) type SessionRef = Arc<tokio::sync::RwLock<Session>>;
 pub(crate) type StoreRef = Arc<Store>;
 
-#[derive(Clone)]
 pub(crate) enum Object {
     Storage(StorageRef),
     Repository(RepositoryRef),
@@ -30,12 +39,6 @@ pub(crate) enum Object {
     Store(StoreRef),
     /// An object owned by an extension library; see `crate::ext`.
     Extension(Arc<dyn Any + Send + Sync>),
-}
-
-impl std::fmt::Debug for Object {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(self.type_name())
-    }
 }
 
 impl Object {
@@ -50,130 +53,207 @@ impl Object {
     }
 }
 
-#[derive(Debug)]
-struct Slot {
+struct Entry {
     generation: u32,
-    entry: Option<Object>,
+    object: Object,
 }
 
-#[derive(Debug, Default)]
-struct Table {
-    slots: Vec<Slot>,
+/// Slots live in fixed segments that are never moved or freed, so a lookup can index
+/// them without a lock while another thread adds segments.
+const SEGMENT_BITS: u32 = 12;
+const SEGMENT_LEN: usize = 1 << SEGMENT_BITS;
+const SEGMENTS: usize = 1024;
+
+type Segment = Box<[Atomic<Entry>]>;
+
+static SEGMENT_TABLE: [OnceLock<Segment>; SEGMENTS] =
+    [const { OnceLock::new() }; SEGMENTS];
+
+/// Bookkeeping for inserts and removals, which are rare compared with lookups.
+struct Allocator {
+    /// The next generation for each slot ever used.
+    generations: Vec<u32>,
     free: Vec<u32>,
 }
 
-static TABLE: RwLock<Table> = RwLock::new(Table { slots: Vec::new(), free: Vec::new() });
+static ALLOCATOR: Mutex<Allocator> =
+    Mutex::new(Allocator { generations: Vec::new(), free: Vec::new() });
 
 fn encode(index: u32, generation: u32) -> i64 {
     ((u64::from(generation) << 32) | u64::from(index)) as i64
 }
 
-fn decode(handle: i64) -> (usize, u32) {
+fn decode(handle: i64) -> (u32, u32) {
     let raw = handle as u64;
-    ((raw & u64::from(u32::MAX)) as usize, (raw >> 32) as u32)
+    ((raw & u64::from(u32::MAX)) as u32, (raw >> 32) as u32)
+}
+
+fn slot(index: u32) -> Option<&'static Atomic<Entry>> {
+    let segment = SEGMENT_TABLE.get((index >> SEGMENT_BITS) as usize)?.get()?;
+    segment.get(index as usize & (SEGMENT_LEN - 1))
 }
 
 pub(crate) fn insert(object: Object) -> NativeResult<i64> {
-    let mut table = TABLE.write().unwrap_or_else(PoisonError::into_inner);
-    if let Some(index) = table.free.pop() {
-        let slot = &mut table.slots[index as usize];
-        slot.entry = Some(object);
-        return Ok(encode(index, slot.generation));
-    }
-    let index = u32::try_from(table.slots.len())
-        .map_err(|_| NativeError::new(ErrorKind::Icechunk, "too many open handles"))?;
-    // Generations start at 1 so that 0 is never a valid handle.
-    table.slots.push(Slot { generation: 1, entry: Some(object) });
-    Ok(encode(index, 1))
+    let mut allocator = ALLOCATOR.lock().unwrap_or_else(PoisonError::into_inner);
+    let index = match allocator.free.pop() {
+        Some(index) => index,
+        None => {
+            let index = u32::try_from(allocator.generations.len())
+                .ok()
+                .filter(|i| (*i as usize) < SEGMENTS * SEGMENT_LEN)
+                .ok_or_else(|| {
+                    NativeError::new(ErrorKind::Icechunk, "too many open handles")
+                })?;
+            SEGMENT_TABLE[(index >> SEGMENT_BITS) as usize]
+                .get_or_init(|| (0..SEGMENT_LEN).map(|_| Atomic::null()).collect());
+            // Generations start at 1 so that 0 is never a valid handle.
+            allocator.generations.push(1);
+            index
+        }
+    };
+    let generation = allocator.generations[index as usize];
+    let Some(slot) = slot(index) else {
+        return Err(NativeError::new(
+            ErrorKind::Icechunk,
+            "handle table is inconsistent",
+        ));
+    };
+    slot.store(Owned::new(Entry { generation, object }), Ordering::Release);
+    Ok(encode(index, generation))
 }
 
-fn get(handle: i64) -> NativeResult<Object> {
-    let (index, generation) = decode(handle);
-    let table = TABLE.read().unwrap_or_else(PoisonError::into_inner);
-    match table.slots.get(index) {
-        Some(Slot { generation: live, entry: Some(object) }) if *live == generation => {
-            Ok(object.clone())
-        }
-        _ => Err(NativeError::new(ErrorKind::Closed, "handle is closed")),
+/// A borrowed object, valid while this value lives.
+pub(crate) struct Ref<T: 'static> {
+    _guard: Guard,
+    value: *const T,
+}
+
+impl<T> Deref for Ref<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        // SAFETY: `value` points into an `Entry` that was reachable when the guard was
+        // pinned. Removal defers freeing entries until all such guards are dropped.
+        unsafe { &*self.value }
     }
+}
+
+fn get<T>(
+    handle: i64,
+    select: impl FnOnce(&Object) -> Option<&T>,
+    expected: &str,
+) -> NativeResult<Ref<T>> {
+    let (index, generation) = decode(handle);
+    let closed = || NativeError::new(ErrorKind::Closed, "handle is closed");
+    let slot = slot(index).ok_or_else(closed)?;
+    let guard = epoch::pin();
+    let shared = slot.load(Ordering::Acquire, &guard);
+    // SAFETY: entries are only freed through `defer_destroy`, after `guard` is dropped.
+    let entry = unsafe { shared.as_ref() }.ok_or_else(closed)?;
+    if entry.generation != generation {
+        return Err(closed());
+    }
+    let value = select(&entry.object).ok_or_else(|| {
+        NativeError::invalid_argument(format!(
+            "expected a {expected} handle, got a {} handle",
+            entry.object.type_name()
+        ))
+    })?;
+    let value: *const T = value;
+    Ok(Ref { _guard: guard, value })
 }
 
 /// Close a handle. Closing an already closed handle is a no-op.
-///
-/// The object is dropped after the table lock is released, because dropping the last
-/// reference to it can do arbitrary work.
 pub(crate) fn remove(handle: i64) {
     let (index, generation) = decode(handle);
-    let removed = {
-        let mut table = TABLE.write().unwrap_or_else(PoisonError::into_inner);
-        let Some(slot) = table.slots.get_mut(index) else { return };
-        if slot.generation != generation || slot.entry.is_none() {
-            return;
-        }
-        slot.generation = slot.generation.wrapping_add(1).max(1);
-        let removed = slot.entry.take();
-        table.free.push(index as u32);
-        removed
-    };
-    drop(removed);
-}
-
-fn wrong_type(expected: &str, found: &Object) -> NativeError {
-    NativeError::invalid_argument(format!(
-        "expected a {expected} handle, got a {} handle",
-        found.type_name()
-    ))
-}
-
-pub(crate) fn storage(handle: i64) -> NativeResult<StorageRef> {
-    match get(handle)? {
-        Object::Storage(storage) => Ok(storage),
-        other => Err(wrong_type("Storage", &other)),
+    let Some(slot) = slot(index) else { return };
+    let mut allocator = ALLOCATOR.lock().unwrap_or_else(PoisonError::into_inner);
+    let guard = epoch::pin();
+    let current = slot.load(Ordering::Acquire, &guard);
+    // SAFETY: the entry stays allocated while `guard` is pinned.
+    match unsafe { current.as_ref() } {
+        Some(entry) if entry.generation == generation => {}
+        _ => return,
     }
+    slot.store(epoch::Shared::null(), Ordering::Release);
+    // SAFETY: the entry is no longer reachable from the table, so only threads pinned
+    // before this point can hold a reference, and `defer_destroy` waits for them.
+    unsafe { guard.defer_destroy(current) };
+    if let Some(next) = allocator.generations.get_mut(index as usize) {
+        *next = next.wrapping_add(1).max(1);
+    }
+    allocator.free.push(index);
 }
 
-pub(crate) fn repository(handle: i64) -> NativeResult<RepositoryRef> {
-    match get(handle)? {
-        Object::Repository(repository) => Ok(repository),
-        other => Err(wrong_type("Repository", &other)),
-    }
+pub(crate) fn storage(handle: i64) -> NativeResult<Ref<StorageRef>> {
+    get(handle, |o| if let Object::Storage(s) = o { Some(s) } else { None }, "Storage")
 }
 
-pub(crate) fn session(handle: i64) -> NativeResult<SessionRef> {
-    match get(handle)? {
-        Object::Session(session) => Ok(session),
-        other => Err(wrong_type("Session", &other)),
-    }
+pub(crate) fn repository(handle: i64) -> NativeResult<Ref<RepositoryRef>> {
+    get(
+        handle,
+        |o| if let Object::Repository(r) = o { Some(r) } else { None },
+        "Repository",
+    )
+}
+
+pub(crate) fn session(handle: i64) -> NativeResult<Ref<SessionRef>> {
+    get(handle, |o| if let Object::Session(s) = o { Some(s) } else { None }, "Session")
+}
+
+pub(crate) fn store(handle: i64) -> NativeResult<Ref<StoreRef>> {
+    get(handle, |o| if let Object::Store(s) = o { Some(s) } else { None }, "Store")
 }
 
 pub(crate) fn extension(handle: i64) -> NativeResult<Arc<dyn Any + Send + Sync>> {
-    match get(handle)? {
-        Object::Extension(object) => Ok(object),
-        other => Err(wrong_type("extension", &other)),
-    }
-}
-
-pub(crate) fn store(handle: i64) -> NativeResult<StoreRef> {
-    match get(handle)? {
-        Object::Store(store) => Ok(store),
-        other => Err(wrong_type("Store", &other)),
-    }
+    let found = get(
+        handle,
+        |o| if let Object::Extension(e) = o { Some(e) } else { None },
+        "extension",
+    )?;
+    Ok(Arc::clone(&found))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    fn extension_object(value: u64) -> Object {
+        Object::Extension(Arc::new(value))
+    }
+
     #[test]
     fn encode_decode_roundtrip() {
         for (index, generation) in [(0, 1), (7, 3), (u32::MAX, u32::MAX)] {
-            let (i, g) = decode(encode(index, generation));
-            assert_eq!((i, g), (index as usize, generation));
+            assert_eq!(decode(encode(index, generation)), (index, generation));
         }
     }
 
     #[test]
     fn zero_is_never_live() {
-        assert_eq!(get(0).map(|_| ()).unwrap_err().kind, ErrorKind::Closed);
+        assert_eq!(store(0).map(|_| ()).unwrap_err().kind, ErrorKind::Closed);
+    }
+
+    #[test]
+    fn closed_and_reused_handles_are_rejected() {
+        let first = insert(extension_object(1)).unwrap();
+        assert_eq!(*extension(first).unwrap().downcast::<u64>().unwrap(), 1);
+        remove(first);
+        remove(first);
+        assert_eq!(extension(first).map(|_| ()).unwrap_err().kind, ErrorKind::Closed);
+        let second = insert(extension_object(2)).unwrap();
+        assert_eq!(extension(first).map(|_| ()).unwrap_err().kind, ErrorKind::Closed);
+        assert_eq!(*extension(second).unwrap().downcast::<u64>().unwrap(), 2);
+        remove(second);
+    }
+
+    #[test]
+    fn wrong_type_is_an_invalid_argument() {
+        let handle = insert(extension_object(1)).unwrap();
+        assert_eq!(
+            store(handle).map(|_| ()).unwrap_err().kind,
+            ErrorKind::InvalidArgument
+        );
+        remove(handle);
     }
 }

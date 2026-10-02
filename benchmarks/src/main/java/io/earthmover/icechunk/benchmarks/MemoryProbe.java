@@ -24,7 +24,7 @@ import java.util.stream.Stream;
  * <p>JMH's allocation profiler sees only the Java heap. This measures the whole process, so it also counts the native
  * memory icechunk holds and the memory lent to Java as direct buffers. Each mode runs in a fresh JVM: {@code java -cp
  * benchmarks.jar io.earthmover.icechunk.benchmarks.MemoryProbe MODE [chunkMiB] [totalMiB]}, with MODE one of
- * {@code get}, {@code getBuffer}, {@code set}, {@code setDirect}.
+ * {@code get}, {@code getInto}, {@code getBuffer}, {@code set}, {@code setDirect}.
  */
 public final class MemoryProbe {
     public static void main(String[] args) throws Exception {
@@ -51,10 +51,15 @@ public final class MemoryProbe {
             if (reading) {
                 try (Session session = repo.readonlySession(Version.branch("main"))) {
                     Store store = session.store();
+                    ByteBuffer scratch = ByteBuffer.allocateDirect(chunkBytes);
                     for (int i = 0; i < chunks; i++) {
                         String key = "a/c/" + i;
                         if (mode.equals("get")) {
                             checksum += store.get(key).orElseThrow()[i % chunkBytes];
+                        } else if (mode.equals("getInto")) {
+                            scratch.clear();
+                            store.getInto(key, scratch);
+                            checksum += scratch.get(i % chunkBytes);
                         } else {
                             checksum += store.getBuffer(key).orElseThrow().get(i % chunkBytes);
                         }

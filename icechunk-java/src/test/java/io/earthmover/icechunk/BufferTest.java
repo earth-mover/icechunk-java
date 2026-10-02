@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ReadOnlyBufferException;
 import java.util.Arrays;
@@ -59,6 +60,29 @@ class BufferTest {
                 new byte[] {12, 13},
                 bytes(store.getBuffer("data/c/0", ByteRange.suffix(2)).orElseThrow()));
         assertEquals(Optional.empty(), store.getBuffer("data/c/1"));
+    }
+
+    @Test
+    void getIntoCopiesIntoTheCallersBuffer() {
+        for (ByteBuffer dst : new ByteBuffer[] {ByteBuffer.allocate(16), ByteBuffer.allocateDirect(16)}) {
+            dst.position(3);
+            assertEquals(4, store.getInto("data/c/0", dst));
+            assertEquals(7, dst.position());
+            dst.flip().position(3);
+            assertArrayEquals(CHUNK, bytes(dst));
+
+            dst.clear();
+            assertEquals(2, store.getInto("data/c/0", ByteRange.of(1, 3), dst));
+            assertEquals(-1, store.getInto("data/c/9", dst));
+            assertEquals(2, dst.position());
+
+            ByteBuffer small = dst.isDirect() ? ByteBuffer.allocateDirect(3) : ByteBuffer.allocate(3);
+            assertThrows(BufferOverflowException.class, () -> store.getInto("data/c/0", small));
+            assertEquals(0, small.position());
+        }
+        assertThrows(
+                ReadOnlyBufferException.class,
+                () -> store.getInto("data/c/0", ByteBuffer.allocate(8).asReadOnlyBuffer()));
     }
 
     @Test

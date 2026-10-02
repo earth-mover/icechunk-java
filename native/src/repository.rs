@@ -126,7 +126,7 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryOpen<'l>(
     call::run(env, |env| {
         let storage = handles::storage(storage)?;
         let options = RepositoryOptionsSpec::parse(&text(env, &options)?)?;
-        let repository = block_on(open(storage, mode, options))??;
+        let repository = block_on(open(Arc::clone(&storage), mode, options))??;
         handles::insert(Object::Repository(Arc::new(repository)))
     })
 }
@@ -139,7 +139,7 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_repositoryExists<'l>(
 ) -> jboolean {
     call::run(env, |_| {
         let storage = handles::storage(storage)?;
-        Ok(block_on(Repository::exists(storage, None))??)
+        Ok(block_on(Repository::exists(Arc::clone(&storage), None))??)
     })
 }
 

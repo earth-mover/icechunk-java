@@ -94,7 +94,11 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
         return get(keys, start, -1);
     }
 
-    /** Returns a read-only buffer over icechunk's memory; see {@link io.earthmover.icechunk.Store#getBuffer}. */
+    /**
+     * Returns a heap buffer over a copy of the value. zarr-java's codecs copy their input again, so lending icechunk's
+     * memory directly would save little, and would hold it until a garbage collection; see
+     * {@link io.earthmover.icechunk.Store} for the trade-off.
+     */
     @Override
     public ByteBuffer get(String[] keys, long start, long end) {
         String key = key(keys);
@@ -102,7 +106,7 @@ public final class IcechunkZarrStore implements Store, Store.ListableStore {
         if (range == null) {
             return null;
         }
-        return store.getBuffer(key, range).orElse(null);
+        return store.get(key, range).map(ByteBuffer::wrap).orElse(null);
     }
 
     @Override

@@ -1,3 +1,4 @@
+use std::cell::Cell;
 use std::sync::{Mutex, OnceLock, PoisonError};
 use std::time::Duration;
 
@@ -15,6 +16,34 @@ static HANDLE: OnceLock<tokio::runtime::Handle> = OnceLock::new();
 /// code is unmapped. Only touched when the runtime starts and stops.
 static OWNER: Mutex<Option<tokio::runtime::Runtime>> = Mutex::new(None);
 
+thread_local! {
+    /// Set on the runtime's own worker and blocking-pool threads.
+    static RUNTIME_THREAD: Cell<bool> = const { Cell::new(false) };
+    /// Set once a Java thread has entered the runtime context.
+    static ENTERED: Cell<bool> = const { Cell::new(false) };
+}
+
+/// True on the runtime's own threads, where blocking on icechunk is not allowed.
+pub(crate) fn on_runtime_thread() -> bool {
+    RUNTIME_THREAD.get()
+}
+
+/// Make the runtime the current one for this thread, for as long as the thread lives.
+///
+/// icechunk's I/O registers with whatever runtime is current. Entering the context once
+/// per thread, instead of once per call, matters for speed: entering clones a reference
+/// counted handle, and with several threads that clone costs about a microsecond of
+/// contention per call.
+pub(crate) fn enter() -> NativeResult<()> {
+    if !ENTERED.get() {
+        // The guard is never dropped, so the context stays entered. Dropping it would
+        // have to happen on this thread in LIFO order, which nothing here can promise.
+        std::mem::forget(handle()?.enter());
+        ENTERED.set(true);
+    }
+    Ok(())
+}
+
 pub(crate) fn handle() -> NativeResult<&'static tokio::runtime::Handle> {
     if let Some(handle) = HANDLE.get() {
         return Ok(handle);
@@ -25,6 +54,7 @@ pub(crate) fn handle() -> NativeResult<&'static tokio::runtime::Handle> {
     }
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .thread_name("icechunk-worker")
+        .on_thread_start(|| RUNTIME_THREAD.set(true))
         .enable_all()
         .build()
         .map_err(|err| {

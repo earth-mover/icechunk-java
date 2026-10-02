@@ -103,7 +103,7 @@ pub extern "system" fn Java_io_earthmover_icechunk_Native_sessionStore<'l>(
     call::run(env, |_| {
         let session = handles::session(session)?;
         // `from_session` takes `get_partial_values_concurrency` from the repository config.
-        let store = block_on(Store::from_session(session))?;
+        let store = block_on(Store::from_session(Arc::clone(&session)))?;
         handles::insert(Object::Store(Arc::new(store)))
     })
 }

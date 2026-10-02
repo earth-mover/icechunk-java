@@ -1,0 +1,114 @@
+name: Release
+
+# Builds the native library for every supported platform, bundles all of them into the
+# icechunk-java jar, and attaches the jars to a draft GitHub release. A person reviews and
+# publishes the draft.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux builds run in manylinux containers so the library loads on older
+          # distributions, as icechunk-python's wheels do.
+          - platform: linux-x86_64
+            runner: ubuntu-latest
+            container: quay.io/pypa/manylinux_2_28_x86_64
+            target: x86_64-unknown-linux-gnu
+            file: libicechunk_jni.so
+          - platform: linux-aarch_64
+            runner: ubuntu-24.04-arm
+            container: quay.io/pypa/manylinux_2_28_aarch64
+            target: aarch64-unknown-linux-gnu
+            file: libicechunk_jni.so
+          - platform: osx-x86_64
+            runner: macos-latest
+            target: x86_64-apple-darwin
+            file: libicechunk_jni.dylib
+          - platform: osx-aarch_64
+            runner: macos-latest
+            target: aarch64-apple-darwin
+            file: libicechunk_jni.dylib
+          - platform: windows-x86_64
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+            file: icechunk_jni.dll
+    runs-on: ${{ matrix.runner }}
+    container: ${{ matrix.container }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "11.0"
+    steps:
+      - uses: actions/checkout@v5
+      - name: Install Rust
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Build
+        shell: bash
+        run: |
+          rustup target add ${{ matrix.target }}
+          cargo build --release --manifest-path native/Cargo.toml --target ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}
+          path: native/target/${{ matrix.target }}/release/${{ matrix.file }}
+          if-no-files-found: error
+
+  package:
+    needs: native
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: native-*
+          path: artifacts
+      - name: Bundle the native libraries
+        run: |
+          dest=icechunk-java/src/main/resources/io/earthmover/icechunk/native
+          for dir in artifacts/native-*; do
+            platform="${dir#artifacts/native-}"
+            mkdir -p "$dest/$platform"
+            cp "$dir"/* "$dest/$platform/"
+          done
+          find "$dest" -type f | sort
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: astral-sh/setup-uv@v6
+      - name: Set the version from the tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: mvn -B -q versions:set -DnewVersion="${GITHUB_REF_NAME#v}" -DgenerateBackupPoms=false
+      # An empty icechunk.native.dir makes the tests load the library bundled in the jar,
+      # the way users will.
+      - name: Build and test against the bundled library
+        run: |
+          scripts/fetch-icechunk-fixtures.sh
+          mvn -B verify -Dicechunk.native.dir= -Dicechunk.tests.strict=true
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jars
+          path: |
+            icechunk-java/target/icechunk-java-*.jar
+            icechunk-zarr-java/target/icechunk-zarr-java-*.jar
+      - name: Create a draft release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" \
+            --notes "Experimental, unofficial build. See the README." \
+            icechunk-java/target/icechunk-java-*.jar icechunk-zarr-java/target/icechunk-zarr-java-*.jar
