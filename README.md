@@ -206,4 +206,5 @@ Using a closed object throws `IllegalStateException`.
 - [DESIGN.md](DESIGN.md) explains how the binding works and why it is built this way.
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers the build, the checks, and how to add a native method.
 - The [icechunk documentation](https://icechunk.io) explains repositories, sessions and version control in depth.
-  The Java API follows the Python API's names where Java conventions allow.
+  The Java API has the same concepts under Java names, so `readonly_session(tag="v1")` in Python is
+  `readonlySession(Version.tag("v1"))` here.
