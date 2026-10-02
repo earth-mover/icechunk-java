@@ -95,6 +95,7 @@ class StoreTest {
         assertEquals(Arrays.asList("data/c/0", "data/zarr.json", "zarr.json"), sorted(store.list()));
         assertEquals(Arrays.asList("data/c/0", "data/zarr.json"), sorted(store.listPrefix("data")));
         assertThrows(IcechunkException.class, () -> store.listPrefix("missing"));
+        assertThrows(IllegalArgumentException.class, () -> store.exists("data"));
         assertEquals(Arrays.asList("data", "zarr.json"), sorted(store.listDir("")));
         assertEquals(Arrays.asList("c", "zarr.json"), sorted(store.listDir("data")));
         assertFalse(store.isEmpty("data"));

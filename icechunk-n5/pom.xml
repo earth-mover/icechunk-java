@@ -10,9 +10,17 @@
 		<version>0.1.0-SNAPSHOT</version>
 	</parent>
 
-	<artifactId>icechunk-zarr-java</artifactId>
-	<name>icechunk-zarr-java</name>
-	<description>A zarr-java Store backed by an icechunk session.</description>
+	<artifactId>icechunk-n5</artifactId>
+	<name>icechunk-n5</name>
+	<description>An N5 KeyValueAccess backed by an icechunk session.</description>
+
+	<repositories>
+		<!-- n5, n5-zarr and n5-universe are published here, not on Maven Central. -->
+		<repository>
+			<id>scijava.public</id>
+			<url>https://maven.scijava.org/content/groups/public</url>
+		</repository>
+	</repositories>
 
 	<dependencies>
 		<dependency>
@@ -20,12 +28,21 @@
 			<artifactId>icechunk-java</artifactId>
 			<version>${project.version}</version>
 		</dependency>
-		<!-- Provided: applications choose their zarr-java version, and its own dependency
-		     tree (netcdf-java, the AWS SDK, okhttp) should not arrive through this jar. -->
+		<!-- Provided: Fiji and Paintera bring their own n5. -->
 		<dependency>
-			<groupId>dev.zarr</groupId>
-			<artifactId>zarr-java</artifactId>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5</artifactId>
 			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-zarr</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-universe</artifactId>
+			<scope>test</scope>
 		</dependency>
 		<dependency>
 			<groupId>io.earthmover.icechunk</groupId>
@@ -49,7 +66,7 @@
 				<configuration>
 					<archive>
 						<manifestEntries>
-							<Automatic-Module-Name>io.earthmover.icechunk.zarr</Automatic-Module-Name>
+							<Automatic-Module-Name>io.earthmover.icechunk.n5</Automatic-Module-Name>
 						</manifestEntries>
 					</archive>
 				</configuration>

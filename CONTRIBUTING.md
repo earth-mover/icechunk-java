@@ -39,6 +39,7 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 | `icechunk-java/` | The public Java API and its internals (`Native`, `NativeHandle`, `NativeLoader`, `Json`, `JsonReader`). |
 | `benchmarks/` | JMH benchmarks of the Store API. |
 | `icechunk-zarr-java/` | The zarr-java adapter, and the zarr-java, fixture and Python interop tests. |
+| `icechunk-n5/` | The N5 adapter, and its n5-zarr and Python interop tests. |
 | `examples/` | Runnable examples. |
 | `tests/python/` | The icechunk-python side of the interop test. |
 | `scripts/fetch-icechunk-fixtures.sh` | Fetches icechunk's compatibility repositories at the pinned revision. |

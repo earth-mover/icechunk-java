@@ -220,6 +220,23 @@ follow zarr-java's conventions:
 zarr-java's own abstract store tests (`StoreTest`, `WritableStoreTest`) write arbitrary keys, which an icechunk store
 does not accept, so the adapter has its own tests instead.
 
+## N5 adapter
+
+`IcechunkKeyValueAccess` implements N5's `KeyValueAccess`, the interface n5-zarr's readers and writers do their I/O
+through. It maps N5's paths to store keys by normalizing them and dropping the leading slash, so readers and writers
+over it use an empty base path. Three details follow from icechunk storing groups and arrays rather than files:
+
+- A path is a directory if it is the root or has a `zarr.json`. `createDirectories` does nothing, because a group
+  exists once its `zarr.json` is written, and n5-zarr writes one for every group it creates.
+- icechunk rejects a string it cannot parse as a key, such as a group's path, and the binding throws
+  `IllegalArgumentException` for it. The adapter's `isFile` answers false for such a path, and `delete` deletes
+  everything below it instead.
+- Reads are lazy: `createReadData` returns n5's `VolatileReadData` over a `LazyRead` that fetches byte ranges with
+  `Store.get(key, range)`, so n5-zarr reads a shard's index and then only the chunks it needs.
+
+The adapter takes a `Supplier<Store>` as well as a `Session`, so an application that commits and continues in a new
+session can keep the readers and writers it built.
+
 ## Packaging
 
 `.github/workflows/release.yml` builds the native library on each platform, bundles all of them into the
@@ -271,10 +288,13 @@ should not change the Java API.
   listings, values and diff that test checks. It skips the virtual chunk served by the MinIO server icechunk's test
   uses.
 - **icechunk-python interop.** `PythonInteropTest` has icechunk-python write a repository, commits on top of it from
-  Java, and has icechunk-python check the result.
+  Java, and has icechunk-python check the result. `PythonReadsN5Test` writes a plain and a sharded dataset through
+  n5-zarr and the N5 adapter, and has zarr-python read them back.
+- **N5 round trips.** `IcechunkKeyValueAccessTest` writes groups, attributes, plain and sharded datasets through
+  n5-zarr, reads them back from a read-only session, and opens a writer through n5-universe.
 
-The last two need fixtures and `uv`. They skip when those are missing, unless `-Dicechunk.tests.strict=true`, which CI
-sets.
+The compatibility and interop tests need fixtures and `uv`. They skip when those are missing, unless
+`-Dicechunk.tests.strict=true`, which CI sets.
 
 ## Benchmarks
 

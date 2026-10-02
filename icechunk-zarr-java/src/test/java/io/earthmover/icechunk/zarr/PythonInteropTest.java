@@ -1,6 +1,5 @@
 package io.earthmover.icechunk.zarr;
 
-import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -9,14 +8,9 @@ import dev.zarr.zarrjava.v3.DataType;
 import io.earthmover.icechunk.Repository;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.Storage;
+import io.earthmover.icechunk.TestEnvironment;
 import io.earthmover.icechunk.Version;
-import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -25,16 +19,10 @@ import org.junit.jupiter.api.io.TempDir;
  * Python side runs through {@code uv}, which provides the latest icechunk and zarr releases.
  */
 class PythonInteropTest {
-    private static final Path SCRIPTS = Paths.get(System.getProperty("user.dir"))
-            .getParent()
-            .resolve("tests")
-            .resolve("python");
-
     @Test
     void pythonWritesJavaReadsAndCommitsPythonChecks(@TempDir Path tmp) throws Exception {
-        TestEnvironment.require(TestEnvironment.hasUv(), "uv");
         Path repoDir = tmp.resolve("repo");
-        python("write_repo.py", repoDir);
+        TestEnvironment.python("write_repo.py", repoDir.toString());
 
         try (Storage storage = Storage.localFilesystem(repoDir);
                 Repository repo = Repository.open(storage)) {
@@ -74,32 +62,8 @@ class PythonInteropTest {
             }
         }
 
-        assertEquals("ok", python("check_repo.py", repoDir).trim());
-    }
-
-    private static String python(String script, Path repo) throws Exception {
-        List<String> command = new ArrayList<>(Arrays.asList(
-                "uv", "run", "--no-project", "--with", "icechunk", "--with", "zarr", "--with", "numpy", "python"));
-        command.add(SCRIPTS.resolve(script).toString());
-        command.add(repo.toString());
-        Path stderr = Files.createTempFile("icechunk-python-", ".log");
-        try {
-            Process process =
-                    new ProcessBuilder(command).redirectError(stderr.toFile()).start();
-            String output = new String(TestEnvironment.readAll(process.getInputStream()), UTF_8);
-            int status = process.waitFor();
-            assertEquals(0, status, () -> script + " failed:\n" + output + readQuietly(stderr));
-            return output;
-        } finally {
-            Files.deleteIfExists(stderr);
-        }
-    }
-
-    private static String readQuietly(Path file) {
-        try {
-            return new String(Files.readAllBytes(file), UTF_8);
-        } catch (IOException e) {
-            return "(stderr unavailable: " + e + ")";
-        }
+        assertEquals(
+                "ok",
+                TestEnvironment.python("check_repo.py", repoDir.toString()).trim());
     }
 }

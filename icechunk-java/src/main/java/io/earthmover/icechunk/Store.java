@@ -30,7 +30,9 @@ import java.util.OptionalLong;
  * repository's inline chunk threshold stays in the session until commit. Treat a direct buffer passed to
  * {@code set} as handed over, and do not modify it afterwards.
  *
- * <p>Changes through a read-only session throw {@link IcechunkException}.
+ * <p>A key is the {@code zarr.json} of a group or array, or the key of one of an array's chunks. A string icechunk
+ * cannot parse as a key, such as a group's path, throws {@link IllegalArgumentException} where a key is expected.
+ * Changes through a read-only session throw {@link IcechunkException}.
  */
 public final class Store extends NativeHandle {
     Store(long handle) {
@@ -94,8 +96,8 @@ public final class Store extends NativeHandle {
      * Store the remaining bytes of {@code value} at {@code key}, replacing any existing value. The buffer's position
      * is not changed. See the class description for when a direct buffer is read in place.
      *
-     * @throws IcechunkException if the session is read-only, or {@code key} is neither a {@code zarr.json} nor a chunk
-     *     of an existing array
+     * @throws IcechunkException if the session is read-only, or {@code key} is a chunk key and there is no array at
+     *     its path
      */
     public void set(String key, ByteBuffer value) {
         write(key, value, false);

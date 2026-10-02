@@ -23,6 +23,7 @@
 	<modules>
 		<module>icechunk-java</module>
 		<module>icechunk-zarr-java</module>
+		<module>icechunk-n5</module>
 		<module>examples</module>
 		<module>benchmarks</module>
 	</modules>
@@ -41,6 +42,10 @@
 
 		<junit.version>5.14.4</junit.version>
 		<zarr-java.version>0.3.1</zarr-java.version>
+		<!-- The versions Paintera pins. -->
+		<n5.version>4.0.2</n5.version>
+		<n5-zarr.version>2.0.2</n5-zarr.version>
+		<n5-universe.version>3.1.0</n5-universe.version>
 		<errorprone.version>2.50.0</errorprone.version>
 		<palantir-java-format.version>2.101.0</palantir-java-format.version>
 	</properties>
@@ -58,6 +63,21 @@
 				<groupId>dev.zarr</groupId>
 				<artifactId>zarr-java</artifactId>
 				<version>${zarr-java.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.janelia.saalfeldlab</groupId>
+				<artifactId>n5</artifactId>
+				<version>${n5.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.janelia.saalfeldlab</groupId>
+				<artifactId>n5-zarr</artifactId>
+				<version>${n5-zarr.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.janelia.saalfeldlab</groupId>
+				<artifactId>n5-universe</artifactId>
+				<version>${n5-universe.version}</version>
 			</dependency>
 		</dependencies>
 	</dependencyManagement>

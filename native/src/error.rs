@@ -129,6 +129,8 @@ impl From<StoreError> for NativeError {
             StoreErrorKind::SessionError(SessionErrorKind::Conflict { .. }) => {
                 Self::new(ErrorKind::Conflict, err.to_string())
             }
+            // A string that is not a Zarr v3 key is a caller error.
+            StoreErrorKind::InvalidKey { .. } => Self::invalid_argument(err.to_string()),
             _ => Self::icechunk(&err),
         }
     }
@@ -163,5 +165,11 @@ mod tests {
             RepositoryErrorKind::RepoInfoUpdated,
         ));
         assert_eq!(NativeError::from(gc).kind, ErrorKind::Conflict);
+    }
+
+    #[test]
+    fn keys_icechunk_cannot_hold_are_invalid_arguments() {
+        let err = StoreError::capture(StoreErrorKind::InvalidKey { key: "g".to_owned() });
+        assert_eq!(NativeError::from(err).kind, ErrorKind::InvalidArgument);
     }
 }

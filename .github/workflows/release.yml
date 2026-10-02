@@ -101,7 +101,9 @@ jobs:
           name: jars
           path: |
             icechunk-java/target/icechunk-java-*.jar
+            !icechunk-java/target/icechunk-java-*-tests.jar
             icechunk-zarr-java/target/icechunk-zarr-java-*.jar
+            icechunk-n5/target/icechunk-n5-*.jar
             icechunk-java/target/classes/io/earthmover/icechunk/native/
 
   # Each platform's library was built on that platform, but only Linux x86_64 loaded it from

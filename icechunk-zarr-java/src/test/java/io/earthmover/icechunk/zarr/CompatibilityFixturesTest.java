@@ -13,6 +13,7 @@ import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.SnapshotInfo;
 import io.earthmover.icechunk.Storage;
 import io.earthmover.icechunk.Store;
+import io.earthmover.icechunk.TestEnvironment;
 import io.earthmover.icechunk.Version;
 import java.nio.file.Path;
 import java.util.ArrayList;

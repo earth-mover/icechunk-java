@@ -56,6 +56,17 @@
 						</manifestEntries>
 					</archive>
 				</configuration>
+				<executions>
+					<!-- The other modules' tests use TestEnvironment from here. -->
+					<execution>
+						<goals>
+							<goal>test-jar</goal>
+						</goals>
+						<configuration>
+							<archive combine.self="override"/>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 			<!-- A JVM reads META-INF/versions only from a jar, so the default run tests the Java 8
 			     classes and this one tests the jar as shipped. -->

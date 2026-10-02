@@ -43,16 +43,17 @@ try (Storage storage = Storage.localFilesystem(Paths.get("/tmp/my-repo"));
 |---|---|
 | `icechunk-java` | `Storage`, `Repository`, `Session` and `Store`. No runtime dependencies besides the native library. |
 | `icechunk-zarr-java` | `IcechunkZarrStore`, which lets [zarr-java](https://github.com/zarr-developers/zarr-java) read and write arrays in a session. zarr-java itself is a `provided` dependency, so you choose its version. |
+| `icechunk-n5` | `IcechunkKeyValueAccess`, which lets [N5](https://github.com/saalfeldlab/n5)'s Zarr v3 reader and writer ([n5-zarr](https://github.com/saalfeldlab/n5-zarr)), and the Fiji and Paintera tools built on them, read and write a session. n5 is a `provided` dependency. |
 | `examples` | Runnable programs. Not published. |
 
 Programs that only move Zarr keys and bytes, such as a store adapter for another library, need only
-`icechunk-java`. Programs that work with arrays use `icechunk-zarr-java` with zarr-java.
+`icechunk-java`. Programs that work with arrays use `icechunk-zarr-java` with zarr-java, or `icechunk-n5` with N5.
 
 ## Getting the jars
 
 Nothing is published to Maven Central. Tagged releases of this repository attach jars to a GitHub release, with the
 native library for Linux (x86_64, aarch64), macOS (x86_64, arm64) and Windows (x86_64) bundled inside `icechunk-java`.
-Put both jars on the classpath, plus zarr-java if you use `icechunk-zarr-java`.
+Put `icechunk-java` and the adapter you use on the classpath, plus zarr-java or n5 and n5-zarr.
 
 ## Building
 
@@ -139,6 +140,17 @@ Array temperature = Array.open(new IcechunkZarrStore(session).resolve("temperatu
 ucar.ma2.Array firstStep = temperature.read(new long[] {0, 0, 0}, new long[] {1, 721, 1440});
 ```
 
+N5 tools open the session through `IcechunkKeyValueAccess`, with n5-zarr's Zarr v3 classes, since icechunk holds Zarr
+v3 only:
+
+```java
+N5Reader n5 = new ZarrV3KeyValueReader(new IcechunkKeyValueAccess(session), "", new GsonBuilder(), false);
+DatasetAttributes attributes = n5.getDatasetAttributes("em/raw");
+DataBlock<?> chunk = n5.readChunk("em/raw", attributes, 0, 0);
+```
+
+n5-universe opens the same object with `new N5Factory().openWriter(StorageFormat.ZARR3, kva, URI.create(""))`.
+
 ### Writing and committing
 
 A writable session collects changes until you commit them. After a commit the session is read-only; open a new one
@@ -224,6 +236,8 @@ All four classes are safe to use from several threads. Each call runs on the cal
 icechunk finishes; calls in progress do not respond to `Thread.interrupt()`.
 
 Errors from icechunk are thrown as `IcechunkException`, and a lost commit race as its subclass `ConflictException`.
+A string passed as a store key that icechunk cannot parse as one, such as a group's path, throws
+`IllegalArgumentException`.
 Using a closed object throws `IllegalStateException`.
 
 ## Limitations
