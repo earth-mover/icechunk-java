@@ -36,10 +36,14 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 | `native/src/spec.rs` | The JSON formats the Java classes send. |
 | `native/src/results.rs` | The JSON formats of record results the Java classes read. |
 | `native/src/{storage,repository,session,store,logging}.rs` | Native methods, one module per Java class. |
+| `native/src/codecs.rs` | The pcodec decoder behind `Pcodec`, used by `icechunk-n5-codecs`. |
+| `native/src/error.rs` | The native error type, and how icechunk's errors map onto Java exceptions. |
 | `icechunk-java/` | The public Java API and its internals (`Native`, `NativeHandle`, `NativeLoader`, `Json`, `JsonReader`). |
 | `benchmarks/` | JMH benchmarks of the Store API. |
 | `icechunk-zarr-java/` | The zarr-java adapter, and the zarr-java, fixture and Python interop tests. |
 | `icechunk-n5/` | The N5 adapter, and its n5-zarr and Python interop tests. |
+| `icechunk-n5-universe/` | Opens icechunk URLs through n5-universe's `N5Factory`. Builds only with `-Pn5-universe-provider`. |
+| `icechunk-n5-codecs/` | numcodecs Zarr v3 codecs (pcodec, zlib) for n5-zarr. |
 | `examples/` | Runnable examples. |
 | `tests/python/` | The icechunk-python side of the interop test. |
 | `scripts/fetch-icechunk-fixtures.sh` | Fetches icechunk's compatibility repositories at the pinned revision. |

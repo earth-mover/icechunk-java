@@ -15,5 +15,9 @@ commits as [icechunk-python](https://pypi.org/project/icechunk/), and read and w
 | `icechunk-zarr-java` | `IcechunkZarrStore`, for [zarr-java](https://github.com/zarr-developers/zarr-java). |
 | `icechunk-n5` | `IcechunkKeyValueAccess`, for [N5](https://github.com/saalfeldlab/n5) and [n5-zarr](https://github.com/saalfeldlab/n5-zarr). See [N5](n5.md). |
 | `icechunk-n5-codecs` | The `numcodecs.pcodec` and `numcodecs.zlib` codecs for n5-zarr. See [N5](n5.md#numcodecs-codecs). |
+| `icechunk-n5-universe` | `IcechunkKeyValueAccessProvider`, which opens repositories from URLs through n5-universe's `N5Factory`. Builds only with `-Pn5-universe-provider`. |
 
-Until the rest of this site is written, the repository's `README.md` covers the Java API.
+[How the pieces fit](ecosystem.md) explains where these modules sit among icechunk, Zarr, N5 and Fiji.
+
+This site covers the N5 adapter on the [N5](n5.md) page. For the Java API itself (storage, repositories, sessions,
+branches, tags and garbage collection), see the repository's `README.md`.
