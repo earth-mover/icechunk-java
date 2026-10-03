@@ -4,9 +4,11 @@ import ij.ImagePlus;
 import io.earthmover.icechunk.Repository;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.SnapshotId;
+import io.earthmover.icechunk.Storage;
 import io.earthmover.icechunk.n5.IcechunkKeyValueAccess;
 import java.io.IOException;
 import java.net.URI;
+import java.nio.file.Paths;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.janelia.saalfeldlab.n5.KeyValueAccess;
@@ -34,7 +36,8 @@ import org.scijava.ui.UIService;
  * registers a {@link KeyValueAccessProvider} for one URL made up for the save, whose store is a writable session on
  * the branch. The session is committed once the exporter returns; if anything fails, nothing is committed.
  *
- * <p>A branch that does not exist is created at the tip of {@code main}, and deleted again if the save fails.
+ * <p>A branch that does not exist is created at the tip of {@code main}, and deleted again if the save fails. A
+ * repository is created only at a local path, and only when asked.
  */
 @Plugin(
         type = Command.class,
@@ -103,6 +106,12 @@ public final class SaveToIcechunk implements Command {
             persist = false)
     boolean overwrite = false;
 
+    @Parameter(
+            label = "Create repository if missing",
+            description = "Create a new repository at a local path that holds none. Repositories elsewhere are never"
+                    + " created.")
+    boolean create = false;
+
     @Override
     public void run() {
         try {
@@ -136,8 +145,15 @@ public final class SaveToIcechunk implements Command {
                     "give the repository's location without an icechunk: stage; the branch and path have their own"
                             + " fields: " + location);
         }
-        Repository repository = IcechunkKeyValueAccessProvider.repository(
-                IcechunkUrl.parse(location).location());
+        String repositoryLocation = IcechunkUrl.parse(location).location();
+        if (create && !IcechunkUrl.hasScheme(repositoryLocation)) {
+            try (Storage storage = Storage.localFilesystem(Paths.get(repositoryLocation))) {
+                if (!Repository.exists(storage)) {
+                    Repository.create(storage).close();
+                }
+            }
+        }
+        Repository repository = IcechunkKeyValueAccessProvider.repository(repositoryLocation);
         boolean createdBranch = !repository.listBranches().contains(branch);
         if (createdBranch) {
             repository.createBranch(branch, repository.lookupBranch("main"));

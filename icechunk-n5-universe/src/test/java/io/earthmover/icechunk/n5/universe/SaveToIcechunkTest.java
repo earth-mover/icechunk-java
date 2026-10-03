@@ -1,25 +1,35 @@
 package io.earthmover.icechunk.n5.universe;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.GsonBuilder;
+import ij.CompositeImage;
+import ij.IJ;
 import ij.ImagePlus;
 import ij.ImageStack;
 import ij.VirtualStack;
+import ij.process.ByteProcessor;
 import ij.process.ImageProcessor;
 import ij.process.ShortProcessor;
 import io.earthmover.icechunk.Repository;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.SnapshotId;
+import io.earthmover.icechunk.SnapshotInfo;
 import io.earthmover.icechunk.Storage;
+import io.earthmover.icechunk.Version;
 import io.earthmover.icechunk.n5.IcechunkKeyValueAccess;
 import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.imglib2.Cursor;
+import net.imglib2.RandomAccess;
 import net.imglib2.RandomAccessibleInterval;
+import net.imglib2.type.numeric.integer.UnsignedByteType;
 import net.imglib2.type.numeric.integer.UnsignedShortType;
 import net.imglib2.view.Views;
 import org.janelia.saalfeldlab.n5.N5Exception;
@@ -210,5 +220,113 @@ class SaveToIcechunkTest {
         overwrite.save();
         assertValues(new N5Factory().openReader(repo + "|icechunk://branch.main/cells3d/labels/nuclei"), "s0", 1);
         assertValues(new N5Factory().openReader(repo + "|icechunk://" + first + "/cells3d/labels/nuclei"), "s0", 0);
+    }
+
+    @Test
+    void createsALocalRepositoryOnlyWhenAsked() throws Exception {
+        String repo = tmp.resolve("new repo").toString();
+        assertThrows(
+                N5Exception.class,
+                () -> command(repo, "main", "cells", labels(0)).save());
+
+        SaveToIcechunk create = command(repo, "main", "cells", labels(0));
+        create.create = true;
+        assertEquals(create.save(), tip(repo, "main"));
+        assertValues(new N5Factory().openReader(repo + "|icechunk://branch.main/cells"), "s0", 0);
+
+        SaveToIcechunk again = command(repo, "main", "more-cells", labels(1));
+        again.create = true;
+        again.save();
+        assertValues(new N5Factory().openReader(repo + "|icechunk://branch.main/cells"), "s0", 0);
+        assertValues(new N5Factory().openReader(repo + "|icechunk://branch.main/more-cells"), "s0", 1);
+    }
+
+    @Test
+    void savesAnImageThenItsLabelsThenNewLabels() throws Exception {
+        String repo = tmp.resolve("demo").toString();
+        SaveToIcechunk cells = command(repo, "main", "cells", composite());
+        cells.create = true;
+        cells.message = "cells";
+        cells.chunkSize = "64";
+        SnapshotId first = cells.save();
+
+        SaveToIcechunk labels = command(repo, "main", "labels/stardist", labels2d(0));
+        labels.message = "labels";
+        labels.chunkSize = "64";
+        SnapshotId second = labels.save();
+
+        SaveToIcechunk relabel = command(repo, "main", "labels/stardist", labels2d(1));
+        relabel.message = "new labels";
+        relabel.chunkSize = "64";
+        relabel.overwrite = true;
+        SnapshotId third = relabel.save();
+
+        List<SnapshotInfo> history =
+                IcechunkKeyValueAccessProvider.repository(repo).ancestry(Version.branch("main"));
+        assertEquals(
+                Arrays.asList(third, second, first),
+                Arrays.asList(
+                        history.get(0).id(), history.get(1).id(), history.get(2).id()));
+        assertEquals("new labels", history.get(0).message());
+
+        N5Reader main = new N5Factory().openReader(repo + "|icechunk://branch.main");
+        assertEquals("channel", main.getAttribute("cells", "ome/multiscales[0]/axes[1]/type", String.class));
+        RandomAccessibleInterval<UnsignedByteType> channels = N5Utils.open(main, "cells/s0");
+        assertArrayEquals(new long[] {WIDTH, HEIGHT, 1, CHANNELS, 1}, channels.dimensionsAsLongArray());
+        RandomAccess<UnsignedByteType> pixel = channels.randomAccess();
+        for (int c = 0; c < CHANNELS; c++) {
+            for (int y = 0; y < HEIGHT; y++) {
+                for (int x = 0; x < WIDTH; x++) {
+                    assertEquals(
+                            x + 10 * y + 50 * c,
+                            pixel.setPositionAndGet(x, y, 0, c, 0).get());
+                }
+            }
+        }
+        assertLabels2d(main, 1);
+        assertLabels2d(new N5Factory().openReader(repo + "|icechunk://" + second), 0);
+    }
+
+    private static final int CHANNELS = 3;
+
+    /** A 2D 8-bit composite image with three channels, whose value at x, y, c is x + 10 y + 50 c. */
+    private static ImagePlus composite() {
+        ImageStack stack = new ImageStack(WIDTH, HEIGHT);
+        for (int c = 0; c < CHANNELS; c++) {
+            byte[] pixels = new byte[WIDTH * HEIGHT];
+            for (int y = 0; y < HEIGHT; y++) {
+                for (int x = 0; x < WIDTH; x++) {
+                    pixels[x + WIDTH * y] = (byte) (x + 10 * y + 50 * c);
+                }
+            }
+            stack.addSlice(new ByteProcessor(WIDTH, HEIGHT, pixels));
+        }
+        ImagePlus image = new ImagePlus("cells", stack);
+        image.setDimensions(CHANNELS, 1, 1);
+        return new CompositeImage(image, IJ.COMPOSITE);
+    }
+
+    /** A 2D uint16 image whose value at x, y is x + 10 y + offset. */
+    private static ImagePlus labels2d(int offset) {
+        short[] pixels = new short[WIDTH * HEIGHT];
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                pixels[x + WIDTH * y] = (short) value(x, y, 0, offset);
+            }
+        }
+        return new ImagePlus("labels", new ShortProcessor(WIDTH, HEIGHT, pixels, null));
+    }
+
+    private static void assertLabels2d(N5Reader n5, int offset) {
+        RandomAccessibleInterval<UnsignedShortType> img = N5Utils.open(n5, "labels/stardist/s0");
+        assertArrayEquals(new long[] {WIDTH, HEIGHT, 1, 1, 1}, img.dimensionsAsLongArray());
+        RandomAccess<UnsignedShortType> pixel = img.randomAccess();
+        for (int y = 0; y < HEIGHT; y++) {
+            for (int x = 0; x < WIDTH; x++) {
+                assertEquals(
+                        value(x, y, 0, offset),
+                        pixel.setPositionAndGet(x, y, 0, 0, 0).get());
+            }
+        }
     }
 }

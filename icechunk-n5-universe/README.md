@@ -68,6 +68,7 @@ DatasetAttributes attributes = n5.getDatasetAttributes("raw");
   `IcechunkKeyValueAccess` on a writable session, as in [icechunk-n5](../icechunk-n5).
 - In Fiji, **File > Save As > icechunk...** saves the current image as OME-Zarr into a branch of a repository and
   commits it. n5-ij's exporter writes the image, so the metadata, pyramid and compression match Fiji's own export.
+  It can create a new repository at a local path, never elsewhere.
 - Each repository is opened once and kept open. Each URL opens a new session, so a branch is read at its tip when the
   URL is opened.
 - S3 and Google Cloud Storage repositories open with the environment's credentials, such as the AWS default chain,
