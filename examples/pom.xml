@@ -21,6 +21,14 @@
 		<example>Quickstart</example>
 	</properties>
 
+	<repositories>
+		<!-- n5, n5-zarr and n5-universe are published here, not on Maven Central. -->
+		<repository>
+			<id>scijava.public</id>
+			<url>https://maven.scijava.org/content/groups/public</url>
+		</repository>
+	</repositories>
+
 	<dependencies>
 		<dependency>
 			<groupId>io.earthmover.icechunk</groupId>
@@ -35,6 +43,23 @@
 		<dependency>
 			<groupId>dev.zarr</groupId>
 			<artifactId>zarr-java</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.earthmover.icechunk</groupId>
+			<artifactId>icechunk-n5</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-zarr</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-universe</artifactId>
 		</dependency>
 	</dependencies>
 

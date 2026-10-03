@@ -19,3 +19,13 @@ example = { cmd = "mvn -B -q install -DskipTests -pl examples -am && mvn -B -q -
 build-native-release = { cmd = "cargo build --release --manifest-path native/Cargo.toml" }
 bench = { cmd = "mvn -B -q package -DskipTests -pl benchmarks -am && java -jar benchmarks/target/benchmarks.jar -jvmArgsAppend -Dicechunk.native.dir=native/target/release -prof gc -rf json -rff benchmarks/target/results.json {{ args }}", args = [{ arg = "args", default = "" }], depends-on = ["build-native-release"] }
 check = { depends-on = ["lint-native", "test-native", "test"] }
+
+[feature.docs.dependencies]
+zensical = ">=0.0.67,<0.1"
+
+[feature.docs.tasks]
+docs = { cmd = "zensical serve" }
+docs-build = { cmd = "zensical build --clean" }
+
+[environments]
+docs = { features = ["docs"], solve-group = "default" }
