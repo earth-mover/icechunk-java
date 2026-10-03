@@ -5,7 +5,10 @@ import io.earthmover.icechunk.RepositoryOptions;
 import io.earthmover.icechunk.Storage;
 import java.nio.file.Paths;
 
-/** Opens {@code named:NAME} as the test repository, the way a hosted service maps names to repositories. */
+/**
+ * Opens {@code named:odd} as the test repository with unusual node names, and any other {@code named:NAME} as the main
+ * test repository, the way a hosted service maps names to repositories.
+ */
 public final class NamedRepositoryResolver implements RepositoryResolver {
     @Override
     public boolean claims(String location) {
@@ -14,7 +17,10 @@ public final class NamedRepositoryResolver implements RepositoryResolver {
 
     @Override
     public Repository open(String location, RepositoryOptions options) {
-        try (Storage storage = Storage.localFilesystem(Paths.get(IcechunkKeyValueAccessProviderTest.repo))) {
+        String path = location.equals("named:odd")
+                ? IcechunkKeyValueAccessProviderTest.oddNames
+                : IcechunkKeyValueAccessProviderTest.repo;
+        try (Storage storage = Storage.localFilesystem(Paths.get(path))) {
             return Repository.open(storage, options);
         }
     }

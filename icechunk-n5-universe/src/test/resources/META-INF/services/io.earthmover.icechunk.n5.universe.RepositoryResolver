@@ -1,1 +1,3 @@
+io.earthmover.icechunk.n5.universe.ThrowingRepositoryResolver
+io.earthmover.icechunk.n5.universe.MissingRepositoryResolver
 io.earthmover.icechunk.n5.universe.NamedRepositoryResolver

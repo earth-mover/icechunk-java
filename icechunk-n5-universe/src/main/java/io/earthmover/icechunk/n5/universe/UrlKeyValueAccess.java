@@ -8,23 +8,16 @@ import org.janelia.saalfeldlab.n5.readdata.ReadData;
 import org.janelia.saalfeldlab.n5.readdata.VolatileReadData;
 
 /**
- * An {@link IcechunkKeyValueAccess} rooted at the node an {@link IcechunkUrl} names. n5 composes every path from the
- * URL it was opened with, so each path is the URL's path, then a path relative to the node.
+ * An {@link IcechunkKeyValueAccess} rooted at the node an {@link IcechunkUrl} names. Every path n5 gives it comes from
+ * {@link #compose}, relative to that node.
  */
 final class UrlKeyValueAccess implements KeyValueAccess {
     private final IcechunkKeyValueAccess store;
-    /**
-     * The decoded path of the URL, without trailing slashes or repeated slashes, which every composed path starts with.
-     * n5 collapses the {@code //} of {@code icechunk://branch.main} in the paths it composes, so both sides are compared
-     * collapsed.
-     */
-    private final String root;
     /** The node the URL names, relative to the repository root. */
     private final String node;
 
-    UrlKeyValueAccess(IcechunkKeyValueAccess store, URI url, String node) {
+    UrlKeyValueAccess(IcechunkKeyValueAccess store, String node) {
         this.store = store;
-        this.root = collapseSlashes(IcechunkUrl.stripSlashes(IcechunkUrl.path(url)));
         this.node = node;
     }
 
@@ -34,21 +27,20 @@ final class UrlKeyValueAccess implements KeyValueAccess {
     }
 
     /**
-     * n5 composes paths onto the URL's path, which an opaque URL such as {@code al:org/repo|icechunk:} lacks, so for
-     * those the composed path is relative to the node.
+     * The path relative to the node, percent-encoded, rather than n5's composition onto the URL's path. An opaque URL
+     * such as {@code al:org/repo|icechunk:} has no path to compose onto, and n5 resolves each name as a URI, which reads
+     * a name such as {@code t0:x} as a scheme. Encoding keeps {@code %}, {@code ?} or {@code #} in a name from being
+     * read as syntax.
      */
     @Override
     public String compose(URI uri, String... components) {
-        if (!uri.isOpaque()) {
-            return KeyValueAccess.super.compose(uri, components);
-        }
         StringBuilder path = new StringBuilder();
         for (String component : components) {
             if (component != null) {
                 IcechunkUrl.join(path, component);
             }
         }
-        return path.toString();
+        return encode(path.toString());
     }
 
     @Override
@@ -101,19 +93,19 @@ final class UrlKeyValueAccess implements KeyValueAccess {
         store.delete(inStore(normalPath));
     }
 
-    /**
-     * The path {@link IcechunkKeyValueAccess} takes for a path n5 gives: the node, then the part of the path after the
-     * URL's, percent-encoded as n5 encodes names. A path without the URL's in front is relative to the node.
-     */
+    /** The path {@link IcechunkKeyValueAccess} takes for a path {@link #compose} made: the node, then that path. */
     private String inStore(String normalPath) {
-        String path = collapseSlashes(IcechunkUrl.path(N5URI.getAsUri(normalPath)));
-        String relative = path.startsWith(root) ? path.substring(root.length()) : path;
         StringBuilder key = new StringBuilder(node);
-        IcechunkUrl.join(key, relative);
-        return N5URI.encodeAsUriPath(key.toString()).getRawPath();
+        IcechunkUrl.join(key, N5URI.getAsUri(normalPath).getPath());
+        return encode(key.toString());
     }
 
-    private static String collapseSlashes(String path) {
-        return path.replaceAll("/{2,}", "/");
+    /**
+     * Percent-encodes a path as n5 encodes names, colons included. Encoding it after a {@code /} keeps the URI
+     * constructor from reading a first name such as {@code 0:x} as a scheme, which it rejects, and the encoded colon
+     * keeps it from being read back as one.
+     */
+    private static String encode(String path) {
+        return N5URI.encodeAsUriPath("/" + path).getRawPath().substring(1).replace(":", "%3A");
     }
 }

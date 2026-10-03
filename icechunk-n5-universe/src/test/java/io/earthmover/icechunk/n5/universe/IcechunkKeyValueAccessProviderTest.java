@@ -14,8 +14,11 @@ import io.earthmover.icechunk.RepositoryOptions;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.SnapshotId;
 import io.earthmover.icechunk.Storage;
+import io.earthmover.icechunk.Store;
 import io.earthmover.icechunk.Version;
 import io.earthmover.icechunk.n5.IcechunkKeyValueAccess;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -38,7 +41,10 @@ class IcechunkKeyValueAccessProviderTest {
     static Path tmp;
 
     static String repo;
+    static String oddNames;
     static SnapshotId first;
+
+    private static final String[] ODD_NAMES = {"a%20b", "a?b", "a#b", "t0:x", "0:x", "t_0:x"};
 
     @BeforeAll
     static void createRepository() {
@@ -61,6 +67,24 @@ class IcechunkKeyValueAccessProviderTest {
                 session.commit("second");
             }
         }
+        // Written through the store, since n5's writer reads a name such as t0:x as a URI scheme and drops it.
+        Path odd = tmp.resolve("odd names");
+        oddNames = odd.toString();
+        try (Storage storage = Storage.localFilesystem(odd);
+                Repository repository = Repository.create(storage);
+                Session session = repository.writableSession("main")) {
+            Store store = session.store();
+            store.set("zarr.json", group("{}"));
+            for (String name : ODD_NAMES) {
+                store.set(name + "/zarr.json", group("{\"name\": \"" + name + "\"}"));
+            }
+            session.commit("odd names");
+        }
+    }
+
+    private static ByteBuffer group(String attributes) {
+        return ByteBuffer.wrap(("{\"zarr_format\": 3, \"node_type\": \"group\", \"attributes\": " + attributes + "}")
+                .getBytes(StandardCharsets.UTF_8));
     }
 
     private static N5Writer writer(Session session) {
@@ -107,6 +131,36 @@ class IcechunkKeyValueAccessProviderTest {
         assertTrue(IcechunkKeyValueAccessProvider.repository("named:mine")
                 .configJson()
                 .contains("\"ideal_concurrent_request_size\":2097152"));
+    }
+
+    @Test
+    void readsNodesWithUriSyntaxInTheirNames() {
+        for (String url : new String[] {"named:odd|icechunk:", oddNames + "|icechunk:"}) {
+            N5Reader n5 = new N5Factory().openReader(url);
+            for (String name : ODD_NAMES) {
+                assertTrue(n5.exists(name), url + " " + name);
+                assertEquals(name, n5.getAttribute(name, "name", String.class));
+            }
+        }
+    }
+
+    @Test
+    void reportsResolversThatFailedToLoadOrClaim() {
+        N5Exception e =
+                assertThrows(N5Exception.class, () -> IcechunkKeyValueAccessProvider.repository("nobody:org/repo"));
+        assertTrue(e.getMessage().contains("no RepositoryResolver"));
+        assertTrue(Arrays.stream(e.getSuppressed())
+                .anyMatch(failure -> failure.getMessage().contains("MissingRepositoryResolver")));
+        assertTrue(
+                Arrays.stream(e.getSuppressed()).anyMatch(failure -> "broken resolver".equals(failure.getMessage())));
+    }
+
+    @Test
+    void leavesTheQueryOutOfAnOpaqueUrlsLocation() {
+        assertEquals(
+                "named:mine",
+                IcechunkUrl.parse(java.net.URI.create("named:mine%7Cicechunk:?x=1"))
+                        .location());
     }
 
     @Test

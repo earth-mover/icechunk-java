@@ -149,9 +149,15 @@ public final class IcechunkUrl {
         return HAS_SCHEME.matcher(s).find();
     }
 
-    /** The decoded path of {@code uri}, or its scheme-specific part if it is opaque. */
+    /** The decoded path of {@code uri}, or if it is opaque, its scheme-specific part without the query. */
     static String path(URI uri) {
-        return uri.getPath() == null ? uri.getSchemeSpecificPart() : uri.getPath();
+        if (uri.getPath() != null) {
+            return uri.getPath();
+        }
+        String raw = uri.getRawSchemeSpecificPart();
+        int query = raw.indexOf('?');
+        String withoutQuery = query < 0 ? raw : raw.substring(0, query);
+        return withoutQuery.isEmpty() ? "" : URI.create("x:" + withoutQuery).getSchemeSpecificPart();
     }
 
     static String stripSlashes(String s) {

@@ -22,9 +22,11 @@ import java.net.URL;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.ServiceConfigurationError;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -66,6 +68,9 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
  */
 public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvider {
     private static final Map<String, Repository> REPOSITORIES = new ConcurrentHashMap<>();
+    /** Why each resolver that failed to load did, reported when no loaded resolver claims a location. */
+    private static final List<Throwable> RESOLVER_FAILURES = new ArrayList<>();
+
     private static final List<RepositoryResolver> RESOLVERS = resolvers();
 
     // A viewer reads one chunk at a time, often from servers that limit each connection's speed, so a chunk read as
@@ -78,7 +83,7 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
             return true;
         }
         try {
-            return resolver(IcechunkUrl.parse(uri).location()) != null;
+            return resolver(IcechunkUrl.parse(uri).location(), new ArrayList<>()) != null;
         } catch (IllegalArgumentException e) {
             return false;
         }
@@ -97,7 +102,7 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
         } catch (IcechunkException e) {
             throw new N5Exception.N5IOException("cannot open " + url + ": " + e.getMessage(), e);
         }
-        return new UrlKeyValueAccess(new IcechunkKeyValueAccess(session), uri, url.path());
+        return new UrlKeyValueAccess(new IcechunkKeyValueAccess(session), url.path());
     }
 
     /** Opens outside the map: opening can take seconds, and computeIfAbsent would block other locations meanwhile. */
@@ -116,13 +121,16 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
     }
 
     private static Repository open(String location) {
-        RepositoryResolver resolver = resolver(location);
+        List<Throwable> claimFailures = new ArrayList<>();
+        RepositoryResolver resolver = resolver(location, claimFailures);
         if (resolver != null) {
             try {
                 return resolver.open(
                         location,
                         RepositoryOptions.builder().configJson(storageConfig()).build());
-            } catch (IcechunkException e) {
+            } catch (N5Exception e) {
+                throw e;
+            } catch (RuntimeException e) {
                 throw new N5Exception.N5IOException("cannot open " + location + ": " + e.getMessage(), e);
             }
         }
@@ -157,7 +165,11 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
             return open(Storage.http(location));
         }
         if (IcechunkUrl.hasScheme(location)) {
-            throw new N5Exception("unsupported icechunk repository location: " + location);
+            N5Exception unsupported = new N5Exception("unsupported icechunk repository location: " + location
+                    + "; no RepositoryResolver on the classpath claims it");
+            RESOLVER_FAILURES.forEach(unsupported::addSuppressed);
+            claimFailures.forEach(unsupported::addSuppressed);
+            throw unsupported;
         }
         return open(Storage.localFilesystem(Paths.get(location)));
     }
@@ -195,17 +207,45 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
         }
     }
 
+    /**
+     * Loads each resolver on its own, skipping any that fail: this runs while the provider class initializes, so one
+     * broken resolver jar would otherwise stop every icechunk URL from opening, not only its own. ServiceLoader throws a
+     * class that cannot be linked from {@code hasNext} and one that cannot be instantiated from {@code next}, and moves
+     * past either. It retries a failure to find the services files on every call, so that ends the loading.
+     */
     private static List<RepositoryResolver> resolvers() {
         List<RepositoryResolver> resolvers = new ArrayList<>();
-        ServiceLoader.load(RepositoryResolver.class, IcechunkKeyValueAccessProvider.class.getClassLoader())
-                .forEach(resolvers::add);
+        Iterator<RepositoryResolver> loader = ServiceLoader.load(
+                        RepositoryResolver.class, IcechunkKeyValueAccessProvider.class.getClassLoader())
+                .iterator();
+        while (true) {
+            try {
+                if (!loader.hasNext()) {
+                    break;
+                }
+                resolvers.add(loader.next());
+            } catch (ServiceConfigurationError | LinkageError e) {
+                RESOLVER_FAILURES.add(e);
+                if (e.getCause() instanceof IOException) {
+                    break;
+                }
+            }
+        }
         return Collections.unmodifiableList(resolvers);
     }
 
-    private static RepositoryResolver resolver(String location) {
+    /**
+     * The first resolver that claims {@code location}. n5-universe asks about every URL it opens, so a resolver that
+     * throws from {@code claims} is taken not to claim it, and the failure is added to {@code failures}.
+     */
+    private static RepositoryResolver resolver(String location, List<Throwable> failures) {
         for (RepositoryResolver resolver : RESOLVERS) {
-            if (resolver.claims(location)) {
-                return resolver;
+            try {
+                if (resolver.claims(location)) {
+                    return resolver;
+                }
+            } catch (RuntimeException | LinkageError e) {
+                failures.add(e);
             }
         }
         return null;
