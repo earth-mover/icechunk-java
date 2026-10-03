@@ -51,6 +51,10 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
  * parallel. This provider sets that size to 2 MiB, overriding the repository's own setting; icechunk's default is
  * 12 MiB. It applies to every read from the repository: virtual chunks, and chunks and manifests on S3 or Google Cloud
  * Storage. Set the system property to another number of bytes to change it.
+ *
+ * <p>A failed request is tried up to 10 times, waiting from 100 ms up to 10 s between tries. Some servers refuse
+ * connections beyond a limit, and a viewer reading several chunks at once can reach it. The provider sets this over the
+ * repository's settings, which for a repository on the local file system allow a single try.
  */
 public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvider {
     private static final Map<String, Repository> REPOSITORIES = new ConcurrentHashMap<>();
@@ -165,7 +169,7 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
         }
     }
 
-    /** The configuration layered over each repository's own: the request size {@code icechunk.requestSize} sets. */
+    /** The configuration layered over each repository's own: request size and retries. */
     static String storageConfig() {
         String property = System.getProperty("icechunk.requestSize");
         long size;
@@ -177,7 +181,8 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
         if (size <= 0) {
             throw new N5Exception("icechunk.requestSize must be a positive number of bytes: " + property);
         }
-        return "{\"storage\": {\"concurrency\": {\"ideal_concurrent_request_size\": " + size + "}}}";
+        return "{\"storage\": {\"concurrency\": {\"ideal_concurrent_request_size\": " + size + "},"
+                + " \"retries\": {\"max_tries\": 10, \"initial_backoff_ms\": 100, \"max_backoff_ms\": 10000}}}";
     }
 
     /**

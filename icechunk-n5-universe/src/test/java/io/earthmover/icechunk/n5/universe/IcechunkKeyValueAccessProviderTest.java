@@ -116,7 +116,7 @@ class IcechunkKeyValueAccessProviderTest {
     }
 
     @Test
-    void layersTheRequestSizeOverTheStoredConfig() {
+    void layersRequestSizeAndRetriesOverTheStoredConfig() {
         Path path = tmp.resolve("configured");
         String stored = "{\"inline_chunk_threshold_bytes\": 7, \"virtual_chunk_containers\": {"
                 + "\"https://ftp.example.org/data/\": {\"url_prefix\": \"https://ftp.example.org/data/\","
@@ -137,6 +137,12 @@ class IcechunkKeyValueAccessProviderTest {
                         .getAsJsonObject("concurrency")
                         .get("ideal_concurrent_request_size")
                         .getAsLong());
+        assertEquals(
+                10,
+                config.getAsJsonObject("storage")
+                        .getAsJsonObject("retries")
+                        .get("max_tries")
+                        .getAsInt());
         assertEquals(7, config.get("inline_chunk_threshold_bytes").getAsInt());
         assertTrue(config.getAsJsonObject("virtual_chunk_containers").has("https://ftp.example.org/data/"));
     }
