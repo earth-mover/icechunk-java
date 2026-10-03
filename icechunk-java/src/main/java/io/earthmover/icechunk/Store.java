@@ -4,7 +4,9 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -232,6 +234,25 @@ public final class Store extends NativeHandle {
         } finally {
             HandleCleaner.reachabilityFence(this);
         }
+    }
+
+    /**
+     * Every group and array, by path, with its {@code zarr.json} document. Paths have no leading slash, and the root
+     * is {@code ""}. The documents come from the session's snapshot and changes, so unlike {@link #list} this reads no
+     * manifests. A read-only session lists them in path order.
+     */
+    public Map<String, String> listNodes() {
+        String[] entries;
+        try {
+            entries = Native.storeListNodes(handle());
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+        Map<String, String> nodes = new LinkedHashMap<>(entries.length);
+        for (int i = 0; i < entries.length; i += 2) {
+            nodes.put(entries[i], entries[i + 1]);
+        }
+        return Collections.unmodifiableMap(nodes);
     }
 
     /** Returns true if the store's session cannot write. */

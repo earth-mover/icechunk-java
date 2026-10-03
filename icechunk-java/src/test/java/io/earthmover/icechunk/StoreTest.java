@@ -9,8 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import org.junit.jupiter.api.AfterEach;
@@ -102,6 +105,32 @@ class StoreTest {
         assertEquals(Arrays.asList("c", "zarr.json"), sorted(store.listDir("data")));
         assertFalse(store.isEmpty("data"));
         assertTrue(store.isEmpty("nothing"));
+    }
+
+    @Test
+    void listNodesIncludesUncommittedNodes() {
+        store.set("a group/zarr.json", ByteBuffer.wrap(GROUP));
+        Map<String, String> nodes = store.listNodes();
+        assertEquals(new HashSet<>(Arrays.asList("", "a group", "data")), nodes.keySet());
+        assertEquals(new String(ARRAY, UTF_8), nodes.get("data"));
+    }
+
+    @Test
+    void listNodesReadsTheSnapshotInPathOrder() {
+        store.set("a group/zarr.json", ByteBuffer.wrap(GROUP));
+        store.set("a group/inner/zarr.json", ByteBuffer.wrap(ARRAY));
+        session.commit("nodes");
+        try (Session readonly = repo.readonlySession(Version.branch("main"))) {
+            Store snapshot = readonly.store();
+            Map<String, String> nodes = snapshot.listNodes();
+            assertEquals(Arrays.asList("", "a group", "a group/inner", "data"), new ArrayList<>(nodes.keySet()));
+            nodes.forEach((path, document) -> assertEquals(
+                    new String(
+                            snapshot.get(path.isEmpty() ? "zarr.json" : path + "/zarr.json")
+                                    .get(),
+                            UTF_8),
+                    document));
+        }
     }
 
     @Test

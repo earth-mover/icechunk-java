@@ -13,15 +13,21 @@ import io.earthmover.icechunk.IcechunkException;
 import io.earthmover.icechunk.Repository;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.Storage;
+import io.earthmover.icechunk.Store;
 import io.earthmover.icechunk.Version;
 import java.net.URI;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import org.janelia.saalfeldlab.n5.ByteArrayDataBlock;
 import org.janelia.saalfeldlab.n5.DataBlock;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
+import org.janelia.saalfeldlab.n5.KeyValueAccess;
 import org.janelia.saalfeldlab.n5.N5Exception.N5IOException;
+import org.janelia.saalfeldlab.n5.N5Exception.N5NoSuchKeyException;
 import org.janelia.saalfeldlab.n5.N5Reader;
 import org.janelia.saalfeldlab.n5.N5Writer;
 import org.janelia.saalfeldlab.n5.RawCompression;
@@ -196,6 +202,105 @@ class IcechunkKeyValueAccessTest {
             N5Reader n5 = new N5Factory().openReader(null, kva, URI.create(""));
             assertInstanceOf(ZarrV3KeyValueReader.class, n5);
             assertTrue(n5.exists("g"));
+        }
+    }
+
+    @Test
+    void readOnlyStoresAnswerAsWritableOnesDo() {
+        try (Session session = repo.writableSession("main")) {
+            N5Writer n5 = writer(session);
+            n5.createGroup("a group/empty");
+            DatasetAttributes attributes = n5.createDataset(
+                    "a group/raw", new long[] {4}, new int[] {2}, DataType.UINT16, new RawCompression());
+            n5.writeChunk(
+                    "a group/raw", attributes, new ShortArrayDataBlock(new int[] {2}, new long[] {1}, ramp(2, 0)));
+            n5.createDataset("b", new long[] {4}, new int[] {4}, DataType.UINT8, new RawCompression());
+            n5.createGroup("c/d/e");
+            session.commit("tree");
+        }
+
+        List<String> paths = Arrays.asList(
+                "",
+                "a group",
+                "a group/empty",
+                "a group/raw",
+                "a group/raw/c",
+                "a group/raw/c/1",
+                "b",
+                "c",
+                "c/d",
+                "c/d/e",
+                "missing",
+                "zarr.json",
+                "a group/zarr.json",
+                "a group/raw/zarr.json",
+                "missing/zarr.json",
+                ".zgroup",
+                "b/.zarray");
+        try (Session readonly = repo.readonlySession(Version.branch("main"));
+                Session writable = repo.writableSession("main")) {
+            KeyValueAccess cached = new IcechunkKeyValueAccess(readonly);
+            KeyValueAccess direct = new IcechunkKeyValueAccess(writable);
+            // The first listing loads the nodes the read-only answers come from.
+            cached.list("");
+            for (String path : paths) {
+                assertEquals(outcome(() -> direct.exists(path)), outcome(() -> cached.exists(path)), path);
+                assertEquals(outcome(() -> direct.isFile(path)), outcome(() -> cached.isFile(path)), path);
+                assertEquals(direct.isDirectory(path), cached.isDirectory(path), path);
+                assertEquals(
+                        outcome(() -> Arrays.asList(direct.list(path))),
+                        outcome(() -> Arrays.asList(cached.list(path))),
+                        path);
+                assertEquals(
+                        outcome(() -> Arrays.asList(direct.listDirectories(path))),
+                        outcome(() -> Arrays.asList(cached.listDirectories(path))),
+                        path);
+                if (Boolean.TRUE.equals(outcome(() -> direct.isFile(path)))) {
+                    assertArrayEquals(
+                            direct.createReadData(path).allBytes(),
+                            cached.createReadData(path).allBytes(),
+                            path);
+                    assertArrayEquals(
+                            direct.createReadData(path).slice(1, 2).allBytes(),
+                            cached.createReadData(path).slice(1, 2).allBytes(),
+                            path);
+                }
+            }
+            assertThrows(
+                    N5NoSuchKeyException.class,
+                    () -> cached.createReadData("missing/zarr.json").allBytes());
+        }
+    }
+
+    /** The result of {@code operation}, or the class of the exception it threw. */
+    private static Object outcome(Supplier<Object> operation) {
+        try {
+            return operation.get();
+        } catch (RuntimeException e) {
+            return e.getClass();
+        }
+    }
+
+    @Test
+    void readOnlyListingsFollowTheSuppliedStore() {
+        try (Session session = repo.writableSession("main")) {
+            writer(session).createGroup("first");
+            session.commit("first");
+        }
+        try (Session before = repo.readonlySession(Version.branch("main"))) {
+            try (Session session = repo.writableSession("main")) {
+                writer(session).createGroup("second");
+                session.commit("second");
+            }
+            try (Session after = repo.readonlySession(Version.branch("main"))) {
+                AtomicReference<Store> current = new AtomicReference<>(before.store());
+                IcechunkKeyValueAccess kva = new IcechunkKeyValueAccess(current::get);
+                assertArrayEquals(new String[] {"first"}, kva.listDirectories(""));
+                assertFalse(kva.exists("second"));
+                current.set(after.store());
+                assertArrayEquals(new String[] {"first", "second"}, kva.listDirectories(""));
+                assertTrue(kva.exists("second/zarr.json"));
+            }
         }
     }
 

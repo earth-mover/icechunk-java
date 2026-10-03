@@ -1,11 +1,19 @@
 package io.earthmover.icechunk.n5;
 
+import static java.nio.charset.StandardCharsets.UTF_8;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonParser;
 import io.earthmover.icechunk.ByteRange;
 import io.earthmover.icechunk.IcechunkException;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.Store;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Supplier;
@@ -38,6 +46,9 @@ import org.janelia.saalfeldlab.n5.readdata.VolatileReadData;
  * {@code zarr.json} is written. A group cannot become an array, or an array a group, by rewriting its
  * {@code zarr.json}: icechunk refuses the write. Writes go to the session and become a snapshot when it commits.
  *
+ * <p>Over a read-only session, the first listing reads every group and array's {@code zarr.json} from the session's
+ * snapshot in one call, and later listings, existence checks and {@code zarr.json} reads are answered from it. A writable session is asked each time, since writes would make that copy stale.
+ *
  * <p>Errors from icechunk are thrown as {@link N5IOException}, with the {@link IcechunkException} as the cause. A path
  * that is not a key icechunk can hold, such as a group's path, is not a file; reading or writing it throws
  * {@link IllegalArgumentException}.
@@ -46,6 +57,8 @@ public final class IcechunkKeyValueAccess implements KeyValueAccess {
     private static final String METADATA = "zarr.json";
 
     private final Supplier<Store> store;
+    // Swapped when the supplier returns another store.
+    private volatile Nodes cache;
 
     /** Read and write through {@code session}'s store. */
     public IcechunkKeyValueAccess(Session session) {
@@ -74,8 +87,15 @@ public final class IcechunkKeyValueAccess implements KeyValueAccess {
     @Override
     public boolean isFile(String normalPath) {
         String key = key(normalPath);
+        if (key.isEmpty()) {
+            return false;
+        }
+        Nodes cached = isMetadata(key) ? nodes(normalPath, false) : null;
+        if (cached != null) {
+            return cached.metadata.containsKey(nodePath(key));
+        }
         try {
-            return !key.isEmpty() && call(normalPath, () -> store.get().exists(key));
+            return call(normalPath, () -> store.get().exists(key));
         } catch (IllegalArgumentException e) {
             return false;
         }
@@ -97,7 +117,13 @@ public final class IcechunkKeyValueAccess implements KeyValueAccess {
 
     @Override
     public VolatileReadData createReadData(String normalPath) {
-        return VolatileReadData.from(new StoreRead(store.get(), key(normalPath), normalPath));
+        String key = key(normalPath);
+        Nodes cached = isMetadata(key) ? nodes(normalPath, false) : null;
+        String document = cached != null ? cached.metadata.get(nodePath(key)) : null;
+        if (document != null) {
+            return VolatileReadData.from(new DocumentRead(document.getBytes(UTF_8)));
+        }
+        return VolatileReadData.from(new StoreRead(store.get(), key, normalPath));
     }
 
     @Override
@@ -116,6 +142,10 @@ public final class IcechunkKeyValueAccess implements KeyValueAccess {
     @Override
     public String[] listDirectories(String normalPath) {
         String key = key(normalPath);
+        Nodes cached = nodes(normalPath, true);
+        if (cached != null && cached.metadata.containsKey(key)) {
+            return cached.children(key).toArray(new String[0]);
+        }
         List<String> directories = new ArrayList<>();
         for (String child : children(normalPath)) {
             if (isNode(key.isEmpty() ? child : key + "/" + child, normalPath)) {
@@ -151,7 +181,42 @@ public final class IcechunkKeyValueAccess implements KeyValueAccess {
 
     /** Whether {@code key} is the root or a group or array. */
     private boolean isNode(String key, String normalPath) {
-        return key.isEmpty() || call(normalPath, () -> store.get().exists(key + "/" + METADATA));
+        if (key.isEmpty()) {
+            return true;
+        }
+        Nodes cached = nodes(normalPath, false);
+        if (cached != null) {
+            return cached.metadata.containsKey(key);
+        }
+        return call(normalPath, () -> store.get().exists(key + "/" + METADATA));
+    }
+
+    /**
+     * The listing of the current store if it is read-only, or null. Only a listing reads it, so that opening one
+     * dataset by its path costs a few lookups rather than every node's metadata.
+     */
+    private Nodes nodes(String normalPath, boolean load) {
+        Store current = store.get();
+        Nodes cached = cache;
+        if (cached == null || cached.store != current) {
+            if (!load) {
+                return null;
+            }
+            cached = new Nodes(current, call(normalPath, () -> current.isReadOnly() ? current.listNodes() : null));
+            cache = cached;
+        }
+        return cached.metadata == null ? null : cached;
+    }
+
+    private static boolean isMetadata(String key) {
+        return key.equals(METADATA) || key.endsWith("/" + METADATA);
+    }
+
+    /** The node a {@code zarr.json} key belongs to. */
+    private static String nodePath(String metadataKey) {
+        return metadataKey.equals(METADATA)
+                ? ""
+                : metadataKey.substring(0, metadataKey.length() - METADATA.length() - 1);
     }
 
     /**
@@ -165,6 +230,10 @@ public final class IcechunkKeyValueAccess implements KeyValueAccess {
 
     private List<String> children(String normalPath) {
         String key = key(normalPath);
+        Nodes cached = nodes(normalPath, true);
+        if (cached != null && cached.metadata.containsKey(key)) {
+            return cached.listDir(key);
+        }
         return call(normalPath, () -> store.get().listDir(key));
     }
 
@@ -190,6 +259,78 @@ public final class IcechunkKeyValueAccess implements KeyValueAccess {
             operation.run();
             return null;
         });
+    }
+
+    /** The groups and arrays of a read-only store; {@code metadata} is null for a writable store. */
+    private static final class Nodes {
+        private static final List<String> ARRAY_ENTRIES = Collections.unmodifiableList(Arrays.asList(METADATA, "c"));
+
+        final Store store;
+        final Map<String, String> metadata;
+        private final Map<String, List<String>> children = new HashMap<>();
+
+        Nodes(Store store, Map<String, String> metadata) {
+            this.store = store;
+            this.metadata = metadata;
+            if (metadata == null) {
+                return;
+            }
+            for (String path : metadata.keySet()) {
+                if (!path.isEmpty()) {
+                    int slash = path.lastIndexOf('/');
+                    String parent = slash < 0 ? "" : path.substring(0, slash);
+                    children.computeIfAbsent(parent, p -> new ArrayList<>()).add(path.substring(slash + 1));
+                }
+            }
+        }
+
+        /** The names of the groups and arrays directly below the node {@code path}. */
+        List<String> children(String path) {
+            return children.getOrDefault(path, Collections.emptyList());
+        }
+
+        /** What {@link Store#listDir} returns for the node {@code path}. */
+        List<String> listDir(String path) {
+            if (isArray(path)) {
+                return ARRAY_ENTRIES;
+            }
+            List<String> entries = new ArrayList<>();
+            entries.add(METADATA);
+            entries.addAll(children(path));
+            return entries;
+        }
+
+        private boolean isArray(String path) {
+            if (children.containsKey(path)) {
+                return false;
+            }
+            JsonElement type =
+                    JsonParser.parseString(metadata.get(path)).getAsJsonObject().get("node_type");
+            return type != null && type.getAsString().equals("array");
+        }
+    }
+
+    /** Reads a {@code zarr.json} already in memory. */
+    private static final class DocumentRead implements LazyRead {
+        private final byte[] bytes;
+
+        DocumentRead(byte[] bytes) {
+            this.bytes = bytes;
+        }
+
+        @Override
+        public ReadData materialize(long offset, long length) {
+            int start = (int) offset;
+            return ReadData.from(bytes, start, length < 0 ? bytes.length - start : (int) length);
+        }
+
+        @Override
+        public long size() {
+            return bytes.length;
+        }
+
+        @Override
+        public void close() {}
     }
 
     /** Reads one key, fetching only the ranges n5 asks for. */

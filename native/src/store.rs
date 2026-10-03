@@ -2,7 +2,7 @@
 
 use bytes::Bytes;
 use futures::TryStreamExt as _;
-use icechunk::format::ByteRange;
+use icechunk::format::{ByteRange, Path};
 use icechunk::session::SessionErrorKind;
 use icechunk::store::{StoreError, StoreErrorKind};
 use jni::Env;
@@ -254,6 +254,24 @@ native! { fn storeList(
         }
     })??;
     strings(env, keys.iter())
+}}
+
+// Every node's path, without the leading slash, then its `zarr.json`, alternating. The
+// documents come from the session, so no manifest is read.
+native! { fn storeListNodes(env, store: jlong) -> JObjectArray<'l, JString<'l>> {
+    let store = handles::store(store)?;
+    let entries = block_on(async {
+        let session = store.session();
+        let session = session.read().await;
+        let mut entries = Vec::new();
+        for node in session.list_nodes(&Path::root()).await? {
+            let node = node?;
+            entries.push(node.path.to_string().trim_start_matches('/').to_owned());
+            entries.push(String::from_utf8_lossy(&node.user_data).into_owned());
+        }
+        Ok::<_, NativeError>(entries)
+    })??;
+    strings(env, entries.iter())
 }}
 
 native! { fn storeReadOnly(_, store: jlong) -> jboolean {

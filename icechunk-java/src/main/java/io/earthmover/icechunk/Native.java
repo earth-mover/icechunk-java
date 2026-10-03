@@ -14,7 +14,7 @@ final class Native {
      * signatures, the constants below, and the JSON documents they exchange. A library built for another version
      * would read arguments it does not understand, or crash the JVM, so loading checks it first.
      */
-    static final int ABI_VERSION = 2;
+    static final int ABI_VERSION = 3;
 
     static final int OPEN = 0;
     static final int CREATE = 1;
@@ -140,6 +140,8 @@ final class Native {
     static native boolean storeIsEmpty(long store, String prefix);
 
     static native String[] storeList(long store, int mode, String prefix);
+
+    static native String[] storeListNodes(long store);
 
     static native boolean storeReadOnly(long store);
 }
