@@ -17,6 +17,12 @@
 	<properties>
 		<!-- KeyValueAccessProvider is not in a released n5-universe yet. -->
 		<n5-universe-provider.version>3.1.1-SNAPSHOT</n5-universe-provider.version>
+		<!-- The versions Fiji ships. -->
+		<n5-ij.version>5.0.0</n5-ij.version>
+		<ij.version>1.54p</ij.version>
+		<imglib2.version>8.0.0</imglib2.version>
+		<!-- The version n5 depends on, as in icechunk-n5-codecs. -->
+		<scijava-common.version>2.99.2</scijava-common.version>
 	</properties>
 
 	<repositories>
@@ -47,7 +53,63 @@
 		</dependency>
 		<dependency>
 			<groupId>org.janelia.saalfeldlab</groupId>
+			<artifactId>n5-ij</artifactId>
+			<version>${n5-ij.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>ij</artifactId>
+			<version>${ij.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.scijava</groupId>
+			<artifactId>scijava-common</artifactId>
+			<version>${scijava-common.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2</artifactId>
+			<version>${imglib2.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.janelia.saalfeldlab</groupId>
 			<artifactId>n5-zarr</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<!-- What the exporter needs at run time, for an n5-ij installed into the local repository from its jar alone,
+		     whose POM lists no dependencies. -->
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2-algorithm</artifactId>
+			<version>0.18.3</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2-ij</artifactId>
+			<version>2.0.3</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2-cache</artifactId>
+			<version>1.0.0-beta-20</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.imglib2</groupId>
+			<artifactId>imglib2-realtransform</artifactId>
+			<version>4.0.5</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>net.imagej</groupId>
+			<artifactId>imagej-common</artifactId>
+			<version>2.1.1</version>
 			<scope>test</scope>
 		</dependency>
 		<dependency>
@@ -59,6 +121,23 @@
 
 	<build>
 		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<compilerArgs combine.children="append">
+						<!-- SciJava's processor indexes annotations without claiming them, which javac warns about. -->
+						<arg>-Xlint:-processing</arg>
+					</compilerArgs>
+					<annotationProcessorPaths combine.children="append">
+						<path>
+							<groupId>org.scijava</groupId>
+							<artifactId>scijava-common</artifactId>
+							<version>${scijava-common.version}</version>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-jar-plugin</artifactId>
