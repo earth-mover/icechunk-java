@@ -68,4 +68,5 @@ mvn -f n5-ij/pom.xml package -DskipTests
 
 For Fiji, replace its `jars/n5-universe-*.jar` and `jars/n5-ij-*.jar` with the jars the two builds produce, and add
 the icechunk-java jars listed under [Open from a URL](n5.md#open-from-a-url). Restart Fiji afterwards. Keep the
-original jars to switch back.
+original jars to switch back. [Use in Fiji](fiji.md) walks through every step, including building the icechunk-java
+jars.

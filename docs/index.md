@@ -95,8 +95,9 @@ an optional path inside the repository. An Arraylake repository opens by its web
 needs the separate icechunk-arraylake-java project on the classpath. URLs open read-only.
 
 Fiji needs builds of n5-universe and n5-ij that no release contains yet, in place of the ones it ships.
-[Changes in other projects](upstream.md) lists the changes and how to install them.
-[Open from a URL](n5.md#open-from-a-url) has the full URL syntax, the jars Fiji needs, and how credentials are found.
+[Use in Fiji](fiji.md) builds them and the icechunk-java jars and installs all six into Fiji.
+[Changes in other projects](upstream.md) lists the changes.
+[Open from a URL](n5.md#open-from-a-url) has the full URL syntax and how credentials are found.
 
 ## Modules
 
@@ -116,6 +117,7 @@ library bundled. [Get the jars](n5.md#get-the-jars) shows how to build and insta
 - [How the pieces fit](ecosystem.md) explains where these modules sit among icechunk, Zarr, N5 and Fiji, and which
   modules each goal needs.
 - [N5](n5.md) covers the N5 adapter, URLs, the numcodecs codecs, and how icechunk differs from a file system.
+- [Use in Fiji](fiji.md) builds and installs the jars Fiji needs to open repositories by URL.
 - [Changes in other projects](upstream.md) lists the n5-universe and n5-ij changes that opening by URL depends on.
 - The repository's `README.md` documents the Java API: storage, repositories, sessions, branches, tags and garbage
   collection.
