@@ -145,15 +145,14 @@ public final class SaveToIcechunk implements Command {
                     "give the repository's location without an icechunk: stage; the branch and path have their own"
                             + " fields: " + location);
         }
-        String repositoryLocation = IcechunkUrl.parse(location).location();
-        if (create && !IcechunkUrl.hasScheme(repositoryLocation)) {
-            try (Storage storage = Storage.localFilesystem(Paths.get(repositoryLocation))) {
-                if (!Repository.exists(storage)) {
-                    Repository.create(storage).close();
-                }
+        for (String size : chunkSize.split("[,;]", -1)) {
+            if (!size.trim().matches("[0-9]+") || Integer.parseInt(size.trim()) == 0) {
+                throw new IllegalArgumentException(
+                        "give the chunk size as positive whole numbers separated by commas, such as 64 or 64,64,16: "
+                                + chunkSize);
             }
         }
-        Repository repository = IcechunkKeyValueAccessProvider.repository(repositoryLocation);
+        Repository repository = repository(IcechunkUrl.parse(location).location());
         boolean createdBranch = !repository.listBranches().contains(branch);
         if (createdBranch) {
             repository.createBranch(branch, repository.lookupBranch("main"));
@@ -172,6 +171,33 @@ public final class SaveToIcechunk implements Command {
             }
             throw t;
         }
+    }
+
+    /** Opens the repository, first creating it if it is missing, asked to be, and at a local path. */
+    private Repository repository(String repositoryLocation) {
+        if (IcechunkUrl.hasScheme(repositoryLocation)) {
+            try {
+                return IcechunkKeyValueAccessProvider.repository(repositoryLocation);
+            } catch (N5Exception e) {
+                if (!create) {
+                    throw e;
+                }
+                throw new N5Exception(
+                        "cannot open " + location + ", and only repositories at local paths are created: "
+                                + e.getMessage(),
+                        e);
+            }
+        }
+        try (Storage storage = Storage.localFilesystem(Paths.get(repositoryLocation))) {
+            if (!Repository.exists(storage)) {
+                if (!create) {
+                    throw new N5Exception(
+                            "no repository at " + location + "; check Create repository if missing to create one");
+                }
+                Repository.create(storage).close();
+            }
+        }
+        return IcechunkKeyValueAccessProvider.repository(repositoryLocation);
     }
 
     private void export(KeyValueAccess store, String node)
@@ -221,19 +247,22 @@ public final class SaveToIcechunk implements Command {
     }
 
     /**
-     * Refuses, unless overwrite is set, to write where the exporter would overwrite: where a group or array exists, or
-     * below an array. With overwrite set, deletes that node in the session.
+     * Refuses to write below an array, and, unless overwrite is set, where a group or array exists. With overwrite set,
+     * deletes the group or array at {@code node} in the session.
      */
     private void clear(N5Writer n5, String node) {
-        String existing = n5.exists(node) ? node : arrayAbove(n5, node);
-        if (existing == null) {
+        String array = arrayAbove(n5, node);
+        if (array != null) {
+            throw new N5Exception((array.isEmpty() ? "the repository root" : array) + " is an array on branch " + branch
+                    + "; an image cannot be saved inside it");
+        }
+        if (!n5.exists(node)) {
             return;
         }
         if (!overwrite) {
-            throw new N5Exception((existing.isEmpty() ? "the repository root" : existing) + " already exists on branch "
-                    + branch + "; check Overwrite to replace it");
+            throw new N5Exception(node + " already exists on branch " + branch + "; check Overwrite to replace it");
         }
-        n5.remove(existing);
+        n5.remove(node);
     }
 
     /** The array at the root or a parent of {@code node}, or null if there is none. */

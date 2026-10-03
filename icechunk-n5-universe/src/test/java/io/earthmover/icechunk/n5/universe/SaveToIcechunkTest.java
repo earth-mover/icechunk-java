@@ -208,12 +208,12 @@ class SaveToIcechunkTest {
                 N5Exception.class,
                 () -> command(repo, "main", "cells3d/labels/nuclei", labels(1)).save());
         assertTrue(refused.getMessage().contains("cells3d/labels/nuclei already exists"), refused.getMessage());
-        N5Exception below = assertThrows(
-                N5Exception.class,
-                () -> command(repo, "main", "cells3d/labels/nuclei/s0/inner", labels(1))
-                        .save());
-        assertTrue(below.getMessage().contains("cells3d/labels/nuclei/s0 already exists"), below.getMessage());
+        SaveToIcechunk inside = command(repo, "main", "cells3d/labels/nuclei/s0/inner", labels(1));
+        inside.overwrite = true;
+        N5Exception below = assertThrows(N5Exception.class, inside::save);
+        assertTrue(below.getMessage().contains("cells3d/labels/nuclei/s0 is an array"), below.getMessage());
         assertEquals(first, tip(repo, "main"));
+        assertValues(new N5Factory().openReader(repo + "|icechunk://branch.main/cells3d/labels/nuclei"), "s0", 0);
 
         SaveToIcechunk overwrite = command(repo, "main", "cells3d/labels/nuclei", labels(1));
         overwrite.overwrite = true;
@@ -225,9 +225,10 @@ class SaveToIcechunkTest {
     @Test
     void createsALocalRepositoryOnlyWhenAsked() throws Exception {
         String repo = tmp.resolve("new repo").toString();
-        assertThrows(
+        N5Exception missing = assertThrows(
                 N5Exception.class,
                 () -> command(repo, "main", "cells", labels(0)).save());
+        assertTrue(missing.getMessage().contains("check Create repository if missing"), missing.getMessage());
 
         SaveToIcechunk create = command(repo, "main", "cells", labels(0));
         create.create = true;
@@ -285,6 +286,27 @@ class SaveToIcechunkTest {
         }
         assertLabels2d(main, 1);
         assertLabels2d(new N5Factory().openReader(repo + "|icechunk://" + second), 0);
+    }
+
+    @Test
+    void createsNoRepositoryElsewhere() {
+        SaveToIcechunk command = command("nobody:org/repo", "main", "cells", labels(0));
+        command.create = true;
+        N5Exception e = assertThrows(N5Exception.class, command::save);
+        assertTrue(e.getMessage().contains("only repositories at local paths are created"), e.getMessage());
+    }
+
+    @Test
+    void refusesABadChunkSizeBeforeWriting() {
+        String repo = repository();
+        SnapshotId main = tip(repo, "main");
+        for (String size : new String[] {"0", "abc", "64,,64", "", "64,-1"}) {
+            SaveToIcechunk command = command(repo, "main", "cells3d/labels/nuclei", labels(0));
+            command.chunkSize = size;
+            IllegalArgumentException e = assertThrows(IllegalArgumentException.class, command::save, size);
+            assertTrue(e.getMessage().contains("chunk size"), e.getMessage());
+        }
+        assertEquals(main, tip(repo, "main"));
     }
 
     private static final int CHANNELS = 3;
