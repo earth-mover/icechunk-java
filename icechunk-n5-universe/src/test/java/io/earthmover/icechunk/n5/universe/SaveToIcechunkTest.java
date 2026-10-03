@@ -301,7 +301,11 @@ class SaveToIcechunkTest {
             // wrong.
             {"a#b", "'#'"},
             {"a?b", "'?'"},
-            {"t0:x", "':'"}
+            {"t0:x", "':'"},
+            {"a\\b", "'\\'"},
+            {"../a", "'..' as a name"},
+            {"a/../b", "'..' as a name"},
+            {"./a", "'.' as a name"}
         };
         for (String[] c : cases) {
             IllegalArgumentException e =
@@ -324,13 +328,39 @@ class SaveToIcechunkTest {
     void refusesABadChunkSizeBeforeWriting() {
         String repo = repository();
         SnapshotId main = tip(repo, "main");
-        for (String size : new String[] {"0", "abc", "64,,64", "", "64,-1", "99999999999", "4,4,4,4"}) {
+        for (String size : new String[] {"0", "abc", "64,,64", "", "64,-1", "99999999999", "4,4,4,4,4,4"}) {
             SaveToIcechunk command = command(repo, "main", "cells3d/labels/nuclei", labels(0));
             command.chunkSize = size;
             IllegalArgumentException e = assertThrows(IllegalArgumentException.class, command::save, size);
             assertTrue(e.getMessage().contains("chunk size"), e.getMessage());
         }
         assertEquals(main, tip(repo, "main"));
+    }
+
+    @Test
+    void readsTheChunkSizeInTheOrderXYZCT() throws Exception {
+        String repo = repository();
+        SaveToIcechunk command = command(repo, "main", "cells3d/labels/nuclei", labels(0));
+        command.chunkSize = "4,3,2,1,1;";
+        command.pyramid = false;
+        command.save();
+        N5Reader n5 = new N5Factory().openReader(repo + "|icechunk://branch.main/cells3d/labels/nuclei");
+        assertArrayEquals(
+                new long[] {WIDTH, HEIGHT, DEPTH, 1, 1},
+                n5.getDatasetAttributes("s0").getDimensions());
+        assertArrayEquals(
+                new int[] {4, 3, 2, 1, 1}, n5.getDatasetAttributes("s0").getBlockSize());
+    }
+
+    @Test
+    void refusesAnIcechunkStageInTheLocation() {
+        String repo = repository();
+        for (String location :
+                new String[] {repo + "|icechunk://branch.other/x", repo + "%7Cicechunk://branch.other/x"}) {
+            IllegalArgumentException e = assertThrows(
+                    IllegalArgumentException.class, command(location, "main", "cells", labels(0))::save, location);
+            assertTrue(e.getMessage().contains("without an icechunk: stage"), e.getMessage());
+        }
     }
 
     private static final int CHANNELS = 3;

@@ -9,6 +9,7 @@ import io.earthmover.icechunk.n5.IcechunkKeyValueAccess;
 import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Paths;
+import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import org.janelia.saalfeldlab.n5.KeyValueAccess;
@@ -78,8 +79,9 @@ public final class SaveToIcechunk implements Command {
 
     @Parameter(
             label = "Chunk size",
-            description = "Comma separated, in ImageJ's axis order X,Y,C,Z,T, skipping axes of size 1. Missing values"
-                    + " repeat the last one.")
+            description = "Comma separated, in the order X,Y,Z,C,T, including axes of size 1. Missing Y and Z values"
+                    + " follow the voxel size so that chunks are near cubic, a missing C is 1, and a missing T repeats"
+                    + " the last value.")
     String chunkSize = "64";
 
     @Parameter(
@@ -102,14 +104,16 @@ public final class SaveToIcechunk implements Command {
 
     @Parameter(
             label = "Overwrite",
-            description = "Delete what is at the path before writing. Earlier snapshots keep it.",
+            description =
+                    "Delete what is at the path, and everything inside it, before writing. Earlier snapshots keep it.",
             persist = false)
     boolean overwrite = false;
 
     @Parameter(
             label = "Create repository if missing",
             description = "Create a new repository at a local path that holds none. Repositories elsewhere are never"
-                    + " created.")
+                    + " created.",
+            persist = false)
     boolean create = false;
 
     @Override
@@ -136,16 +140,17 @@ public final class SaveToIcechunk implements Command {
 
     /** Writes the image into a session on the branch and commits it. */
     SnapshotId save() throws IOException, InterruptedException, ExecutionException {
-        String node = N5URI.normalizeGroupPath(path == null ? "" : path);
+        String given = path == null ? "" : path;
+        checkPath(given);
+        String node = N5URI.normalizeGroupPath(given);
         if (node.isEmpty()) {
             throw new IllegalArgumentException("give a path inside the repository to save the image at");
         }
-        if (location.contains("|")) {
+        if (location.contains("|") || location.toLowerCase(Locale.ROOT).contains("%7c")) {
             throw new IllegalArgumentException(
                     "give the repository's location without an icechunk: stage; the branch and path have their own"
                             + " fields: " + location);
         }
-        checkPath(node);
         checkChunkSize();
         Repository repository = repository(IcechunkUrl.parse(location).location());
         boolean createdBranch = !repository.listBranches().contains(branch);
@@ -171,37 +176,34 @@ public final class SaveToIcechunk implements Command {
     /**
      * Refuses a path n5-universe cannot write OME-Zarr metadata for: it reads the image's path as a URI, which fails on
      * a space and other characters a URI path cannot hold, and misreads {@code ?}, {@code #}, {@code %} and {@code :}.
+     * Also refuses {@code .} and {@code ..} segments, which N5 would resolve to some other node or fail on.
      */
-    private static void checkPath(String node) {
-        for (int i = 0; i < node.length(); i++) {
-            char c = node.charAt(i);
+    private static void checkPath(String given) {
+        for (String segment : given.split("/", -1)) {
+            if (segment.equals(".") || segment.equals("..")) {
+                throw new IllegalArgumentException("the path cannot contain '" + segment
+                        + "' as a name; give the full path from the root: " + given);
+            }
+        }
+        for (int i = 0; i < given.length(); i++) {
+            char c = given.charAt(i);
             boolean allowed = (c < 128 && (Character.isLetterOrDigit(c) || "-._~!$&'()*+,;=@/".indexOf(c) >= 0))
                     || (c >= 128 && !Character.isSpaceChar(c) && !Character.isISOControl(c));
             if (!allowed) {
                 throw new IllegalArgumentException(
                         "the path cannot contain '" + c + "'" + (c == ' ' ? " (a space)" : "")
                                 + ", since n5-universe cannot write OME-Zarr metadata for it; use names like labels/stardist: "
-                                + node);
+                                + given);
             }
         }
     }
 
     /**
      * Refuses a chunk size the exporter would not use as given: it skips values that are not positive numbers and
-     * values beyond the image's axes of size above 1, rather than failing.
+     * values beyond its five axes X,Y,Z,C,T, rather than failing.
      */
     private void checkChunkSize() {
-        StringBuilder axes = new StringBuilder("XY");
-        if (image.getNChannels() > 1) {
-            axes.append('C');
-        }
-        if (image.getNSlices() > 1) {
-            axes.append('Z');
-        }
-        if (image.getNFrames() > 1) {
-            axes.append('T');
-        }
-        for (String level : chunkSize.split(";", -1)) {
+        for (String level : chunkSize.trim().replaceFirst(";+$", "").split(";", -1)) {
             String[] sizes = level.split(",", -1);
             for (String size : sizes) {
                 if (!size.trim().matches("0*[1-9][0-9]{0,8}")) {
@@ -210,9 +212,9 @@ public final class SaveToIcechunk implements Command {
                                     + " 64,64,16: " + chunkSize);
                 }
             }
-            if (sizes.length > axes.length()) {
+            if (sizes.length > 5) {
                 throw new IllegalArgumentException("the chunk size " + chunkSize + " has " + sizes.length
-                        + " values, but the image has " + axes.length() + " axes of size above 1 (" + axes + ")");
+                        + " values, but the image is saved with five axes, X,Y,Z,C,T");
             }
         }
     }
