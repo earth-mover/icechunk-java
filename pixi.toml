@@ -19,6 +19,25 @@ example = { cmd = "mvn -B -q install -DskipTests -pl examples -am && mvn -B -q -
 build-native-release = { cmd = "cargo build --release --manifest-path native/Cargo.toml" }
 bench = { cmd = "mvn -B -q package -DskipTests -pl benchmarks -am && java -jar benchmarks/target/benchmarks.jar -jvmArgsAppend -Dicechunk.native.dir=native/target/release -prof gc -rf json -rff benchmarks/target/results.json {{ args }}", args = [{ arg = "args", default = "" }], depends-on = ["build-native-release"] }
 check = { depends-on = ["lint-native", "test-native", "test"] }
+# icechunk-n5-universe builds only against the n5-universe fork, which must already be in the local Maven repository.
+fiji-jars = { cmd = "mvn -B install -DskipTests -Pn5-universe-provider -pl icechunk-java,icechunk-n5,icechunk-n5-universe,icechunk-n5-codecs -am && rm -rf target/fiji && mkdir -p target/fiji && cp icechunk-java/target/icechunk-java-*.jar icechunk-n5/target/icechunk-n5-*.jar icechunk-n5-universe/target/icechunk-n5-universe-*.jar icechunk-n5-codecs/target/icechunk-n5-codecs-*.jar target/fiji/ && rm target/fiji/icechunk-java-*-tests.jar", depends-on = ["bundle-native"] }
+
+# bundle-native puts the release library where the icechunk-java jar bundles it, in the directory NativeLoader looks in
+# for this platform.
+[target.osx-arm64.tasks]
+bundle-native = { cmd = "mkdir -p icechunk-java/src/main/resources/io/earthmover/icechunk/native/osx-aarch_64 && cp native/target/release/libicechunk_jni.dylib icechunk-java/src/main/resources/io/earthmover/icechunk/native/osx-aarch_64/", depends-on = ["build-native-release"] }
+
+[target.osx-64.tasks]
+bundle-native = { cmd = "mkdir -p icechunk-java/src/main/resources/io/earthmover/icechunk/native/osx-x86_64 && cp native/target/release/libicechunk_jni.dylib icechunk-java/src/main/resources/io/earthmover/icechunk/native/osx-x86_64/", depends-on = ["build-native-release"] }
+
+[target.linux-64.tasks]
+bundle-native = { cmd = "mkdir -p icechunk-java/src/main/resources/io/earthmover/icechunk/native/linux-x86_64 && cp native/target/release/libicechunk_jni.so icechunk-java/src/main/resources/io/earthmover/icechunk/native/linux-x86_64/", depends-on = ["build-native-release"] }
+
+[target.linux-aarch64.tasks]
+bundle-native = { cmd = "mkdir -p icechunk-java/src/main/resources/io/earthmover/icechunk/native/linux-aarch_64 && cp native/target/release/libicechunk_jni.so icechunk-java/src/main/resources/io/earthmover/icechunk/native/linux-aarch_64/", depends-on = ["build-native-release"] }
+
+[target.win-64.tasks]
+bundle-native = { cmd = "mkdir -p icechunk-java/src/main/resources/io/earthmover/icechunk/native/windows-x86_64 && cp native/target/release/icechunk_jni.dll icechunk-java/src/main/resources/io/earthmover/icechunk/native/windows-x86_64/", depends-on = ["build-native-release"] }
 
 [feature.docs.dependencies]
 zensical = ">=0.0.67,<0.1"
