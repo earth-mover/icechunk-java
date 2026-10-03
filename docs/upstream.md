@@ -56,17 +56,13 @@ The other n5-ij commits fix problems any large OME-Zarr container meets, icechun
 
 ## Install the forks
 
-Build each branch and install it into your local Maven repository, then build `icechunk-n5-universe` against it:
+[Use in Fiji](fiji.md) walks through every step: cloning both branches, installing the n5-universe fork into your
+local Maven repository, building the n5-ij fork and the icechunk-java jars, and replacing Fiji's own n5-universe and
+n5-ij jars. Code that only uses `N5Factory` needs the n5-universe branch alone:
 
 ```sh
 git clone -b kva-provider https://github.com/ianhi/n5-universe.git
-mvn -f n5-universe/pom.xml install -DskipTests
-
-git clone -b icechunk-pipe-uri https://github.com/ianhi/n5-ij.git
-mvn -f n5-ij/pom.xml package -DskipTests
+pixi run mvn -B -f n5-universe/pom.xml install -DskipTests
 ```
 
-For Fiji, replace its `jars/n5-universe-*.jar` and `jars/n5-ij-*.jar` with the jars the two builds produce, and add
-the icechunk-java jars listed under [Open from a URL](n5.md#open-from-a-url). Restart Fiji afterwards. Keep the
-original jars to switch back. [Use in Fiji](fiji.md) walks through every step, including building the icechunk-java
-jars.
+Run it from a clone of icechunk-java, where pixi provides Maven and the JDK.
