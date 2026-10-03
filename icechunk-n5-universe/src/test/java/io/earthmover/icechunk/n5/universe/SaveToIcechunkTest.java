@@ -292,7 +292,16 @@ class SaveToIcechunkTest {
     void refusesPathsTheMetadataCannotHold() throws Exception {
         String repo = repository();
         SnapshotId main = tip(repo, "main");
-        String[][] cases = {{"more cells", "a space"}, {"a#b", "'#'"}, {"a?b", "'?'"}, {"t0:x", "':'"}, {"a%20b", "'%'"}
+        String[][] cases = {
+            {"more cells", "' ' (a space)"},
+            {"a%20b", "'%'"},
+            {"a[1]", "'['"},
+            {"a|b", "'|'"},
+            // URI.create accepts these, but reads them as a query, fragment or scheme, so the dataset paths come out
+            // wrong.
+            {"a#b", "'#'"},
+            {"a?b", "'?'"},
+            {"t0:x", "':'"}
         };
         for (String[] c : cases) {
             IllegalArgumentException e =

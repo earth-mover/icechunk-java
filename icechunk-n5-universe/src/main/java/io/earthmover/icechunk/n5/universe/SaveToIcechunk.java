@@ -178,9 +178,10 @@ public final class SaveToIcechunk implements Command {
             boolean allowed = (c < 128 && (Character.isLetterOrDigit(c) || "-._~!$&'()*+,;=@/".indexOf(c) >= 0))
                     || (c >= 128 && !Character.isSpaceChar(c) && !Character.isISOControl(c));
             if (!allowed) {
-                throw new IllegalArgumentException("the path cannot contain "
-                        + (c == ' ' ? "a space" : "'" + c + "'")
-                        + ", since n5-universe cannot write OME-Zarr metadata for it: " + node);
+                throw new IllegalArgumentException(
+                        "the path cannot contain '" + c + "'" + (c == ' ' ? " (a space)" : "")
+                                + ", since n5-universe cannot write OME-Zarr metadata for it; use names like labels/stardist: "
+                                + node);
             }
         }
     }
