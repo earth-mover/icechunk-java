@@ -43,7 +43,10 @@ import org.scijava.ui.UIService;
 @Plugin(
         type = Command.class,
         menuPath = "File>Save As>icechunk...",
+        label = "Save to icechunk",
         description = "Save the current image into an icechunk repository as OME-Zarr, and commit it.")
+// Fiji's Swing dialogs still size text fields from the deprecated Parameter.columns.
+@SuppressWarnings("deprecation")
 public final class SaveToIcechunk implements Command {
     private static final String SCHEME = "icechunk-save";
 
@@ -61,6 +64,7 @@ public final class SaveToIcechunk implements Command {
 
     @Parameter(
             label = "Repository",
+            columns = 40,
             description = "The repository's location: a local path, s3://bucket/prefix, gs://bucket/prefix, an http(s)"
                     + " URL, or a name a repository resolver opens, such as al:org/repo.")
     String location;
@@ -70,11 +74,12 @@ public final class SaveToIcechunk implements Command {
 
     @Parameter(
             label = "Path in repository",
+            columns = 40,
             description = "The group to write the image to, such as cells3d/labels/nuclei. Missing parent groups are"
                     + " created.")
     String path;
 
-    @Parameter(label = "Commit message", required = false, persist = false)
+    @Parameter(label = "Commit message", required = false, persist = false, columns = 40)
     String message;
 
     @Parameter(
