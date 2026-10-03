@@ -12,6 +12,7 @@ use jni::sys::{JNI_VERSION_1_8, jint};
 
 mod buffers;
 mod call;
+mod codecs;
 #[cfg(test)]
 mod contract_tests;
 mod error;
@@ -80,7 +81,7 @@ pub mod ext {
 /// The version of the contract with `Native.java`, which checks it on load; it must equal
 /// `Native.ABI_VERSION`. Raise both whenever a native method's name or signature, a shared
 /// constant, or a JSON document format changes.
-pub(crate) const ABI_VERSION: jint = 3;
+pub(crate) const ABI_VERSION: jint = 4;
 
 call::native! { fn abiVersion(_) -> jint {
     Ok(ABI_VERSION)

@@ -44,6 +44,7 @@ try (Storage storage = Storage.localFilesystem(Paths.get("/tmp/my-repo"));
 | `icechunk-java` | `Storage`, `Repository`, `Session` and `Store`. No runtime dependencies besides the native library. |
 | `icechunk-zarr-java` | `IcechunkZarrStore`, which lets [zarr-java](https://github.com/zarr-developers/zarr-java) read and write arrays in a session. zarr-java itself is a `provided` dependency, so you choose its version. |
 | `icechunk-n5` | `IcechunkKeyValueAccess`, which lets [N5](https://github.com/saalfeldlab/n5)'s Zarr v3 reader and writer ([n5-zarr](https://github.com/saalfeldlab/n5-zarr)), and the Fiji and Paintera tools built on them, read and write a session. n5 is a `provided` dependency. |
+| `icechunk-n5-codecs` | Decoders for the `numcodecs.pcodec` and `numcodecs.zlib` Zarr v3 codecs, which n5-zarr finds on the classpath. They work on any store, not only icechunk. n5 and n5-zarr are `provided` dependencies. |
 | `examples` | Runnable programs. Not published. |
 
 Programs that only move Zarr keys and bytes, such as a store adapter for another library, need only

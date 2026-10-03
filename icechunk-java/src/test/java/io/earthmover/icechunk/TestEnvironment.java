@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -91,9 +92,20 @@ public final class TestEnvironment {
      * fails it if the script exits with an error.
      */
     public static String python(String script, String... args) throws IOException, InterruptedException {
+        return pythonWith(Collections.emptyList(), script, args);
+    }
+
+    /** {@link #python}, with the latest releases of {@code packages} as well. */
+    public static String pythonWith(List<String> packages, String script, String... args)
+            throws IOException, InterruptedException {
         require(hasUv(), "uv");
-        List<String> command = new ArrayList<>(Arrays.asList(
-                "uv", "run", "--no-project", "--with", "icechunk", "--with", "zarr", "--with", "numpy", "python"));
+        List<String> command = new ArrayList<>(
+                Arrays.asList("uv", "run", "--no-project", "--with", "icechunk", "--with", "zarr", "--with", "numpy"));
+        for (String name : packages) {
+            command.add("--with");
+            command.add(name);
+        }
+        command.add("python");
         command.add(PYTHON_SCRIPTS.resolve(script).toString());
         command.addAll(Arrays.asList(args));
         Path stderr = Files.createTempFile("icechunk-python-", ".log");

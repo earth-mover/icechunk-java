@@ -24,6 +24,7 @@
 		<module>icechunk-java</module>
 		<module>icechunk-zarr-java</module>
 		<module>icechunk-n5</module>
+		<module>icechunk-n5-codecs</module>
 		<module>examples</module>
 		<module>benchmarks</module>
 	</modules>

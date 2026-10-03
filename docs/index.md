@@ -14,5 +14,6 @@ commits as [icechunk-python](https://pypi.org/project/icechunk/), and read and w
 | `icechunk-java` | `Storage`, `Repository`, `Session` and `Store`. |
 | `icechunk-zarr-java` | `IcechunkZarrStore`, for [zarr-java](https://github.com/zarr-developers/zarr-java). |
 | `icechunk-n5` | `IcechunkKeyValueAccess`, for [N5](https://github.com/saalfeldlab/n5) and [n5-zarr](https://github.com/saalfeldlab/n5-zarr). See [N5](n5.md). |
+| `icechunk-n5-codecs` | The `numcodecs.pcodec` and `numcodecs.zlib` codecs for n5-zarr. See [N5](n5.md#numcodecs-codecs). |
 
 Until the rest of this site is written, the repository's `README.md` covers the Java API.
