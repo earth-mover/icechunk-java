@@ -7,6 +7,7 @@ nav = [
   { "N5" = "n5.md" },
   { "Use in Fiji" = "fiji.md" },
   { "Example: StarDist" = "stardist.md" },
+  { "Example: save results" = "write-back.md" },
   { "Changes in other projects" = "upstream.md" },
 ]
 

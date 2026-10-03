@@ -122,6 +122,12 @@ found.
 [Example: segment nuclei with StarDist](stardist.md) opens a microscopy image from Arraylake and segments it with
 StarDist through Appose.
 
+## Save into a repository
+
+**File > Save As > icechunk...** saves the active image into a repository as OME-Zarr and commits it, on a branch you
+choose. [Example: save results into icechunk](write-back.md) walks through saving an image and two segmentations of
+it, and opening an earlier one again by its snapshot ID.
+
 ## Troubleshooting
 
 **The dialog reads the URL as a local file path.** Fiji is still running its own n5-ij, or it was not restarted.

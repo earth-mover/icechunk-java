@@ -88,3 +88,6 @@ The template is
 [`StarDist_cellcast.py`](https://github.com/scijava/scripting-appose-python/blob/main/src/main/resources/script_templates/Appose/StarDist_cellcast.py)
 from [scripting-appose-python](https://github.com/scijava/scripting-appose-python). Its header names the Python
 packages it needs, and Appose builds the environment from that header.
+
+To keep the labels, and each later run's labels alongside them, save them into an icechunk repository:
+[Example: save results into icechunk](write-back.md) shows how.

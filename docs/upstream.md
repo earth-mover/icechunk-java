@@ -20,6 +20,7 @@ as the [N5](n5.md) page shows.
 | Open an icechunk URL from code, or from any tool that uses `N5Factory` | not possible: n5-universe has no way for another jar to add a backend | n5-universe [`fcc83c0`](https://github.com/ianhi/n5-universe/commit/fcc83c0) |
 | Type a URL containing `\|` into Fiji's HDF5/N5/Zarr/OME-NGFF dialog | the dialog reads it as a local path | also n5-ij [`4441e7f`](https://github.com/ianhi/n5-ij/commit/4441e7f) |
 | Open a local repository by path, such as `/data/repo\|icechunk://branch.main` | the branch is read as a node path | also n5-universe [`9e0c8d5`](https://github.com/ianhi/n5-universe/commit/9e0c8d5) |
+| Type a URL with a version, such as `s3://bucket/repo\|icechunk://branch.main` or a local path with one, into the dialog | the version is read as a node path | also n5-ij [`48062b9`](https://github.com/ianhi/n5-ij/commit/48062b9) |
 | Browse a repository with thousands of nodes in the dialog | the dialog freezes Fiji | n5-ij [`29742b3`](https://github.com/ianhi/n5-ij/commit/29742b3) |
 | Open OME-Zarr images with their `omero` channel colours, ranges and labels | images open as grey stacks | n5-ij [`8e180b9`](https://github.com/ianhi/n5-ij/commit/8e180b9) |
 | Select an OME-Zarr image, not only its full-resolution array, in the dialog | the selection is cleared | n5-ij [`2fa2799`](https://github.com/ianhi/n5-ij/commit/2fa2799) |
@@ -57,6 +58,9 @@ The other n5-ij commits fix problems any large OME-Zarr container meets, icechun
   full-resolution level.
 - [`48b03b3`](https://github.com/ianhi/n5-ij/commit/48b03b3): an image opened from the dialog loads on its own
   thread instead of the Swing event thread. Macros still wait for the image.
+- [`48062b9`](https://github.com/ianhi/n5-ij/commit/48062b9): the dialog leaves a URL with pipeline stages as parsed.
+  `URI.normalize` merges repeated slashes, which turned `|icechunk://branch.main` into `|icechunk:/branch.main`, a
+  node path.
 
 ## Install the forks
 
