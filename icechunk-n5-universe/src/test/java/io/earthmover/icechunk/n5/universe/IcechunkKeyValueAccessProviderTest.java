@@ -7,7 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import io.earthmover.icechunk.Repository;
+import io.earthmover.icechunk.RepositoryOptions;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.SnapshotId;
 import io.earthmover.icechunk.Storage;
@@ -110,6 +113,44 @@ class IcechunkKeyValueAccessProviderTest {
                         IcechunkKeyValueAccessProvider.anonymousAccess(config).keySet()));
         assertTrue(IcechunkKeyValueAccessProvider.anonymousAccess("{\"virtual_chunk_containers\": null}")
                 .isEmpty());
+    }
+
+    @Test
+    void layersTheRequestSizeOverTheStoredConfig() {
+        Path path = tmp.resolve("configured");
+        String stored = "{\"inline_chunk_threshold_bytes\": 7, \"virtual_chunk_containers\": {"
+                + "\"https://ftp.example.org/data/\": {\"url_prefix\": \"https://ftp.example.org/data/\","
+                + " \"store\": {\"http\": {}}}}}";
+        try (Storage storage = Storage.localFilesystem(path)) {
+            Repository.create(
+                            storage,
+                            RepositoryOptions.builder().configJson(stored).build())
+                    .close();
+        }
+
+        JsonObject config = JsonParser.parseString(IcechunkKeyValueAccessProvider.repository(path.toString())
+                        .configJson())
+                .getAsJsonObject();
+        assertEquals(
+                2 << 20,
+                config.getAsJsonObject("storage")
+                        .getAsJsonObject("concurrency")
+                        .get("ideal_concurrent_request_size")
+                        .getAsLong());
+        assertEquals(7, config.get("inline_chunk_threshold_bytes").getAsInt());
+        assertTrue(config.getAsJsonObject("virtual_chunk_containers").has("https://ftp.example.org/data/"));
+    }
+
+    @Test
+    void readsTheRequestSizeFromItsProperty() {
+        try {
+            System.setProperty("icechunk.requestSize", "1048576");
+            assertTrue(IcechunkKeyValueAccessProvider.storageConfig().contains("1048576"));
+            System.setProperty("icechunk.requestSize", "0");
+            assertThrows(N5Exception.class, IcechunkKeyValueAccessProvider::storageConfig);
+        } finally {
+            System.clearProperty("icechunk.requestSize");
+        }
     }
 
     @Test

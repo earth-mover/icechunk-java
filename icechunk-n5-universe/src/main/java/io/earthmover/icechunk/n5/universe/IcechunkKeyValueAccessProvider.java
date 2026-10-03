@@ -46,9 +46,18 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
  * <p>Virtual chunks are read from every container the repository declares, anonymously, so no credentials are ever
  * sent to a location the repository names. Containers on the local file system are not authorized. Setting the system
  * property {@code icechunk.virtualChunks} to {@code none} authorizes no containers.
+ *
+ * <p>icechunk splits a large read into ranged requests of about {@code icechunk.requestSize} bytes and sends them in
+ * parallel. This provider sets that size to 2 MiB, overriding the repository's own setting; icechunk's default is
+ * 12 MiB. It applies to every read from the repository: virtual chunks, and chunks and manifests on S3 or Google Cloud
+ * Storage. Set the system property to another number of bytes to change it.
  */
 public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvider {
     private static final Map<String, Repository> REPOSITORIES = new ConcurrentHashMap<>();
+
+    // A viewer reads one chunk at a time, often from servers that limit each connection's speed, so a chunk read as
+    // one request is slow. Several smaller ranged requests in parallel get past the per-connection limit.
+    private static final long DEFAULT_REQUEST_SIZE = 2 << 20;
 
     @Override
     public boolean test(URI uri) {
@@ -72,7 +81,7 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
     }
 
     /** Opens outside the map: opening can take seconds, and computeIfAbsent would block other locations meanwhile. */
-    private static Repository repository(String location) {
+    static Repository repository(String location) {
         Repository cached = REPOSITORIES.get(location);
         if (cached != null) {
             return cached;
@@ -138,8 +147,9 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
     }
 
     private static Repository open(Storage storage) {
+        RepositoryOptions.Builder options = RepositoryOptions.builder().configJson(storageConfig());
         try (Storage s = storage) {
-            Repository repo = Repository.open(s);
+            Repository repo = Repository.open(s, options.build());
             if ("none".equals(System.getProperty("icechunk.virtualChunks"))) {
                 return repo;
             }
@@ -148,12 +158,26 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
                 return repo;
             }
             repo.close();
-            RepositoryOptions.Builder options = RepositoryOptions.builder();
             containers.forEach(options::authorizeVirtualChunkAccess);
             return Repository.open(s, options.build());
         } catch (IcechunkException e) {
             throw new N5Exception.N5IOException("cannot open icechunk repository: " + e.getMessage(), e);
         }
+    }
+
+    /** The configuration layered over each repository's own: the request size {@code icechunk.requestSize} sets. */
+    static String storageConfig() {
+        String property = System.getProperty("icechunk.requestSize");
+        long size;
+        try {
+            size = property == null ? DEFAULT_REQUEST_SIZE : Long.parseLong(property.trim());
+        } catch (NumberFormatException e) {
+            size = 0;
+        }
+        if (size <= 0) {
+            throw new N5Exception("icechunk.requestSize must be a positive number of bytes: " + property);
+        }
+        return "{\"storage\": {\"concurrency\": {\"ideal_concurrent_request_size\": " + size + "}}}";
     }
 
     /**
