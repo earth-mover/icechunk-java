@@ -289,6 +289,21 @@ class SaveToIcechunkTest {
     }
 
     @Test
+    void refusesPathsTheMetadataCannotHold() throws Exception {
+        String repo = repository();
+        SnapshotId main = tip(repo, "main");
+        String[][] cases = {{"more cells", "a space"}, {"a#b", "'#'"}, {"a?b", "'?'"}, {"t0:x", "':'"}, {"a%20b", "'%'"}
+        };
+        for (String[] c : cases) {
+            IllegalArgumentException e =
+                    assertThrows(IllegalArgumentException.class, command(repo, "main", c[0], labels(0))::save, c[0]);
+            assertTrue(e.getMessage().contains("cannot contain " + c[1]), e.getMessage());
+        }
+        assertEquals(main, tip(repo, "main"));
+        command(repo, "main", "cells_3d/labels-v2/zellen-ä", labels(0)).save();
+    }
+
+    @Test
     void createsNoRepositoryElsewhere() {
         SaveToIcechunk command = command("nobody:org/repo", "main", "cells", labels(0));
         command.create = true;
@@ -300,7 +315,7 @@ class SaveToIcechunkTest {
     void refusesABadChunkSizeBeforeWriting() {
         String repo = repository();
         SnapshotId main = tip(repo, "main");
-        for (String size : new String[] {"0", "abc", "64,,64", "", "64,-1"}) {
+        for (String size : new String[] {"0", "abc", "64,,64", "", "64,-1", "99999999999", "4,4,4,4"}) {
             SaveToIcechunk command = command(repo, "main", "cells3d/labels/nuclei", labels(0));
             command.chunkSize = size;
             IllegalArgumentException e = assertThrows(IllegalArgumentException.class, command::save, size);

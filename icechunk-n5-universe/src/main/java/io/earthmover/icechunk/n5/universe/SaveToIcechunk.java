@@ -145,13 +145,8 @@ public final class SaveToIcechunk implements Command {
                     "give the repository's location without an icechunk: stage; the branch and path have their own"
                             + " fields: " + location);
         }
-        for (String size : chunkSize.split("[,;]", -1)) {
-            if (!size.trim().matches("[0-9]+") || Integer.parseInt(size.trim()) == 0) {
-                throw new IllegalArgumentException(
-                        "give the chunk size as positive whole numbers separated by commas, such as 64 or 64,64,16: "
-                                + chunkSize);
-            }
-        }
+        checkPath(node);
+        checkChunkSize();
         Repository repository = repository(IcechunkUrl.parse(location).location());
         boolean createdBranch = !repository.listBranches().contains(branch);
         if (createdBranch) {
@@ -170,6 +165,54 @@ public final class SaveToIcechunk implements Command {
                 }
             }
             throw t;
+        }
+    }
+
+    /**
+     * Refuses a path n5-universe cannot write OME-Zarr metadata for: it reads the image's path as a URI, which fails on
+     * a space and other characters a URI path cannot hold, and misreads {@code ?}, {@code #}, {@code %} and {@code :}.
+     */
+    private static void checkPath(String node) {
+        for (int i = 0; i < node.length(); i++) {
+            char c = node.charAt(i);
+            boolean allowed = (c < 128 && (Character.isLetterOrDigit(c) || "-._~!$&'()*+,;=@/".indexOf(c) >= 0))
+                    || (c >= 128 && !Character.isSpaceChar(c) && !Character.isISOControl(c));
+            if (!allowed) {
+                throw new IllegalArgumentException("the path cannot contain "
+                        + (c == ' ' ? "a space" : "'" + c + "'")
+                        + ", since n5-universe cannot write OME-Zarr metadata for it: " + node);
+            }
+        }
+    }
+
+    /**
+     * Refuses a chunk size the exporter would not use as given: it skips values that are not positive numbers and
+     * values beyond the image's axes of size above 1, rather than failing.
+     */
+    private void checkChunkSize() {
+        StringBuilder axes = new StringBuilder("XY");
+        if (image.getNChannels() > 1) {
+            axes.append('C');
+        }
+        if (image.getNSlices() > 1) {
+            axes.append('Z');
+        }
+        if (image.getNFrames() > 1) {
+            axes.append('T');
+        }
+        for (String level : chunkSize.split(";", -1)) {
+            String[] sizes = level.split(",", -1);
+            for (String size : sizes) {
+                if (!size.trim().matches("0*[1-9][0-9]{0,8}")) {
+                    throw new IllegalArgumentException(
+                            "give the chunk size as positive whole numbers separated by commas, such as 64 or"
+                                    + " 64,64,16: " + chunkSize);
+                }
+            }
+            if (sizes.length > axes.length()) {
+                throw new IllegalArgumentException("the chunk size " + chunkSize + " has " + sizes.length
+                        + " values, but the image has " + axes.length() + " axes of size above 1 (" + axes + ")");
+            }
         }
     }
 
