@@ -13,6 +13,7 @@ import io.earthmover.icechunk.SnapshotId;
 import io.earthmover.icechunk.Storage;
 import io.earthmover.icechunk.n5.IcechunkKeyValueAccess;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
 import org.janelia.saalfeldlab.n5.DataType;
 import org.janelia.saalfeldlab.n5.DatasetAttributes;
@@ -95,6 +96,20 @@ class IcechunkKeyValueAccessProviderTest {
     @Test
     void opensWritersNever() {
         assertThrows(N5Exception.class, () -> new N5Factory().openWriter(repo + "|icechunk:@branch.main"));
+    }
+
+    @Test
+    void authorizesDeclaredContainersAnonymously() {
+        String config = "{\"virtual_chunk_containers\": {"
+                + "\"https://ftp.example.org/data/\": {\"store\": {\"http\": {}}},"
+                + "\"s3://bucket/\": {\"store\": {\"s3_compatible\": {\"anonymous\": true}}},"
+                + "\"file:///home/\": {\"store\": {\"local_file_system\": \"/home\"}}}}";
+        assertEquals(
+                Arrays.asList("https://ftp.example.org/data/", "s3://bucket/"),
+                new ArrayList<>(
+                        IcechunkKeyValueAccessProvider.anonymousAccess(config).keySet()));
+        assertTrue(IcechunkKeyValueAccessProvider.anonymousAccess("{\"virtual_chunk_containers\": null}")
+                .isEmpty());
     }
 
     @Test

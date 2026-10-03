@@ -1,9 +1,15 @@
 package io.earthmover.icechunk.n5.universe;
 
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import io.earthmover.icechunk.AzureCredentials;
+import io.earthmover.icechunk.Credentials;
 import io.earthmover.icechunk.GcsCredentials;
 import io.earthmover.icechunk.GcsOptions;
 import io.earthmover.icechunk.IcechunkException;
 import io.earthmover.icechunk.Repository;
+import io.earthmover.icechunk.RepositoryOptions;
 import io.earthmover.icechunk.S3Credentials;
 import io.earthmover.icechunk.S3Options;
 import io.earthmover.icechunk.Session;
@@ -14,6 +20,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Paths;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
@@ -35,6 +42,10 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
  * AWS default chain, and anonymously if that fails, so public repositories open without credentials. An S3 bucket's
  * region is looked up from the bucket. Each repository is opened once and kept open; every URL opens a new session, so
  * a branch is read at its tip when the URL is opened.
+ *
+ * <p>Virtual chunks are read from every container the repository declares, anonymously, so no credentials are ever
+ * sent to a location the repository names. Containers on the local file system are not authorized. Setting the system
+ * property {@code icechunk.virtualChunks} to {@code none} authorizes no containers.
  */
 public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvider {
     private static final Map<String, Repository> REPOSITORIES = new ConcurrentHashMap<>();
@@ -128,9 +139,62 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
 
     private static Repository open(Storage storage) {
         try (Storage s = storage) {
-            return Repository.open(s);
+            Repository repo = Repository.open(s);
+            if ("none".equals(System.getProperty("icechunk.virtualChunks"))) {
+                return repo;
+            }
+            Map<String, Credentials> containers = anonymousAccess(repo.configJson());
+            if (containers.isEmpty()) {
+                return repo;
+            }
+            repo.close();
+            RepositoryOptions.Builder options = RepositoryOptions.builder();
+            containers.forEach(options::authorizeVirtualChunkAccess);
+            return Repository.open(s, options.build());
         } catch (IcechunkException e) {
             throw new N5Exception.N5IOException("cannot open icechunk repository: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Anonymous credentials for each virtual chunk container in a repository's configuration, by URL prefix. Local
+     * file system containers are left out: a repository opened from a URL should not read local files unasked.
+     */
+    static Map<String, Credentials> anonymousAccess(String configJson) {
+        Map<String, Credentials> access = new LinkedHashMap<>();
+        JsonElement containers =
+                JsonParser.parseString(configJson).getAsJsonObject().get("virtual_chunk_containers");
+        if (containers == null || !containers.isJsonObject()) {
+            return access;
+        }
+        for (Map.Entry<String, JsonElement> container :
+                containers.getAsJsonObject().entrySet()) {
+            JsonObject store = container.getValue().getAsJsonObject().getAsJsonObject("store");
+            String type = store == null || store.size() != 1
+                    ? ""
+                    : store.keySet().iterator().next();
+            Credentials credentials = anonymous(type);
+            if (credentials != null) {
+                access.put(container.getKey(), credentials);
+            }
+        }
+        return access;
+    }
+
+    private static Credentials anonymous(String storeType) {
+        switch (storeType) {
+            case "http":
+                return Credentials.http();
+            case "s3":
+            case "s3_compatible":
+            case "tigris":
+                return Credentials.s3(S3Credentials.anonymous());
+            case "gcs":
+                return Credentials.gcs(GcsCredentials.anonymous());
+            case "azure":
+                return Credentials.azure(AzureCredentials.anonymous());
+            default:
+                return null;
         }
     }
 
