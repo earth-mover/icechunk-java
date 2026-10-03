@@ -20,8 +20,12 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -55,9 +59,14 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
  * <p>A failed request is tried up to 10 times, waiting from 100 ms up to 10 s between tries. Some servers refuse
  * connections beyond a limit, and a viewer reading several chunks at once can reach it. The provider sets this over the
  * repository's settings, which for a repository on the local file system allow a single try.
+ *
+ * <p>A location that a {@link RepositoryResolver} on the classpath claims, such as an Arraylake repository name, is
+ * opened by that resolver, which supplies the repository's credentials, including those for its virtual chunks. The
+ * request size and retries apply to those repositories too.
  */
 public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvider {
     private static final Map<String, Repository> REPOSITORIES = new ConcurrentHashMap<>();
+    private static final List<RepositoryResolver> RESOLVERS = resolvers();
 
     // A viewer reads one chunk at a time, often from servers that limit each connection's speed, so a chunk read as
     // one request is slow. Several smaller ranged requests in parallel get past the per-connection limit.
@@ -65,7 +74,14 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
 
     @Override
     public boolean test(URI uri) {
-        return IcechunkUrl.claims(uri.toString());
+        if (IcechunkUrl.claims(uri.toString())) {
+            return true;
+        }
+        try {
+            return resolver(IcechunkUrl.parse(uri).location()) != null;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
     }
 
     @Override
@@ -100,6 +116,16 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
     }
 
     private static Repository open(String location) {
+        RepositoryResolver resolver = resolver(location);
+        if (resolver != null) {
+            try {
+                return resolver.open(
+                        location,
+                        RepositoryOptions.builder().configJson(storageConfig()).build());
+            } catch (IcechunkException e) {
+                throw new N5Exception.N5IOException("cannot open " + location + ": " + e.getMessage(), e);
+            }
+        }
         if (location.startsWith("s3://")) {
             String[] bucketAndPrefix = bucketAndPrefix(location, "s3://");
             String region = bucketRegion(bucketAndPrefix[0]);
@@ -167,6 +193,22 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
         } catch (IcechunkException e) {
             throw new N5Exception.N5IOException("cannot open icechunk repository: " + e.getMessage(), e);
         }
+    }
+
+    private static List<RepositoryResolver> resolvers() {
+        List<RepositoryResolver> resolvers = new ArrayList<>();
+        ServiceLoader.load(RepositoryResolver.class, IcechunkKeyValueAccessProvider.class.getClassLoader())
+                .forEach(resolvers::add);
+        return Collections.unmodifiableList(resolvers);
+    }
+
+    private static RepositoryResolver resolver(String location) {
+        for (RepositoryResolver resolver : RESOLVERS) {
+            if (resolver.claims(location)) {
+                return resolver;
+            }
+        }
+        return null;
     }
 
     /** The configuration layered over each repository's own: request size and retries. */

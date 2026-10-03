@@ -29,6 +29,24 @@ final class UrlKeyValueAccess implements KeyValueAccess {
         return IcechunkUrl.hasScheme(path) ? IcechunkUrl.stripSlashes(path) : N5URI.normalizeGroupPath(path);
     }
 
+    /**
+     * n5 composes paths onto the URL's path, which an opaque URL such as {@code al:org/repo|icechunk:} lacks, so for
+     * those the composed path is relative to the node.
+     */
+    @Override
+    public String compose(URI uri, String... components) {
+        if (!uri.isOpaque()) {
+            return KeyValueAccess.super.compose(uri, components);
+        }
+        StringBuilder path = new StringBuilder();
+        for (String component : components) {
+            if (component != null) {
+                IcechunkUrl.join(path, component);
+            }
+        }
+        return path.toString();
+    }
+
     @Override
     public boolean exists(String normalPath) {
         return store.exists(inStore(normalPath));

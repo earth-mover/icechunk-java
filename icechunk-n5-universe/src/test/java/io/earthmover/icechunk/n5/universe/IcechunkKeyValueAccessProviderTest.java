@@ -97,6 +97,18 @@ class IcechunkKeyValueAccessProviderTest {
     }
 
     @Test
+    void opensLocationsAResolverClaims() {
+        N5Factory factory = new N5Factory();
+        assertEquals(2, firstValue(factory.openReader("named:mine|icechunk:@branch.main/em data"), "raw"));
+        assertEquals(1, firstValue(factory.openReader("named:mine%7Cicechunk:@tag.v1"), "em data/raw"));
+        assertArrayEquals(
+                new String[] {"em data"}, factory.openReader("named:mine").list(""));
+        assertTrue(IcechunkKeyValueAccessProvider.repository("named:mine")
+                .configJson()
+                .contains("\"ideal_concurrent_request_size\":2097152"));
+    }
+
+    @Test
     void opensWritersNever() {
         assertThrows(N5Exception.class, () -> new N5Factory().openWriter(repo + "|icechunk:@branch.main"));
     }

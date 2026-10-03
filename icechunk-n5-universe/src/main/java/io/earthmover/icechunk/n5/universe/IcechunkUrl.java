@@ -20,7 +20,8 @@ import org.janelia.saalfeldlab.n5.N5URI;
  * </pre>
  *
  * <p>The part before the first {@code |} is the repository's location: {@code s3://}, {@code gs://},
- * {@code http(s)://}, {@code file://} or a local path. The {@code icechunk:} stage names the version as
+ * {@code http(s)://}, {@code file://}, a local path, or a location a {@link RepositoryResolver} claims, such as
+ * {@code al:org/repo} with the Arraylake resolver. The {@code icechunk:} stage names the version as
  * {@code @branch.NAME}, {@code @tag.NAME} or {@code @SNAPSHOT_ID}, followed by an optional node path; without a version
  * it is the main branch. A following {@code zarr3:} stage's path is joined onto the node path. A location ending in
  * {@code .icechunk} needs no stage. {@code %7C} is read as {@code |}, since URL fields percent-encode it.
