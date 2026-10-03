@@ -119,6 +119,9 @@ dialog. It suits multiscale OME-Zarr images, since it reads only the chunks on s
 [Open from a URL](n5.md#open-from-a-url) covers the URL syntax, other storage locations, and how credentials are
 found.
 
+[Example: segment nuclei with StarDist](stardist.md) opens a microscopy image from Arraylake and segments it with
+StarDist through Appose.
+
 ## Troubleshooting
 
 **The dialog reads the URL as a local file path.** Fiji is still running its own n5-ij, or it was not restarted.

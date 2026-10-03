@@ -6,6 +6,7 @@ nav = [
   { "How the pieces fit" = "ecosystem.md" },
   { "N5" = "n5.md" },
   { "Use in Fiji" = "fiji.md" },
+  { "Example: StarDist" = "stardist.md" },
   { "Changes in other projects" = "upstream.md" },
 ]
 
