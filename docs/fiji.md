@@ -3,7 +3,7 @@
 Fiji opens icechunk repositories by URL once six jars, built from source, are in its `jars/` folder. Its importer
 (**File > Import > HDF5/N5/Zarr/OME-NGFF ...**) and BigDataViewer's N5 viewer
 (**Plugins > BigDataViewer > HDF5/N5/Zarr/OME-NGFF Viewer**) then open a URL such as
-`s3://icechunk-public-data/v1/era5_weatherbench2|icechunk:@branch.main/1x721x1440`. To use icechunk from your own
+`s3://icechunk-public-data/v1/era5_weatherbench2|icechunk://branch.main/1x721x1440`. To use icechunk from your own
 N5 code instead, see [N5](n5.md).
 
 !!! warning "Experimental"
@@ -103,7 +103,7 @@ Start Fiji, then:
    credentials:
 
     ```text
-    s3://icechunk-public-data/v1/era5_weatherbench2|icechunk:@branch.main/1x721x1440
+    s3://icechunk-public-data/v1/era5_weatherbench2|icechunk://branch.main/1x721x1440
     ```
 
 3. Click **Detect datasets**. The tree lists the repository's arrays.

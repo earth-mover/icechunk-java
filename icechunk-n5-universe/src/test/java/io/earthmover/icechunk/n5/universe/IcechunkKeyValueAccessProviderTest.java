@@ -14,6 +14,7 @@ import io.earthmover.icechunk.RepositoryOptions;
 import io.earthmover.icechunk.Session;
 import io.earthmover.icechunk.SnapshotId;
 import io.earthmover.icechunk.Storage;
+import io.earthmover.icechunk.Version;
 import io.earthmover.icechunk.n5.IcechunkKeyValueAccess;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -81,16 +82,16 @@ class IcechunkKeyValueAccessProviderTest {
     @Test
     void opensVersions() {
         N5Factory factory = new N5Factory();
-        assertEquals(2, firstValue(factory.openReader(repo + "|icechunk:@branch.main"), "em data/raw"));
+        assertEquals(2, firstValue(factory.openReader(repo + "|icechunk://branch.main"), "em data/raw"));
         assertEquals(2, firstValue(factory.openReader(repo + "|icechunk:"), "em data/raw"));
-        assertEquals(1, firstValue(factory.openReader(repo + "|icechunk:@tag.v1"), "em data/raw"));
-        assertEquals(1, firstValue(factory.openReader(repo + "|icechunk:@" + first), "em data/raw"));
-        assertEquals(2, firstValue(factory.openReader("file://" + repo + "|icechunk:@branch.main"), "em data/raw"));
+        assertEquals(1, firstValue(factory.openReader(repo + "|icechunk://tag.v1"), "em data/raw"));
+        assertEquals(1, firstValue(factory.openReader(repo + "|icechunk://" + first), "em data/raw"));
+        assertEquals(2, firstValue(factory.openReader("file://" + repo + "|icechunk://branch.main"), "em data/raw"));
     }
 
     @Test
     void rootsTheReaderAtTheNode() {
-        N5Reader n5 = new N5Factory().openReader(repo + "|icechunk:@branch.main/em data");
+        N5Reader n5 = new N5Factory().openReader(repo + "|icechunk://branch.main/em data");
         assertArrayEquals(new String[] {"raw"}, n5.list(""));
         assertTrue(n5.datasetExists("raw"));
         assertEquals(2, firstValue(n5, "raw"));
@@ -99,8 +100,8 @@ class IcechunkKeyValueAccessProviderTest {
     @Test
     void opensLocationsAResolverClaims() {
         N5Factory factory = new N5Factory();
-        assertEquals(2, firstValue(factory.openReader("named:mine|icechunk:@branch.main/em data"), "raw"));
-        assertEquals(1, firstValue(factory.openReader("named:mine%7Cicechunk:@tag.v1"), "em data/raw"));
+        assertEquals(2, firstValue(factory.openReader("named:mine|icechunk://branch.main/em data"), "raw"));
+        assertEquals(1, firstValue(factory.openReader("named:mine%7Cicechunk://tag.v1"), "em data/raw"));
         assertArrayEquals(
                 new String[] {"em data"}, factory.openReader("named:mine").list(""));
         assertTrue(IcechunkKeyValueAccessProvider.repository("named:mine")
@@ -110,7 +111,7 @@ class IcechunkKeyValueAccessProviderTest {
 
     @Test
     void opensWritersNever() {
-        assertThrows(N5Exception.class, () -> new N5Factory().openWriter(repo + "|icechunk:@branch.main"));
+        assertThrows(N5Exception.class, () -> new N5Factory().openWriter(repo + "|icechunk://branch.main"));
     }
 
     @Test
@@ -173,15 +174,49 @@ class IcechunkKeyValueAccessProviderTest {
 
     @Test
     void parsesUrls() {
-        IcechunkUrl url = IcechunkUrl.parse("s3://bucket/repo%7Cicechunk:@tag.v1/a b|zarr3:c/");
+        IcechunkUrl url = IcechunkUrl.parse("s3://bucket/repo%7Cicechunk://tag.v1/a b|zarr3:c/");
         assertEquals("s3://bucket/repo", url.location());
         assertEquals("a b/c", url.path());
-        assertEquals("s3://bucket/repo|icechunk:@tag.v1/a b/c", url.toString());
+        assertEquals("s3://bucket/repo|icechunk://tag.v1/a b/c", url.toString());
         assertEquals("", IcechunkUrl.parse("/data/repo.icechunk/").path());
         assertTrue(IcechunkUrl.claims("/data/repo.icechunk/"));
         assertTrue(IcechunkUrl.claims("gs://b/r%7Cicechunk:"));
         assertFalse(IcechunkUrl.claims("s3://bucket/data.zarr"));
-        assertThrows(IllegalArgumentException.class, () -> IcechunkUrl.parse("s3://b/r|icechunk:@branch."));
+        assertThrows(IllegalArgumentException.class, () -> IcechunkUrl.parse("s3://b/r|icechunk://branch."));
         assertThrows(IllegalArgumentException.class, () -> IcechunkUrl.parse("s3://b/r|zip:"));
+    }
+
+    @Test
+    void parsesTheSpecificationsIcechunkExamples() {
+        String repo = "file:///path/to/repo.zarr.icechunk/";
+        for (String stage : new String[] {"icechunk:", "icechunk", "icechunk://branch.main/"}) {
+            IcechunkUrl url = IcechunkUrl.parse(repo + "|" + stage);
+            assertEquals(Version.branch("main"), url.version());
+            assertEquals("", url.path());
+            assertTrue(IcechunkUrl.claims(repo + "|" + stage));
+        }
+        for (String stage : new String[] {"icechunk:path/to/node/", "icechunk:/path/to/node/"}) {
+            assertEquals("path/to/node", IcechunkUrl.parse(repo + "|" + stage).path());
+        }
+        IcechunkUrl branch = IcechunkUrl.parse(repo + "|icechunk://branch.mybranch/path/to/node/");
+        assertEquals(Version.branch("mybranch"), branch.version());
+        assertEquals("path/to/node", branch.path());
+        assertEquals(
+                Version.tag("a"), IcechunkUrl.parse(repo + "|icechunk://tag.a").version());
+        assertEquals(
+                Version.snapshot(SnapshotId.of("FWWFQGAW742XMX0F5MF0")),
+                IcechunkUrl.parse(repo + "|icechunk://FWWFQGAW742XMX0F5MF0/path/to/node/")
+                        .version());
+        IcechunkUrl zarr = IcechunkUrl.parse(repo + "|icechunk://tag.v5/|zarr3:path/to/array/");
+        assertEquals(Version.tag("v5"), zarr.version());
+        assertEquals("path/to/array", zarr.path());
+        assertFalse(IcechunkUrl.claims("s3://b/icechunks|zarr3:"));
+    }
+
+    @Test
+    void rejectsTheEarlierDraftsVersionSyntax() {
+        IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class, () -> IcechunkUrl.parse("s3://b/r|icechunk:@branch.dev/em"));
+        assertTrue(e.getMessage().contains("icechunk://branch.dev/em"));
     }
 }

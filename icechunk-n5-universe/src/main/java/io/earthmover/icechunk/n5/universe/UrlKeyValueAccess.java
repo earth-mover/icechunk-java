@@ -13,14 +13,18 @@ import org.janelia.saalfeldlab.n5.readdata.VolatileReadData;
  */
 final class UrlKeyValueAccess implements KeyValueAccess {
     private final IcechunkKeyValueAccess store;
-    /** The decoded path of the URL, without trailing slashes, which every composed path starts with. */
+    /**
+     * The decoded path of the URL, without trailing slashes or repeated slashes, which every composed path starts with.
+     * n5 collapses the {@code //} of {@code icechunk://branch.main} in the paths it composes, so both sides are compared
+     * collapsed.
+     */
     private final String root;
     /** The node the URL names, relative to the repository root. */
     private final String node;
 
     UrlKeyValueAccess(IcechunkKeyValueAccess store, URI url, String node) {
         this.store = store;
-        this.root = IcechunkUrl.stripSlashes(IcechunkUrl.path(url));
+        this.root = collapseSlashes(IcechunkUrl.stripSlashes(IcechunkUrl.path(url)));
         this.node = node;
     }
 
@@ -102,10 +106,14 @@ final class UrlKeyValueAccess implements KeyValueAccess {
      * URL's, percent-encoded as n5 encodes names. A path without the URL's in front is relative to the node.
      */
     private String inStore(String normalPath) {
-        String path = IcechunkUrl.path(N5URI.getAsUri(normalPath));
+        String path = collapseSlashes(IcechunkUrl.path(N5URI.getAsUri(normalPath)));
         String relative = path.startsWith(root) ? path.substring(root.length()) : path;
         StringBuilder key = new StringBuilder(node);
         IcechunkUrl.join(key, relative);
         return N5URI.encodeAsUriPath(key.toString()).getRawPath();
+    }
+
+    private static String collapseSlashes(String path) {
+        return path.replaceAll("/{2,}", "/");
     }
 }

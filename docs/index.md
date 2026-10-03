@@ -85,13 +85,14 @@ BigDataViewer's N5 viewer (**Plugins > BigDataViewer > HDF5/N5/Zarr/OME-NGFF Vie
 typed into their dataset dialog:
 
 ```text
-/data/repo|icechunk:@branch.main
-s3://bucket/repo|icechunk:@tag.v1/em/raw
+/data/repo|icechunk://branch.main
+s3://bucket/repo|icechunk://tag.v1/em/raw
 https://app.earthmover.io/org/repo
 ```
 
 The part before `|` is the repository's location. The `icechunk:` stage names a branch, tag or snapshot, followed by
-an optional path inside the repository. An Arraylake repository opens by its web address, or as `al:org/repo`, and
+an optional path inside the repository, as the draft [URL pipeline specification](https://github.com/jbms/url-pipeline)
+defines; the specification is not yet an official Zarr standard. An Arraylake repository opens by its web address, or as `al:org/repo`, and
 needs the separate icechunk-arraylake-java project on the classpath. URLs open read-only.
 
 Fiji needs builds of n5-universe and n5-ij that no release contains yet, in place of the ones it ships.

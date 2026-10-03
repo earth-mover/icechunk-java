@@ -57,18 +57,20 @@ Fiji tools open an icechunk repository from a URL. The URL names the repository'
 `|icechunk:` the version and the node inside it:
 
 ```text
-s3://bucket/repo|icechunk:@branch.main/em/raw
-gs://bucket/repo|icechunk:@tag.v1
-/data/repo|icechunk:@GQQFH5G3AXKWZR5H33M0/labels
+s3://bucket/repo|icechunk://branch.main/em/raw
+gs://bucket/repo|icechunk://tag.v1
+/data/repo|icechunk://GQQFH5G3AXKWZR5H33M0/labels
 ```
 
-The version is `@branch.NAME`, `@tag.NAME` or a snapshot id; without one the URL opens the main branch.
+The version is `//branch.NAME`, `//tag.NAME` or `//SNAPSHOT_ID`; without one the URL opens the main branch. The
+syntax comes from the draft [URL pipeline specification](https://github.com/jbms/url-pipeline), which is not yet an
+official Zarr standard.
 [Open from a URL](n5.md#open-from-a-url) has the full syntax and how credentials are found. A read of one chunk goes
 down this stack:
 
 ```text
 n5-ij importer, or the N5 viewer in BigDataViewer
-  │  opens s3://bucket/repo|icechunk:@branch.main/em/raw
+  │  opens s3://bucket/repo|icechunk://branch.main/em/raw
   ▼
 n5-universe          N5Factory asks each KeyValueAccessProvider on the classpath for the URL
   ▼

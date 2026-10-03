@@ -19,6 +19,7 @@ as the [N5](n5.md) page shows.
 | Use icechunk from N5 code: `IcechunkKeyValueAccess`, or `N5Factory.openReader(format, kva, uri)` | works | nothing |
 | Open an icechunk URL from code, or from any tool that uses `N5Factory` | not possible: n5-universe has no way for another jar to add a backend | n5-universe [`fcc83c0`](https://github.com/ianhi/n5-universe/commit/fcc83c0) |
 | Type a URL containing `\|` into Fiji's HDF5/N5/Zarr/OME-NGFF dialog | the dialog reads it as a local path | also n5-ij [`4441e7f`](https://github.com/ianhi/n5-ij/commit/4441e7f) |
+| Open a local repository by path, such as `/data/repo\|icechunk://branch.main` | the branch is read as a node path | also n5-universe [`9e0c8d5`](https://github.com/ianhi/n5-universe/commit/9e0c8d5) |
 | Browse a repository with thousands of nodes in the dialog | the dialog freezes Fiji | n5-ij [`29742b3`](https://github.com/ianhi/n5-ij/commit/29742b3) |
 | Open OME-Zarr images with their `omero` channel colours, ranges and labels | images open as grey stacks | n5-ij [`8e180b9`](https://github.com/ianhi/n5-ij/commit/8e180b9) |
 | Select an OME-Zarr image, not only its full-resolution array, in the dialog | the selection is cleared | n5-ij [`2fa2799`](https://github.com/ianhi/n5-ij/commit/2fa2799) |
@@ -35,15 +36,18 @@ The other n5-ij commits fix problems any large OME-Zarr container meets, icechun
 
 - [`fcc83c0`](https://github.com/ianhi/n5-universe/commit/fcc83c0): a `KeyValueAccessProvider` service interface.
   `N5Factory` asks providers found through `java.util.ServiceLoader` before its built-in backends, so a jar on the
-  classpath can claim URLs such as `s3://bucket/repo|icechunk:@branch.main`. Strings with a scheme are parsed as
+  classpath can claim URLs such as `s3://bucket/repo|icechunk://branch.main`. Strings with a scheme are parsed as
   URIs even when they contain characters a URI must escape, instead of being taken for local paths.
 - [`2757f10`](https://github.com/ianhi/n5-universe/commit/2757f10): `KeyValueAccessProvider.register` and
   `unregister`, for providers an application adds at run time.
+- [`9e0c8d5`](https://github.com/ianhi/n5-universe/commit/9e0c8d5): a local path followed by URL stages, such as
+  `/data/repo|icechunk://branch.main`, keeps the stages' `//`. `java.nio.file.Paths` collapses repeated slashes, so
+  only the part before the first `|` goes through it.
 
 **n5-ij**
 
 - [`4441e7f`](https://github.com/ianhi/n5-ij/commit/4441e7f): the dataset dialog accepts URLs that need escaping,
-  such as `s3://bucket/repo|icechunk:@tag.v1`.
+  such as `s3://bucket/repo|icechunk://tag.v1`.
 - [`29742b3`](https://github.com/ianhi/n5-ij/commit/29742b3): the dialog finds each discovered node by walking its
   path rather than searching the whole tree, sorts the tree once, and matches names such as `1X [1]` that contain
   regular-expression characters.

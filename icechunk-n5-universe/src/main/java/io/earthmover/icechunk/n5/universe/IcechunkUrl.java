@@ -13,22 +13,23 @@ import org.janelia.saalfeldlab.n5.N5URI;
  * pipeline draft (formerly ZEP 8):
  *
  * <pre>
- * s3://bucket/repo|icechunk:@branch.main/em/raw
- * gs://bucket/repo|icechunk:@tag.v1
- * /data/repo|icechunk:@GQQFH5G3AXKWZR5H33M0/labels
+ * s3://bucket/repo|icechunk://branch.main/em/raw
+ * gs://bucket/repo|icechunk://tag.v1
+ * /data/repo|icechunk://GQQFH5G3AXKWZR5H33M0/labels
  * /data/repo.icechunk
  * </pre>
  *
  * <p>The part before the first {@code |} is the repository's location: {@code s3://}, {@code gs://},
  * {@code http(s)://}, {@code file://}, a local path, or a location a {@link RepositoryResolver} claims, such as
  * {@code al:org/repo} with the Arraylake resolver. The {@code icechunk:} stage names the version as
- * {@code @branch.NAME}, {@code @tag.NAME} or {@code @SNAPSHOT_ID}, followed by an optional node path; without a version
- * it is the main branch. A following {@code zarr3:} stage's path is joined onto the node path. A location ending in
+ * {@code //branch.NAME}, {@code //tag.NAME} or {@code //SNAPSHOT_ID}, followed by an optional node path; without a
+ * version it is the main branch, and the stage may be just {@code icechunk}. A following {@code zarr3:} stage's path is joined onto the node path. A location ending in
  * {@code .icechunk} needs no stage. {@code %7C} is read as {@code |}, since URL fields percent-encode it.
  */
 public final class IcechunkUrl {
     // Two or more characters, so a Windows drive letter is not taken for a scheme.
     private static final Pattern HAS_SCHEME = Pattern.compile("^[a-zA-Z][a-zA-Z0-9+.-]+:");
+    private static final Pattern ICECHUNK_STAGE = Pattern.compile("(\\||%7c)icechunk(:|\\||%7c|$)");
 
     private final String location;
     private final String ref;
@@ -45,9 +46,7 @@ public final class IcechunkUrl {
     /** Whether {@code url} names an icechunk repository: it has an {@code icechunk:} stage or ends in .icechunk. */
     public static boolean claims(String url) {
         String s = url.trim().toLowerCase(Locale.ROOT);
-        return s.contains("|icechunk:")
-                || s.contains("%7cicechunk:")
-                || stripSlashes(s).endsWith(".icechunk");
+        return ICECHUNK_STAGE.matcher(s).find() || stripSlashes(s).endsWith(".icechunk");
     }
 
     /** Parses a URI as n5 holds it, with names percent-encoded. A query or fragment is not part of the URL. */
@@ -69,10 +68,15 @@ public final class IcechunkUrl {
             String scheme = colon < 0 ? stage : stage.substring(0, colon);
             String rest = colon < 0 ? "" : stage.substring(colon + 1);
             if (scheme.equals("icechunk")) {
-                if (rest.startsWith("@")) {
-                    int slash = rest.indexOf('/');
-                    ref = slash < 0 ? rest.substring(1) : rest.substring(1, slash);
+                if (rest.startsWith("//")) {
+                    int slash = rest.indexOf('/', 2);
+                    ref = slash < 0 ? rest.substring(2) : rest.substring(2, slash);
                     rest = slash < 0 ? "" : rest.substring(slash + 1);
+                } else if (rest.startsWith("@")) {
+                    // An earlier draft's syntax, which Neuroglancer still uses. Read as a node path, it would open the
+                    // wrong node without an error.
+                    throw new IllegalArgumentException(
+                            "write the version as icechunk://" + rest.substring(1) + " in " + url);
                 }
                 join(path, rest);
             } else if (scheme.equals("zarr3")) {
@@ -160,6 +164,6 @@ public final class IcechunkUrl {
 
     @Override
     public String toString() {
-        return location + "|icechunk:@" + ref + (path.isEmpty() ? "" : "/" + path);
+        return location + "|icechunk://" + ref + (path.isEmpty() ? "" : "/" + path);
     }
 }

@@ -11,10 +11,10 @@ BigDataViewer's N5 viewer and [Paintera](https://github.com/saalfeldlab/paintera
 this jar on the classpath, `N5Factory` also opens URLs such as:
 
 ```
-s3://bucket/repo|icechunk:@branch.main/em/raw
-gs://bucket/repo|icechunk:@tag.v1
-/local/repo|icechunk:@tag.v1
-/local/repo|icechunk:@GQQFH5G3AXKWZR5H33M0/labels
+s3://bucket/repo|icechunk://branch.main/em/raw
+gs://bucket/repo|icechunk://tag.v1
+/local/repo|icechunk://tag.v1
+/local/repo|icechunk://GQQFH5G3AXKWZR5H33M0/labels
 /local/repo.icechunk
 ```
 
@@ -58,7 +58,7 @@ the application brings them. n5-universe finds the provider through `META-INF/se
 ## Example
 
 ```java
-N5Reader n5 = new N5Factory().openReader("s3://bucket/repo|icechunk:@branch.main/em");
+N5Reader n5 = new N5Factory().openReader("s3://bucket/repo|icechunk://branch.main/em");
 DatasetAttributes attributes = n5.getDatasetAttributes("raw");
 ```
 

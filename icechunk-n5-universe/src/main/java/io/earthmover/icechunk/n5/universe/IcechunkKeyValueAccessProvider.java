@@ -36,7 +36,7 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
 
 /**
  * Opens {@link IcechunkUrl icechunk URLs} through n5-universe, so any tool that opens a location with
- * {@link N5Factory}, such as n5-ij's importer, opens {@code s3://bucket/repo|icechunk:@branch.main/em/raw} as a Zarr v3
+ * {@link N5Factory}, such as n5-ij's importer, opens {@code s3://bucket/repo|icechunk://branch.main/em/raw} as a Zarr v3
  * container rooted at that node.
  *
  * <p>n5-universe finds this provider through {@code META-INF/services}, so putting the jar on the classpath is enough.
