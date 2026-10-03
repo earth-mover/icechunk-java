@@ -12,7 +12,7 @@
 
 	<artifactId>icechunk-n5-universe</artifactId>
 	<name>icechunk-n5-universe</name>
-	<description>Opens icechunk URLs, such as s3://bucket/repo|icechunk:@branch.main/path, through n5-universe's N5Factory.</description>
+	<description>Opens icechunk URLs, such as s3://bucket/repo|icechunk:@branch.main/path, through n5-universe's N5Factory. Needs an n5-universe with the KeyValueAccessProvider interface, which no release has yet.</description>
 
 	<properties>
 		<!-- KeyValueAccessProvider is not in a released n5-universe yet. -->

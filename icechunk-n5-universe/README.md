@@ -29,7 +29,10 @@ Use it to open icechunk repositories from N5 applications that take a URL, witho
 ## Requires an unreleased n5-universe
 
 The `KeyValueAccessProvider` interface this module implements is not in any n5-universe release. The module compiles
-against an n5-universe 3.1.1-SNAPSHOT that has it, built from a fork and installed into your local Maven repository.
+against an n5-universe 3.1.1-SNAPSHOT that has it, from the
+[`kva-provider` branch of ianhi/n5-universe](https://github.com/ianhi/n5-universe/tree/kva-provider), installed into
+your local Maven repository. [Changes in other projects](../docs/upstream.md) lists what else depends on that branch
+and on an n5-ij branch for Fiji.
 The default build skips this module; build it with the Maven profile `-Pn5-universe-provider`:
 
 ```sh

@@ -112,4 +112,5 @@ Opening by URL needs pieces that are not in released versions of n5-universe and
 - n5-ij's dataset dialog needs a change, not yet released, to accept URLs that contain `|`.
 
 Until those are released, Fiji opens icechunk URLs only with those n5-universe and n5-ij builds in place of the ones
-it ships.
+it ships. [Changes in other projects](upstream.md) links the branches that hold them, says which change each goal
+needs, and how to install them.
