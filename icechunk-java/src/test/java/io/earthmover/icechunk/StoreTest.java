@@ -70,6 +70,8 @@ class StoreTest {
         assertEquals(Optional.empty(), store.get("data/c/1"));
         assertEquals(Optional.empty(), store.get("nope/zarr.json"));
         assertFalse(store.exists("data/c/1"));
+        assertFalse(store.exists(".zgroup"));
+        assertFalse(store.exists("data/.zarray"));
         assertEquals(OptionalLong.empty(), store.getSize("data/c/1"));
     }
 

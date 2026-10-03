@@ -28,6 +28,17 @@
 		<module>benchmarks</module>
 	</modules>
 
+	<profiles>
+		<!-- Needs n5-universe with the KeyValueAccessProvider interface, which no release has yet: install it locally
+		     first, then build with -Pn5-universe-provider. -->
+		<profile>
+			<id>n5-universe-provider</id>
+			<modules>
+				<module>icechunk-n5-universe</module>
+			</modules>
+		</profile>
+	</profiles>
+
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<!-- The bytecode level. n5-universe and n5-ij compile for Java 8, and they must be able

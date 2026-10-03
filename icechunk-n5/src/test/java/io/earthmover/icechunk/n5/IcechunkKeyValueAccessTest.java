@@ -187,6 +187,19 @@ class IcechunkKeyValueAccessTest {
     }
 
     @Test
+    void n5UniverseGuessesZarrV3() {
+        try (Session session = repo.writableSession("main")) {
+            writer(session).createGroup("g");
+            IcechunkKeyValueAccess kva = new IcechunkKeyValueAccess(session);
+            assertFalse(kva.exists(".zarray"));
+            assertFalse(kva.exists("g/.zgroup"));
+            N5Reader n5 = new N5Factory().openReader(null, kva, URI.create(""));
+            assertInstanceOf(ZarrV3KeyValueReader.class, n5);
+            assertTrue(n5.exists("g"));
+        }
+    }
+
+    @Test
     void readOnlySessionsRejectWrites() {
         try (Session session = repo.readonlySession(Version.branch("main"))) {
             IcechunkKeyValueAccess kva = new IcechunkKeyValueAccess(session);

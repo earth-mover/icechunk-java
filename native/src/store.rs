@@ -163,7 +163,8 @@ native! { fn storeSetBuffer(
 native! { fn storeExists(env, store: jlong, key: JString<'l>) -> jboolean {
     let store = handles::store(store)?;
     let key = text(env, &key)?;
-    Ok(block_on(store.exists(&key))??)
+    // icechunk reports a Zarr v2 metadata key, which it never stores, as not found.
+    Ok(found(block_on(store.exists(&key))?)?.unwrap_or(false))
 }}
 
 native! { fn storeGetSize(env, store: jlong, key: JString<'l>) -> jlong {
