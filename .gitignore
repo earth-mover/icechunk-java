@@ -11,3 +11,9 @@ target/
 dependency-reduced-pom.xml
 /icechunk-java/src/main/resources/io/earthmover/icechunk/native/
 /site/
+
+# Eclipse metadata
+.classpath
+.factorypath
+.project
+.settings/
