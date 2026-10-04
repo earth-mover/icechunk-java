@@ -73,4 +73,4 @@ A store holds only Zarr metadata documents and chunks, so setting any other key 
 
 - [README.md](../README.md#using-the-api) walks through the API: storage backends, reading versions, commits,
   branches and tags, garbage collection, threads and errors.
-- [DESIGN.md](../DESIGN.md) explains how the JNI layer, handles and native library loading work.
+- [DESIGN.md](../dev/DESIGN.md) explains how the JNI layer, handles and native library loading work.

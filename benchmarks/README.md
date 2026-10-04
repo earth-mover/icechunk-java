@@ -40,5 +40,5 @@ The module compiles for Java 21, unlike the published modules, which target Java
 
 ## More
 
-- [DESIGN.md](../DESIGN.md#bytes) has the measurements behind the `Store` API's handling of bytes.
-- [DESIGN.md](../DESIGN.md#benchmarks) describes thread contention in the benchmarks.
+- [DESIGN.md](../dev/DESIGN.md#bytes) has the measurements behind the `Store` API's handling of bytes.
+- [DESIGN.md](../dev/DESIGN.md#benchmarks) describes thread contention in the benchmarks.

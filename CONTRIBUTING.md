@@ -1,6 +1,6 @@
 # Contributing
 
-Read [DESIGN.md](DESIGN.md) first; it explains the call flow and handle rules that every change has to follow.
+Read [DESIGN.md](dev/DESIGN.md) first; it explains the call flow and handle rules that every change has to follow.
 
 ## Setup
 

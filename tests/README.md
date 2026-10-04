@@ -32,4 +32,4 @@ assertion error when a check does not hold.
 ## More
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md) lists every build and test command.
-- [DESIGN.md](../DESIGN.md#testing) describes all the test suites, including icechunk's compatibility repositories.
+- [DESIGN.md](../dev/DESIGN.md#testing) describes all the test suites, including icechunk's compatibility repositories.

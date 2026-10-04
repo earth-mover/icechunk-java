@@ -71,4 +71,4 @@ repositories written with xarray, open as keys but cannot be decoded.
 ## More
 
 - [README.md](../README.md) covers the icechunk API: storage backends, versions, branches, tags and commits.
-- [DESIGN.md](../DESIGN.md#zarr-java-adapter) describes how the adapter maps zarr-java's calls to the store.
+- [DESIGN.md](../dev/DESIGN.md#zarr-java-adapter) describes how the adapter maps zarr-java's calls to the store.

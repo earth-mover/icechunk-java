@@ -1,7 +1,7 @@
 # Design
 
 This document explains how icechunk-java connects Java to the icechunk Rust library, and why. It is for people
-changing the binding. For using it, see the [README](README.md).
+changing the binding. For using it, see the [README](../README.md).
 
 ## The decision
 

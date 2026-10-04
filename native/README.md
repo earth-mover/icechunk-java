@@ -45,4 +45,4 @@ one combined library. `Cargo.toml` pins an exact icechunk release.
 
 - [CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-native-method) lists the steps to add a native method and to update
   icechunk.
-- [DESIGN.md](../DESIGN.md) explains the call flow, handles, runtime and extensions.
+- [DESIGN.md](../dev/DESIGN.md) explains the call flow, handles, runtime and extensions.

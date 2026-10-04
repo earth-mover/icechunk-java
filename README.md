@@ -82,12 +82,12 @@ object you forget to close is released by a
 [`java.lang.ref.Cleaner`](https://docs.oracle.com/javase/9/docs/api/java/lang/ref/Cleaner.html) once it becomes
 unreachable, where on Java 8 it stays open until the JVM exits. If you
 shade the jar into an uber-jar, keep `Multi-Release: true` in the merged manifest, or every JVM gets the Java 8
-classes. [DESIGN.md](DESIGN.md#handles) has the details.
+classes. [DESIGN.md](dev/DESIGN.md#handles) has the details.
 
 A development build loads the native library from `native/target/debug`, which the Maven build points to with the
 `icechunk.native.dir` system property. Set the same property when you use the jars from your own project, for
 example `-Dicechunk.native.dir=/path/to/icechunk-java/native/target/release`. Release jars bundle the library and
-need no property; see [DESIGN.md](DESIGN.md#packaging).
+need no property; see [DESIGN.md](dev/DESIGN.md#packaging).
 
 ## Using the API
 
@@ -187,7 +187,7 @@ Metadata values are JSON values: strings, booleans, numbers, lists, maps with st
 - `Store.set(key, buffer)` takes a `ByteBuffer`. Wrap arrays with `ByteBuffer.wrap`. A direct buffer of more than
   64 KiB is read in place, without copying; do not modify it afterwards.
 
-[DESIGN.md](DESIGN.md#bytes) has the measurements behind these choices.
+[DESIGN.md](dev/DESIGN.md#bytes) has the measurements behind these choices.
 
 ### History, branches and tags
 
@@ -261,7 +261,7 @@ Using a closed object throws `IllegalStateException`.
 
 ## Further reading
 
-- [DESIGN.md](DESIGN.md) explains how the binding works and why it is built this way.
+- [DESIGN.md](dev/DESIGN.md) explains how the binding works and why it is built this way.
 - [CONTRIBUTING.md](CONTRIBUTING.md) covers the build, the checks, and how to add a native method.
 - The [icechunk documentation](https://icechunk.io) explains repositories, sessions and version control in depth.
   The Java API has the same concepts under Java names, so `readonly_session(tag="v1")` in Python is

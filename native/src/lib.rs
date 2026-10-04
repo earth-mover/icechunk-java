@@ -3,7 +3,7 @@
 //! Every native method is a static method on `io.earthmover.icechunk.Native`. Each one
 //! runs on the calling Java thread: it reads its arguments, drives the icechunk future
 //! to completion on the shared tokio runtime, and returns the result or throws.
-//! `DESIGN.md` at the repository root explains the threading, handle and memory rules.
+//! `dev/DESIGN.md` explains the threading, handle and memory rules.
 
 use std::ffi::c_void;
 
