@@ -1,11 +1,14 @@
 # native
 
-The Rust crate `icechunk-jni`, which builds `icechunk_jni`, the native library behind the Java bindings. It
-implements the native methods declared in `Native.java` in [icechunk-java](../icechunk-java) on top of the
-[icechunk](https://crates.io/crates/icechunk) Rust crate. Every Java call into icechunk goes through it.
+The Rust crate `icechunk-jni`, which builds `icechunk_jni`, the native library behind the Java bindings.
 
-You only work here as a contributor: to add or change a native method, update icechunk, or debug the JNI layer.
-Users of the jars get a prebuilt copy, bundled in release jars of `icechunk-java`.
+- Every Java call into icechunk goes through the library. The crate implements the native methods declared in
+  `Native.java` in [icechunk-java](../icechunk-java) on top of the [icechunk](https://crates.io/crates/icechunk) Rust
+  crate.
+- This directory is for contributors who add or change a native method, update icechunk, or debug the JNI layer.
+  Users of the jars get a prebuilt copy, bundled in release jars of `icechunk-java`.
+- Clippy denies `unwrap`, `expect` and `panic` outside tests, since a panic in native code becomes an
+  error the Java caller has to handle.
 
 ## Building and checking
 
@@ -19,9 +22,6 @@ pinned in `rust-toolchain.toml` installs on first use.
 | `pixi run test-native` | Rust unit tests. |
 | `pixi run lint-native` | `cargo fmt --check` and clippy with warnings as errors. |
 | `pixi run format` | Formats the Rust and Java code. |
-
-Clippy denies `unwrap`, `expect` and `panic` outside tests: a panic in native code becomes an error the Java caller
-has to handle.
 
 ## Contents
 

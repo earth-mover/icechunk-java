@@ -4,43 +4,35 @@
 > Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
 > notice. See the [top-level README](../README.md).
 
-This module lets [n5-universe](https://github.com/saalfeldlab/n5-universe) open [icechunk](https://icechunk.io)
-repositories from a URL. n5-universe is a library of the [N5](https://github.com/saalfeldlab/n5) family whose
-`N5Factory` turns a location string into an N5 reader or writer. [Fiji](https://fiji.sc)'s N5/Zarr importer,
-BigDataViewer's N5 viewer and [Paintera](https://github.com/saalfeldlab/paintera) open containers through it. With
-this jar on the classpath, `N5Factory` also opens URLs such as:
+Opens [icechunk](https://icechunk.io) repositories by URL in
+[n5-universe](https://github.com/saalfeldlab/n5-universe), and saves Fiji images into them.
 
-```
-s3://bucket/repo|icechunk://branch.main/em/raw
-gs://bucket/repo|icechunk://tag.v1
-/local/repo|icechunk://tag.v1
-/local/repo|icechunk://GQQFH5G3AXKWZR5H33M0/labels
-/local/repo.icechunk
-```
+- With this jar on the classpath, `N5Factory` opens URLs such as
+  `s3://bucket/repo|icechunk://branch.main/em/raw`. So do the tools built on it: [Fiji](https://fiji.sc)'s N5/Zarr
+  importer, BigDataViewer's N5 viewer and [Paintera](https://github.com/saalfeldlab/paintera). URLs open
+  read-only.
+- In Fiji, **File > Save As > icechunk...** saves the current image as OME-Zarr into a branch and commits
+  it.
+- The module needs an unreleased n5-universe, so the default build skips it.
 
-The part before `|` is the repository: `s3://`, `gs://`, `http(s)://`, `file://` or a local path. The `icechunk:`
-stage names a branch, tag or snapshot, followed by an optional path to a group or array. Without a version it opens
-the `main` branch. A `RepositoryResolver` on the classpath can claim other locations: the separate
-icechunk-arraylake-java project provides one that opens Arraylake repositories by name, such as `al:org/repo` or
-`https://app.earthmover.io/org/repo`.
+[Open from a URL](../docs/n5.md#open-from-a-url) gives the URL syntax, credentials and what the provider does.
+[Use in Fiji](../docs/fiji.md) installs it into Fiji.
 
-Use it to open icechunk repositories from N5 applications that take a URL, without changing those applications.
+## Build
 
-## Requires an unreleased n5-universe
-
-The `KeyValueAccessProvider` interface this module implements is not in any n5-universe release. The module compiles
-against an n5-universe 3.1.1-SNAPSHOT that has it, from the
-[`kva-provider` branch of ianhi/n5-universe](https://github.com/ianhi/n5-universe/tree/kva-provider), installed into
-your local Maven repository. [Changes in other projects](../docs/upstream.md) lists what else depends on that branch
-and on an n5-ij branch for Fiji.
-The default build skips this module; build it with the Maven profile `-Pn5-universe-provider`:
+The `KeyValueAccessProvider` interface this module implements is in no n5-universe release. The module compiles
+against n5-universe 3.1.1-SNAPSHOT from the
+[`kva-provider` branch of ianhi/n5-universe](https://github.com/ianhi/n5-universe/tree/kva-provider). Install that
+branch into your local Maven repository, as in [Build the jars](../docs/fiji.md#build-the-jars), then build with the
+`-Pn5-universe-provider` profile:
 
 ```sh
 pixi run build-native
 pixi run mvn -B install -DskipTests -Pn5-universe-provider -pl icechunk-n5-universe -am
 ```
 
-At run time the application must also use that n5-universe build.
+At run time the application must also use that n5-universe build. [Changes in other projects](../docs/upstream.md)
+lists what the fork changes, and the n5-ij fork that Fiji's URL dialog needs.
 
 ## Dependency
 
@@ -52,8 +44,9 @@ At run time the application must also use that n5-universe build.
 </dependency>
 ```
 
-It depends on [icechunk-n5](../icechunk-n5) and [icechunk-java](../icechunk-java). n5 and n5-universe are `provided`:
-the application brings them. n5-universe finds the provider through `META-INF/services`, so no code registers it.
+- [icechunk-n5](../icechunk-n5) and [icechunk-java](../icechunk-java) come in transitively.
+- n5 and n5-universe are `provided`: the application brings them.
+- n5-universe finds the provider through `META-INF/services`, so no code registers it.
 
 ## Example
 
@@ -62,25 +55,18 @@ N5Reader n5 = new N5Factory().openReader("s3://bucket/repo|icechunk://branch.mai
 DatasetAttributes attributes = n5.getDatasetAttributes("raw");
 ```
 
-## Behavior
+To write, use `IcechunkKeyValueAccess` on a writable session, as in [icechunk-n5](../icechunk-n5).
 
-- URLs open read-only. `openWriter` throws, because a URL has no place for a commit. To write, use
-  `IcechunkKeyValueAccess` on a writable session, as in [icechunk-n5](../icechunk-n5).
-- In Fiji, **File > Save As > icechunk...** saves the current image as OME-Zarr into a branch of a repository and
-  commits it. n5-ij's exporter writes the image, so the metadata, pyramid and compression match Fiji's own export.
-  It can create a new repository at a local path, never elsewhere.
-- Each repository is opened once and kept open. Each URL opens a new session, so a branch is read at its tip when the
-  URL is opened.
-- S3 and Google Cloud Storage repositories open with the environment's credentials, such as the AWS default chain,
-  and anonymously if that fails. An S3 bucket's region is looked up from the bucket.
-- Virtual chunks are read from every container the repository declares, anonymously, so no credentials are sent to a
-  location the repository names. Containers on the local file system are never authorized. Set the system property
-  `icechunk.virtualChunks=none` to authorize none.
-- Large reads are split into parallel ranged requests of 2 MiB, overriding the repository's setting. Set the system
-  property `icechunk.requestSize` to another number of bytes to change it.
-- A failed request is tried up to 10 times, waiting from 100 ms up to 10 s between tries.
+## Save As in Fiji
+
+**File > Save As > icechunk...** (`SaveToIcechunk`) writes through n5-ij's OME-Zarr exporter, so the metadata, pyramid
+and compression match Fiji's own export.
+
+- A missing branch is created at the tip of `main`, and deleted again if the save fails.
+- Nothing is committed if the save fails.
+- A new repository is created only at a local path, and only when **Create repository if missing** is checked.
 
 ## More
 
-- [docs/n5.md](../docs/n5.md#open-from-a-url) covers opening from a URL alongside the rest of N5 over icechunk.
 - The javadoc of `IcechunkKeyValueAccessProvider` and `IcechunkUrl` gives the full URL syntax and open behavior.
+- [Example: save results into icechunk](../docs/write-back.md) uses Save As end to end.

@@ -1,7 +1,7 @@
 # examples
 
-Small programs that use the icechunk Java bindings. They are not published; read them as sample code, or run them
-from a clone of this repository.
+Small programs that use the icechunk Java bindings. Read them as sample code, or run them from a clone of this
+repository. They are not published.
 
 | Example | What it does |
 |---|---|
@@ -10,10 +10,9 @@ from a clone of this repository.
 | [`N5Basics`](src/main/java/io/earthmover/icechunk/examples/N5Basics.java) | Writes and reads a dataset with N5's n5-zarr, reads an older snapshot, opens through n5-universe, and keeps one writer across commits. |
 | [`fiji/Era5Temperature.groovy`](fiji/Era5Temperature.groovy) | A Fiji script that opens the same ERA5 data as an image stack through N5. |
 
-## Running
+## Run them
 
-You need [pixi](https://pixi.sh) and [rustup](https://rustup.rs), as for any build of this repository. From the
-repository root:
+You need [pixi](https://pixi.sh) and [rustup](https://rustup.rs). From the repository root:
 
 ```sh
 pixi run example                 # Quickstart
@@ -25,12 +24,14 @@ pixi run example N5Basics
 repository, and runs the class named by the argument.
 
 The Fiji script needs the `icechunk-java` and `icechunk-n5` jars in Fiji's `jars/` folder. Open it in Fiji's script
-editor (File > New > Script..., language Groovy) and run it there.
+editor (**File > New > Script...**, language Groovy) and run it there.
 
-The documentation pages include sections of `N5Basics.java` through the `--8<--` markers in its comments, so keep
-those markers when you edit it.
+## Edit them
+
+The documentation includes sections of `N5Basics.java` through the `--8<--` markers in its comments. Keep those
+markers when you edit it.
 
 ## More
 
-- [README.md](../README.md) describes the API these programs use.
-- [docs/n5.md](../docs/n5.md) walks through `N5Basics` section by section.
+- [Java API](../docs/java-api.md) describes the API these programs use.
+- [N5](../docs/n5.md) walks through `N5Basics` section by section.

@@ -5,7 +5,7 @@
     published to Maven Central, the API will change without notice, and there is no guarantee of fixes or
     compatibility. Do not use it for data you cannot afford to lose.
 
-**Java bindings for [icechunk](https://icechunk.io)**, plus connectors that let Java's Zarr and N5 tools use them.
+Java bindings for [icechunk](https://icechunk.io), plus connectors that let Java's Zarr and N5 tools use them.
 
 - **`icechunk-java`**: the bindings. They call icechunk's Rust library through JNI, so they read and write the same
   repositories as [icechunk-python](https://pypi.org/project/icechunk/).
@@ -38,9 +38,9 @@ repo.readonlySession(Version.tag("v1.0"));
 repo.readonlySession(Version.asOf("main", Instant.parse("2026-03-01T00:00:00Z")));
 ```
 
-A writable session collects changes until `session.commit(message)` makes them a new snapshot. The repository's
-`README.md`, under "Using the API", covers storage on S3, Google Cloud Storage and Azure, writing and committing,
-branches, tags, history and garbage collection.
+A writable session collects changes until `session.commit(message)` makes them a new snapshot. The
+[Java API](java-api.md) page covers storage on S3, Google Cloud Storage and Azure, writing and committing, branches,
+tags, history and garbage collection.
 
 ### With zarr-java
 
@@ -79,8 +79,8 @@ Zarr v3 reader and writer work on a session:
 --8<-- "N5Basics.java:write"
 ```
 
-This works with released n5, n5-zarr and n5-universe. The [N5](n5.md) page covers reading older versions, opening
-through n5-universe's `N5Factory`, and keeping one writer across commits.
+`icechunk-n5` works with released n5, n5-zarr and n5-universe. The [N5](n5.md) page covers reading older versions,
+opening through n5-universe's `N5Factory`, and keeping one writer across commits.
 
 ### In Fiji and BigDataViewer
 
@@ -94,35 +94,21 @@ s3://bucket/repo|icechunk://tag.v1/em/raw
 https://app.earthmover.io/org/repo
 ```
 
-The part before `|` is the repository's location. The `icechunk:` stage names a branch, tag or snapshot, followed by
-an optional path inside the repository, as the draft [URL pipeline specification](https://github.com/jbms/url-pipeline)
-defines; the specification is not yet an official Zarr standard. An Arraylake repository opens by its web address, or as `al:org/repo`, and
-needs the separate icechunk-arraylake-java project on the classpath. URLs open read-only.
+- URLs open read-only. To save from Fiji, use **File > Save As > icechunk...**.
+- Arraylake repositories open by web address, or as `al:org/repo`, with the separate icechunk-arraylake-java jar.
+- Fiji needs builds of n5-universe and n5-ij that no release contains yet. [Use in Fiji](fiji.md) installs them with
+  the icechunk-java jars.
+- [Open from a URL](n5.md#open-from-a-url) has the full syntax and how to pass credentials.
 
-Fiji needs builds of n5-universe and n5-ij that no release contains yet, in place of the ones it ships.
-[Use in Fiji](fiji.md) builds them and the icechunk-java jars and installs all six into Fiji.
-[Changes in other projects](upstream.md) lists the changes.
-[Open from a URL](n5.md#open-from-a-url) has the full URL syntax and how credentials are found.
-
-## Modules
-
-| Artifact | What it contains |
-|---|---|
-| `icechunk-java` | `Storage`, `Repository`, `Session` and `Store`. |
-| `icechunk-zarr-java` | `IcechunkZarrStore`, for [zarr-java](https://github.com/zarr-developers/zarr-java). |
-| `icechunk-n5` | `IcechunkKeyValueAccess`, for [N5](https://github.com/saalfeldlab/n5) and [n5-zarr](https://github.com/saalfeldlab/n5-zarr). See [N5](n5.md). |
-| `icechunk-n5-codecs` | The `numcodecs.pcodec` and `numcodecs.zlib` codecs for n5-zarr. See [N5](n5.md#numcodecs-codecs). |
-| `icechunk-n5-universe` | `IcechunkKeyValueAccessProvider`, which opens repositories from URLs through n5-universe's `N5Factory`. Builds only with `-Pn5-universe-provider`. |
+## Get the jars
 
 Nothing is on Maven Central. Tagged releases of the repository attach the jars to a GitHub release, with the native
 library bundled. [Get the jars](n5.md#get-the-jars) shows how to build and install them from source.
 
 ## More
 
-- [How the pieces fit](ecosystem.md) explains where these modules sit among icechunk, Zarr, N5 and Fiji, and which
-  modules each goal needs.
-- [N5](n5.md) covers the N5 adapter, URLs, the numcodecs codecs, and how icechunk differs from a file system.
-- [Use in Fiji](fiji.md) builds and installs the jars Fiji needs to open repositories by URL.
-- [Changes in other projects](upstream.md) lists the n5-universe and n5-ij changes that opening by URL depends on.
-- The repository's `README.md` documents the Java API: storage, repositories, sessions, branches, tags and garbage
-  collection.
+- [Java API](java-api.md): storage, sessions, commits, branches, tags, garbage collection and limitations.
+- [N5](n5.md): the N5 adapter, URLs, the numcodecs codecs, and how icechunk differs from a file system.
+- [Use in Fiji](fiji.md): build and install the jars Fiji needs.
+- [How the pieces fit](ecosystem.md): where the modules sit among icechunk, Zarr, N5 and Fiji, and which to use.
+- [Changes in other projects](upstream.md): the n5-universe and n5-ij changes that opening by URL depends on.

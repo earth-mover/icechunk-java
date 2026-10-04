@@ -1,20 +1,19 @@
 # Example: segment nuclei with StarDist
 
-This example opens a 3D microscopy image from an icechunk repository on [Arraylake](https://earthmover.io), takes
-20 slices of its nuclear stain, and segments the nuclei with [StarDist](https://github.com/stardist/stardist), a deep
-learning model that runs in Python.
+This example opens a 3D microscopy image from an icechunk repository on [Arraylake](https://earthmover.io) and
+segments its nuclei in Fiji with [StarDist](https://github.com/stardist/stardist), a deep learning model that runs in
+Python.
 
-Fiji runs it through [Appose](https://github.com/apposed/appose), which lets Fiji use Python deep learning models
-without leaving Fiji. Appose builds a Python environment from the packages a script names, runs the script in a
-separate worker process, and passes images between Fiji and Python through shared memory instead of copying them. A
-script in the Script Editor that starts with `#@script (language="appose-python")` runs this way, so nothing is
-installed by hand beyond the Fiji setup. The [Appose workshop](https://fiji.github.io/i2k-2025-appose/) covers writing
-such scripts.
-
-The image is `idr0062A` from Earthmover's demo copy of the
-[Image Data Resource](https://idr.openmicroscopy.org) (IDR). It comes from
-[idr0062](https://github.com/IDR/idr0062-blin-nuclearsegmentation), a study of nuclear segmentation in mouse tissue
-imaged by confocal microscopy, and has two channels, LaminB1 and DAPI, at 271 × 275 pixels and 236 slices.
+- The example opens the image by URL, takes 20 slices of its nuclear stain, and runs StarDist on them.
+- The image is `idr0062A` from Earthmover's demo copy of the [Image Data Resource](https://idr.openmicroscopy.org)
+  (IDR). It comes from [idr0062](https://github.com/IDR/idr0062-blin-nuclearsegmentation), a study of nuclear
+  segmentation in mouse tissue imaged by confocal microscopy: two channels, LaminB1 and DAPI, 271 × 275 pixels and
+  236 slices.
+- [Appose](https://github.com/apposed/appose) runs the Python. It builds a Python environment from the packages a
+  script names, runs the script in a separate worker process, and passes images through shared memory instead of
+  copying them. A Script Editor script that starts with `#@script (language="appose-python")` runs this way, so
+  nothing is installed by hand beyond the Fiji setup. The [Appose workshop](https://fiji.github.io/i2k-2025-appose/)
+  covers writing such scripts.
 
 ## What you need
 

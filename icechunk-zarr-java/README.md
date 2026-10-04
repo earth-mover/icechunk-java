@@ -4,13 +4,17 @@
 > Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
 > notice. See the [top-level README](../README.md).
 
-`IcechunkZarrStore` lets [zarr-java](https://github.com/zarr-developers/zarr-java), a Java implementation of
-[Zarr](https://zarr.dev), read and write arrays in an [icechunk](https://icechunk.io) repository. It implements
-zarr-java's `Store` over an icechunk session, so zarr-java's `Array` and `Group` classes work on a version of the
-repository the way they work on a directory or a bucket.
+`IcechunkZarrStore` lets [zarr-java](https://github.com/zarr-developers/zarr-java) read and write arrays in an
+[icechunk](https://icechunk.io) repository.
 
-Use it from a Java program that already uses zarr-java, or that wants Zarr arrays with version control: commits,
-branches, tags, and reading any earlier version.
+- It is a zarr-java `Store` over one session: zarr-java's `Array` and `Group` work on a version of the repository as
+  they do on a directory or a bucket.
+- The store does not own the session: commit through the session to save writes, and close it
+  yourself.
+- zarr-java reads numeric data types only. It cannot decode string, float16, complex or datetime arrays, which are
+  common in repositories written with xarray. See [Limitations](../docs/java-api.md#limitations).
+
+Repositories, versions, branches and commits are covered in [Java API](../docs/java-api.md).
 
 ## Dependency
 
@@ -27,9 +31,8 @@ branches, tags, and reading any earlier version.
 </dependency>
 ```
 
-It depends on [icechunk-java](../icechunk-java), which comes in transitively and needs the native library described
-there. zarr-java is a `provided` dependency, so you add it yourself and choose its version; this module is built
-against 0.3.1.
+- [icechunk-java](../icechunk-java) comes in transitively, and needs the native library described there.
+- zarr-java is `provided`, so you add it and choose its version. This module is built against 0.3.1.
 
 ## Example
 
@@ -63,12 +66,7 @@ try (Session earlier = repo.readonlySession(Version.snapshot(first))) {
 
 Run the whole program with `pixi run example Quickstart` from the repository root.
 
-The store does not own the session: close the session yourself, and commit through it to save writes.
-
-zarr-java reads numeric data types only, so arrays of strings, float16, complex numbers or datetimes, common in
-repositories written with xarray, open as keys but cannot be decoded.
-
 ## More
 
-- [README.md](../README.md) covers the icechunk API: storage backends, versions, branches, tags and commits.
+- [Java API](../docs/java-api.md) covers storage backends, versions, branches, tags and commits.
 - [DESIGN.md](../dev/DESIGN.md#zarr-java-adapter) describes how the adapter maps zarr-java's calls to the store.
