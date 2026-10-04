@@ -5,6 +5,7 @@ site_url = "https://earth-mover.github.io/icechunk-java/"
 nav = [
   { "Home" = "index.md" },
   { "How the pieces fit" = "ecosystem.md" },
+  { "Java API" = "java-api.md" },
   { "N5" = "n5.md" },
   { "Use in Fiji" = "fiji.md" },
   { "Example: StarDist" = "stardist.md" },

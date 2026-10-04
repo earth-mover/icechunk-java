@@ -1,16 +1,16 @@
 # Changes in other projects
 
-Opening icechunk repositories by URL, and opening them in Fiji, depends on changes to two Saalfeld lab projects,
-[n5-universe](https://github.com/saalfeldlab/n5-universe) and [n5-ij](https://github.com/saalfeldlab/n5-ij), that no
-release contains yet. They live on branches of forks until they are proposed and merged upstream:
+**Opening icechunk repositories by URL, in code or in Fiji, needs changes to
+[n5-universe](https://github.com/saalfeldlab/n5-universe) and [n5-ij](https://github.com/saalfeldlab/n5-ij) that no
+release contains yet.** They live on fork branches until they are proposed upstream:
 
-- n5-universe: [`ianhi/n5-universe`, branch `kva-provider`](https://github.com/ianhi/n5-universe/tree/kva-provider),
+- **n5-universe:** [`ianhi/n5-universe`, branch `kva-provider`](https://github.com/ianhi/n5-universe/tree/kva-provider),
   based on n5-universe `main` (3.1.1-SNAPSHOT).
-- n5-ij: [`ianhi/n5-ij`, branch `icechunk-pipe-uri`](https://github.com/ianhi/n5-ij/tree/icechunk-pipe-uri), based on
-  the n5-ij 5.0.0 release that Fiji ships.
+- **n5-ij:** [`ianhi/n5-ij`, branch `icechunk-pipe-uri`](https://github.com/ianhi/n5-ij/tree/icechunk-pipe-uri), based
+  on the n5-ij 5.0.0 release that Fiji ships.
 
-Using icechunk from N5 code needs neither: `IcechunkKeyValueAccess` works with released n5, n5-zarr and n5-universe,
-as the [N5](n5.md) page shows.
+N5 code needs neither: `IcechunkKeyValueAccess` works with released n5, n5-zarr and n5-universe, as the [N5](n5.md)
+page shows.
 
 ## What needs which change
 
@@ -27,9 +27,11 @@ as the [N5](n5.md) page shows.
 | Keep Fiji responsive while the selected image loads | the window freezes until the read finishes | n5-ij [`48b03b3`](https://github.com/ianhi/n5-ij/commit/48b03b3) |
 | Let an application register its own backends at run time, such as Paintera's writable containers | not possible | n5-universe [`2757f10`](https://github.com/ianhi/n5-universe/commit/2757f10) |
 
-Only the first n5-universe commit is needed to open icechunk URLs at all, and `icechunk-n5-universe` builds only
-against it (Maven profile `-Pn5-universe-provider`). The first n5-ij commit is needed to type those URLs into Fiji.
-The other n5-ij commits fix problems any large OME-Zarr container meets, icechunk or not.
+- **To open icechunk URLs at all**, only n5-universe `fcc83c0` is needed. `icechunk-n5-universe` builds against it,
+  with the Maven profile `-Pn5-universe-provider`.
+- **To type those URLs into Fiji**, n5-ij `4441e7f` and `48062b9` are needed too. A local path also needs
+  n5-universe `9e0c8d5`.
+- **The other n5-ij commits** fix problems any large OME-Zarr container meets, icechunk or not.
 
 ## The changes
 
@@ -64,13 +66,10 @@ The other n5-ij commits fix problems any large OME-Zarr container meets, icechun
 
 ## Install the forks
 
-[Use in Fiji](fiji.md) walks through every step: cloning both branches, installing the n5-universe fork into your
-local Maven repository, building the n5-ij fork and the icechunk-java jars, and replacing Fiji's own n5-universe and
-n5-ij jars. Code that only uses `N5Factory` needs the n5-universe branch alone:
+[Use in Fiji](fiji.md#build-the-jars) builds and installs both. Code that only uses `N5Factory` needs the
+n5-universe branch alone. From a clone of icechunk-java, where pixi provides Maven and the JDK:
 
 ```sh
-git clone -b kva-provider https://github.com/ianhi/n5-universe.git
-pixi run mvn -B -f n5-universe/pom.xml install -DskipTests
+git clone -b kva-provider https://github.com/ianhi/n5-universe.git ../n5-universe
+pixi run mvn -B -f ../n5-universe/pom.xml install -DskipTests
 ```
-
-Run it from a clone of icechunk-java, where pixi provides Maven and the JDK.

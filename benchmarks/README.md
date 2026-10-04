@@ -1,10 +1,11 @@
 # benchmarks
 
-[JMH](https://github.com/openjdk/jmh) benchmarks of the `Store` API in [icechunk-java](../icechunk-java), and a probe of
-the process's peak memory while it streams chunks. They measure what a call into the native library costs, so a change
-to a hot path can be compared before and after. Not published.
+**[JMH](https://github.com/openjdk/jmh) benchmarks of the `Store` API in [icechunk-java](../icechunk-java), and a
+probe of the process's peak memory while it streams chunks.**
 
-You only need them as a contributor changing how calls or bytes cross between Java and Rust.
+- **What a native call costs**, so a change to a hot path can be compared before and after.
+- **For contributors** changing how calls or bytes cross between Java and Rust. Not published.
+- **Java 21**, unlike the published modules, which target Java 8.
 
 ## Running
 
@@ -35,8 +36,6 @@ java -Dicechunk.native.dir=native/target/release -cp benchmarks/target/benchmark
 | `StoreBenchmark` | Average time per call of `get`, `get` of a suffix range, `exists`, `getPartialValues`, `set` from a heap array and `set` from a direct buffer, plus the fixed cost of one native call. Parameters: in-memory or local storage, and chunks of 64 B, 64 KiB or 1 MiB. |
 | `MemoryProbe` | Peak resident memory of the whole process, including native memory that JMH's allocation profiler cannot see. |
 | `Fixtures` | The one-array repository both use. |
-
-The module compiles for Java 21, unlike the published modules, which target Java 8.
 
 ## More
 

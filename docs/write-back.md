@@ -1,12 +1,12 @@
 # Example: save results into icechunk
 
-This example segments nuclei in one of Fiji's sample images with [StarDist](https://github.com/stardist/stardist), saves
-the image and each segmentation into a local icechunk repository, and then opens an earlier segmentation again after a
-later one has replaced it.
+**Each save into icechunk is a commit, so you can save a new result over an old one and still open the old one by
+its snapshot ID.**
 
-Each save is a commit, so each result gets a snapshot of its own. Saving with **Overwrite** replaces what the branch
-holds at a path, but the earlier snapshots still hold the replaced data, and any of them opens by its ID. You can rerun
-an analysis with new settings and save over the old result without losing it.
+- **Steps:** segment nuclei in one of Fiji's sample images with [StarDist](https://github.com/stardist/stardist),
+  save the image and the segmentation into a local repository, rerun with new settings and save over the result, then
+  reopen the first result.
+- **Overwrite** replaces what the branch holds at a path, but earlier snapshots still hold the replaced data.
 
 ## What you need
 
