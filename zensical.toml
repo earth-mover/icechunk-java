@@ -2,14 +2,19 @@
 site_name = "icechunk-java"
 site_description = "Experimental Java bindings for icechunk"
 site_url = "https://earth-mover.github.io/icechunk-java/"
+repo_url = "https://github.com/earth-mover/icechunk-java"
+repo_name = "earth-mover/icechunk-java"
+edit_uri = "edit/main/docs"
 nav = [
   { "Home" = "index.md" },
   { "How the pieces fit" = "ecosystem.md" },
   { "Java API" = "java-api.md" },
   { "N5" = "n5.md" },
   { "Use in Fiji" = "fiji.md" },
-  { "Example: StarDist" = "stardist.md" },
-  { "Example: save results" = "write-back.md" },
+  { "Examples" = [
+    { "Segment nuclei with StarDist" = "stardist.md" },
+    { "Save results into icechunk" = "write-back.md" },
+  ] },
   { "Changes in other projects" = "upstream.md" },
 ]
 

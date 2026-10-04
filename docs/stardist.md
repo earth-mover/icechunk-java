@@ -1,4 +1,4 @@
-# Example: segment nuclei with StarDist
+# Segment nuclei with StarDist
 
 This example opens a 3D microscopy image from an icechunk repository on [Arraylake](https://earthmover.io) and
 segments its nuclei in Fiji with [StarDist](https://github.com/stardist/stardist), a deep learning model that runs in
@@ -17,7 +17,7 @@ Python.
 
 ## What you need
 
-- Fiji set up as in [Use in Fiji](fiji.md), with the icechunk-arraylake-java jar added, since the image is on
+- Fiji set up as in [Use in Fiji](fiji.md), with the [icechunk-arraylake-java](https://github.com/earth-mover/icechunk-arraylake-java) jar added, since the image is on
   Arraylake.
 - An Arraylake login. The repository is readable by any signed-in Arraylake user. The jar uses the login that the
   Python client writes, so run `arraylake auth login` once with the

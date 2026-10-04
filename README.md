@@ -4,6 +4,9 @@
 > Experimental and not officially supported. This is not an Earthmover product and is not part of the icechunk
 > project's supported surface. Nothing is published to Maven Central, the API will change without notice, and there
 > is no guarantee of fixes or compatibility. Do not use it for data you cannot afford to lose.
+>
+> Interested in official support? [Open a GitHub issue](https://github.com/earth-mover/icechunk-java/issues)
+> and say what you would use it for.
 
 Java bindings for [icechunk](https://icechunk.io), plus connectors that let Java's Zarr and N5 tools use them.
 
@@ -58,9 +61,10 @@ and bytes needs only `icechunk-java`.
 
 ## Getting the jars
 
-Nothing is published to Maven Central. Tagged releases of this repository attach jars to a GitHub release, with the
-native library for Linux (x86_64, aarch64), macOS (x86_64, arm64) and Windows (x86_64) bundled inside `icechunk-java`.
-Put `icechunk-java` and the adapter you use on the classpath, plus zarr-java or n5 and n5-zarr.
+Nothing is on Maven Central, and no release is tagged yet, so build the jars from source ([Building](#building)).
+Tagged releases will attach the jars to a GitHub release, with the native library for Linux (x86_64, aarch64),
+macOS (x86_64, arm64) and Windows (x86_64) bundled inside `icechunk-java`. Put `icechunk-java` and the adapter you
+use on the classpath, plus zarr-java or n5 and n5-zarr.
 
 ## Building
 

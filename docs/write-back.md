@@ -1,4 +1,4 @@
-# Example: save results into icechunk
+# Save results into icechunk
 
 Each save into icechunk is a commit, so you can save a new result over an old one and still open the old one by its
 snapshot ID.
