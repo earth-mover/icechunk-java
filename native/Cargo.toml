@@ -2,7 +2,7 @@
 name = "icechunk-jni"
 version = "0.1.0"
 description = "JNI layer for the experimental icechunk Java bindings"
-repository = "https://github.com/earth-mover/icechunk"
+repository = "https://github.com/earth-mover/icechunk-java"
 license = "Apache-2.0"
 edition = "2024"
 rust-version = "1.95.0"

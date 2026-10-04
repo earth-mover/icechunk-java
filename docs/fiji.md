@@ -25,9 +25,10 @@ minutes.
 Fiji needs six jars: four from icechunk-java, and one each from forks of n5-universe and n5-ij. The forks carry
 changes no release contains yet; [Changes in other projects](upstream.md) lists them.
 
-1. Clone the two forks next to your clone of icechunk-java:
+1. Clone icechunk-java and the two forks side by side:
 
     ```sh
+    git clone https://github.com/earth-mover/icechunk-java.git
     git clone -b kva-provider https://github.com/ianhi/n5-universe.git
     git clone -b icechunk-pipe-uri https://github.com/ianhi/n5-ij.git
     cd icechunk-java
