@@ -5,14 +5,18 @@
     published to Maven Central, the API will change without notice, and there is no guarantee of fixes or
     compatibility. Do not use it for data you cannot afford to lose.
 
-icechunk-java lets Java programs read and write [icechunk](https://icechunk.io) repositories, the same repositories
-Python users work with through [icechunk-python](https://pypi.org/project/icechunk/). An icechunk repository holds
-[Zarr](https://zarr.dev) arrays with version control: commits, branches, tags, and reading the data as it was at an
-earlier snapshot or point in time. A repository can also hold virtual chunks, which point into existing files, such
-as TIFF, NetCDF or HDF5 files in a bucket, so the data is read from where it already lives instead of being copied.
-With icechunk-java, zarr-java and N5 code, and Fiji tools such as BigDataViewer, can open these repositories directly.
+**Java bindings for [icechunk](https://icechunk.io)**, plus connectors that let Java's Zarr and N5 tools use them.
 
-The bindings call the icechunk Rust library through JNI, so they read and write the same data as icechunk-python.
+- **`icechunk-java`**: the bindings. They call icechunk's Rust library through JNI, so they read and write the same
+  repositories as [icechunk-python](https://pypi.org/project/icechunk/).
+- **`icechunk-zarr-java`**: a store for [zarr-java](https://github.com/zarr-developers/zarr-java).
+- **`icechunk-n5`** and **`icechunk-n5-universe`**: N5 connectors. N5 code, Fiji and BigDataViewer open repositories by
+  URL, and Fiji saves images into them.
+- **`icechunk-n5-codecs`**: the pcodec and zlib codecs, which n5-zarr lacks.
+
+For what icechunk itself offers, such as version control for Zarr arrays and virtual chunks that read existing TIFF,
+NetCDF or HDF5 files in place, see the [icechunk docs](https://icechunk.io). [How the pieces fit](ecosystem.md) shows
+how the modules connect.
 
 ## Use it
 
