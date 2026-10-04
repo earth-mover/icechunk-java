@@ -93,6 +93,25 @@ try (Session session = repo.writableSession("main")) {
 session.commit("Add March data", CommitOptions.builder().metadata("source", "era5").build());
 ```
 
+With zarr-java, wrap the writable session in an `IcechunkZarrStore` and write arrays as usual:
+
+```java
+try (Session session = repo.writableSession("main")) {
+    IcechunkZarrStore store = new IcechunkZarrStore(session);
+    Group.create(store.resolve());
+    Array array = Array.create(
+            store.resolve("my_array"),
+            Array.metadataBuilder()
+                    .withShape(10)
+                    .withDataType(DataType.INT32)
+                    .withChunkShape(5)
+                    .withFillValue(0)
+                    .build());
+    array.write(data);
+    session.commit("Add my_array");
+}
+```
+
 Metadata values are JSON values: strings, booleans, numbers, lists, maps with string keys, and null.
 
 ## Large values and memory

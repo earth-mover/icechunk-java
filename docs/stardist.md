@@ -1,4 +1,4 @@
-# Example: segment nuclei with StarDist
+# Segment nuclei with StarDist
 
 This example opens a 3D microscopy image from an icechunk repository on [Arraylake](https://earthmover.io) and
 segments its nuclei in Fiji with [StarDist](https://github.com/stardist/stardist), a deep learning model that runs in

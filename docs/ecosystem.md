@@ -1,12 +1,45 @@
 # How the pieces fit
 
-icechunk-java connects icechunk, a versioned store for Zarr written in Rust, to Java's array libraries and the Fiji
-tools built on them.
+icechunk-java lets Java code and Fiji read and write [icechunk](https://icechunk.io) repositories. icechunk keeps
+Zarr arrays under version control, and its engine is a Rust library. icechunk-java wraps that library for Java, and
+its adapter modules plug it in underneath zarr-java and N5, the libraries that Fiji's Zarr tools are built on.
 
-- On the storage side: Zarr, icechunk, icechunk-python and Arraylake.
-- On the Java side: zarr-java, N5, n5-zarr and n5-universe, and the applications on top of them: Fiji, n5-ij,
-  BigDataViewer and Paintera.
-- The module you need depends on which Java library you use ([Which module to use](#which-module-to-use)).
+## What provides what
+
+| Piece | From | Provides |
+|---|---|---|
+| icechunk | the icechunk project, in Rust | repositories: Zarr v3 with commits, branches and tags, on a local directory, S3, Google Cloud Storage or HTTP |
+| `icechunk-java` | this project | the Rust library in Java, over JNI: `Repository`, `Session` and `Store` |
+| `icechunk-zarr-java` | this project | a zarr-java store that reads and writes through a session |
+| `icechunk-n5` | this project | an N5 `KeyValueAccess` that reads and writes through a session |
+| `icechunk-n5-universe` | this project | a provider that lets n5-universe's `N5Factory` open a repository from a URL |
+| zarr-java, N5, n5-zarr, n5-universe | other projects | arrays, chunks, codecs and OME-NGFF metadata, read through whichever store they are given |
+| Fiji, n5-ij, BigDataViewer, Paintera | other projects | the applications you work in |
+
+The Java libraries and applications are unchanged except for opening by URL, which needs forks of n5-universe and
+n5-ij ([Changes in other projects](upstream.md)).
+
+## Use it from Java
+
+Pick the modules for the library your code already uses:
+
+| Goal | Modules |
+|---|---|
+| Read and write Zarr keys and bytes from your own code, or write an adapter for another Zarr library | `icechunk-java` |
+| Read and write arrays with zarr-java | `icechunk-java`, `icechunk-zarr-java` |
+| Read and write arrays with N5 and n5-zarr, or in an application built on them, such as Paintera | `icechunk-java`, `icechunk-n5` |
+| Open repositories by URL in Fiji's importer, BigDataViewer's N5 viewer, or other code that uses `N5Factory` | `icechunk-java`, `icechunk-n5`, `icechunk-n5-universe` |
+
+- Add `icechunk-n5-codecs` to either N5 row when arrays use `numcodecs.pcodec` or `numcodecs.zlib`, which
+  zarr-python can write and n5-zarr cannot decode on its own.
+
+## Use it in Fiji
+
+- **Open**: Fiji's importer and BigDataViewer's N5 viewer take a repository URL, such as
+  `s3://bucket/repo|icechunk://branch.main/em/raw`, wherever they take a path. URLs open read-only.
+- **Save**: **File > Save As > icechunk...** writes the active image as OME-Zarr and commits it to a branch.
+- **Install**: Fiji needs six jars built from source, two of which replace jars Fiji ships.
+  [Use in Fiji](fiji.md) builds and installs them.
 
 ## The projects
 
@@ -18,9 +51,9 @@ tools built on them.
   [Zarr version 3](https://zarr-specs.readthedocs.io/en/latest/v3/core/index.html) only.
 - [icechunk](https://icechunk.io) is a transactional storage engine for Zarr, written in Rust. A repository keeps a
   Zarr hierarchy and its history: each commit is a snapshot, and branches and tags name snapshots, as in git. Virtual
-  chunks read byte ranges inside existing NetCDF, HDF5 or TIFF files where they live.
-- [icechunk-python](https://pypi.org/project/icechunk/) is the Python binding for icechunk, used with
-  [zarr-python](https://zarr.readthedocs.io) and [xarray](https://xarray.dev).
+  chunks read byte ranges inside existing NetCDF, HDF5 or TIFF files where they live. A repository is the same from
+  either language: what [icechunk-python](https://pypi.org/project/icechunk/) writes with
+  [zarr-python](https://zarr.readthedocs.io) and [xarray](https://xarray.dev), icechunk-java reads, and the reverse.
 - [Arraylake](https://earthmover.io) is Earthmover's managed service that hosts icechunk repositories and holds their
   credentials. The separate icechunk-arraylake-java project opens Arraylake repositories as icechunk-java
   `Repository` objects.
@@ -46,8 +79,7 @@ tools built on them.
   the chunks on screen. Its [N5 viewer](https://github.com/saalfeldlab/n5-viewer) opens containers through n5-ij's
   dialog and `N5Factory` (**Plugins > BigDataViewer > HDF5/N5/Zarr/OME-NGFF Viewer**).
 - [Paintera](https://github.com/saalfeldlab/paintera) is a tool for painting and proofreading labels in large 3D
-  images, built on BigDataViewer and N5. icechunk-java builds against the n5, n5-zarr and n5-universe versions it
-  pins.
+  images, built on BigDataViewer and N5.
 - [OME-NGFF](https://ngff.openmicroscopy.org), also called OME-Zarr, is the convention for storing microscopy images
   in Zarr: multiscale pyramids, axes, channels and labels. OME-Zarr stored in icechunk is still OME-Zarr, so n5-ij and
   the N5 viewer read its metadata as usual.
@@ -82,17 +114,3 @@ icechunk (Rust)      finds the chunk in the snapshot's manifests and fetches it
   **File > Save As > icechunk...**, which commits ([Use in Fiji](fiji.md#save-into-a-repository)).
 - Arraylake repositories open the same way, as `al:org/repo`, once icechunk-arraylake-java is on the classpath. It
   supplies the storage and credentials, including those for virtual chunks.
-
-## Which module to use
-
-| Goal | Modules |
-|---|---|
-| Read and write Zarr keys and bytes from your own code, or write an adapter for another Zarr library | `icechunk-java` |
-| Read and write arrays with zarr-java | `icechunk-java`, `icechunk-zarr-java` |
-| Read and write arrays with N5 and n5-zarr, or in an application built on them, such as Paintera | `icechunk-java`, `icechunk-n5` |
-| Open repositories by URL in Fiji's importer, BigDataViewer's N5 viewer, or other code that uses `N5Factory` | `icechunk-java`, `icechunk-n5`, `icechunk-n5-universe` |
-
-- Add `icechunk-n5-codecs` to either N5 row when arrays use `numcodecs.pcodec` or `numcodecs.zlib`, which
-  zarr-python can write and n5-zarr cannot decode on its own.
-- Opening by URL needs unreleased forks of n5-universe and n5-ij. [Changes in other projects](upstream.md) lists
-  what they change, and [Use in Fiji](fiji.md) installs them.
