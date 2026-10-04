@@ -1,8 +1,8 @@
 # Changes in other projects
 
-**Opening icechunk repositories by URL, in code or in Fiji, needs changes to
+Opening icechunk repositories by URL, in code or in Fiji, needs changes to
 [n5-universe](https://github.com/saalfeldlab/n5-universe) and [n5-ij](https://github.com/saalfeldlab/n5-ij) that no
-release contains yet.** They live on fork branches until they are proposed upstream:
+release contains yet. They live on fork branches until they are proposed upstream:
 
 - **n5-universe:** [`ianhi/n5-universe`, branch `kva-provider`](https://github.com/ianhi/n5-universe/tree/kva-provider),
   based on n5-universe `main` (3.1.1-SNAPSHOT).
@@ -27,15 +27,15 @@ page shows.
 | Keep Fiji responsive while the selected image loads | the window freezes until the read finishes | n5-ij [`48b03b3`](https://github.com/ianhi/n5-ij/commit/48b03b3) |
 | Let an application register its own backends at run time, such as Paintera's writable containers | not possible | n5-universe [`2757f10`](https://github.com/ianhi/n5-universe/commit/2757f10) |
 
-- **To open icechunk URLs at all**, only n5-universe `fcc83c0` is needed. `icechunk-n5-universe` builds against it,
+- To open icechunk URLs at all, only n5-universe `fcc83c0` is needed. `icechunk-n5-universe` builds against it,
   with the Maven profile `-Pn5-universe-provider`.
-- **To type those URLs into Fiji**, n5-ij `4441e7f` and `48062b9` are needed too. A local path also needs
+- To type those URLs into Fiji, n5-ij `4441e7f` and `48062b9` are needed too. A local path also needs
   n5-universe `9e0c8d5`.
-- **The other n5-ij commits** fix problems any large OME-Zarr container meets, icechunk or not.
+- The other n5-ij commits fix problems any large OME-Zarr container meets, icechunk or not.
 
 ## The changes
 
-**n5-universe**
+### n5-universe
 
 - [`fcc83c0`](https://github.com/ianhi/n5-universe/commit/fcc83c0): a `KeyValueAccessProvider` service interface.
   `N5Factory` asks providers found through `java.util.ServiceLoader` before its built-in backends, so a jar on the
@@ -47,7 +47,7 @@ page shows.
   `/data/repo|icechunk://branch.main`, keeps the stages' `//`. `java.nio.file.Paths` collapses repeated slashes, so
   only the part before the first `|` goes through it.
 
-**n5-ij**
+### n5-ij
 
 - [`4441e7f`](https://github.com/ianhi/n5-ij/commit/4441e7f): the dataset dialog accepts URLs that need escaping,
   such as `s3://bucket/repo|icechunk://tag.v1`.

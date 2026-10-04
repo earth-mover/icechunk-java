@@ -1,6 +1,6 @@
 # examples
 
-**Small programs that use the icechunk Java bindings.** Read them as sample code, or run them from a clone of this
+Small programs that use the icechunk Java bindings. Read them as sample code, or run them from a clone of this
 repository. They are not published.
 
 | Example | What it does |

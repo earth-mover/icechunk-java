@@ -1,11 +1,11 @@
 # tests
 
-**The Python side of the interop tests, which check that icechunk-java and icechunk-python read each other's
-repositories.**
+The Python side of the interop tests, which check that icechunk-java and icechunk-python read each other's
+repositories.
 
-- **Python scripts only.** The Java tests live in each module's `src/test` and start these scripts.
-- **For contributors**, when an interop test fails or when you add one.
-- **Needs [uv](https://docs.astral.sh/uv/)**, which runs each script with the latest icechunk, zarr and numpy releases.
+- This directory holds only the Python scripts. The Java tests live in each module's `src/test` and start these scripts.
+- Read it when an interop test fails or when you add one.
+- The scripts need [uv](https://docs.astral.sh/uv/), which runs each script with the latest icechunk, zarr and numpy releases.
 
 ## Running
 

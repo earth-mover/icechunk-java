@@ -5,7 +5,7 @@
     published to Maven Central, the API will change without notice, and there is no guarantee of fixes or
     compatibility. Do not use it for data you cannot afford to lose.
 
-**Java bindings for [icechunk](https://icechunk.io)**, plus connectors that let Java's Zarr and N5 tools use them.
+Java bindings for [icechunk](https://icechunk.io), plus connectors that let Java's Zarr and N5 tools use them.
 
 - **`icechunk-java`**: the bindings. They call icechunk's Rust library through JNI, so they read and write the same
   repositories as [icechunk-python](https://pypi.org/project/icechunk/).
@@ -79,8 +79,8 @@ Zarr v3 reader and writer work on a session:
 --8<-- "N5Basics.java:write"
 ```
 
-This works with released n5, n5-zarr and n5-universe. The [N5](n5.md) page covers reading older versions, opening
-through n5-universe's `N5Factory`, and keeping one writer across commits.
+`icechunk-n5` works with released n5, n5-zarr and n5-universe. The [N5](n5.md) page covers reading older versions,
+opening through n5-universe's `N5Factory`, and keeping one writer across commits.
 
 ### In Fiji and BigDataViewer
 
@@ -94,11 +94,11 @@ s3://bucket/repo|icechunk://tag.v1/em/raw
 https://app.earthmover.io/org/repo
 ```
 
-- **Read-only.** URLs open read-only; to save from Fiji, use **File > Save As > icechunk...**.
-- **Arraylake** repositories open by web address or as `al:org/repo` with the separate icechunk-arraylake-java jar.
-- **Unreleased forks.** Fiji needs builds of n5-universe and n5-ij that no release contains yet.
-  [Use in Fiji](fiji.md) installs them with the icechunk-java jars.
-- **Syntax and credentials:** [Open from a URL](n5.md#open-from-a-url).
+- URLs open read-only. To save from Fiji, use **File > Save As > icechunk...**.
+- Arraylake repositories open by web address, or as `al:org/repo`, with the separate icechunk-arraylake-java jar.
+- Fiji needs builds of n5-universe and n5-ij that no release contains yet. [Use in Fiji](fiji.md) installs them with
+  the icechunk-java jars.
+- [Open from a URL](n5.md#open-from-a-url) has the full syntax and how to pass credentials.
 
 ## Get the jars
 

@@ -1,15 +1,15 @@
 # Example: segment nuclei with StarDist
 
-**This example opens a 3D microscopy image from an icechunk repository on [Arraylake](https://earthmover.io) and
+This example opens a 3D microscopy image from an icechunk repository on [Arraylake](https://earthmover.io) and
 segments its nuclei in Fiji with [StarDist](https://github.com/stardist/stardist), a deep learning model that runs in
-Python.**
+Python.
 
-- **Steps:** open the image by URL, take 20 slices of its nuclear stain, and run StarDist on them.
-- **The image** is `idr0062A` from Earthmover's demo copy of the [Image Data Resource](https://idr.openmicroscopy.org)
+- The example opens the image by URL, takes 20 slices of its nuclear stain, and runs StarDist on them.
+- The image is `idr0062A` from Earthmover's demo copy of the [Image Data Resource](https://idr.openmicroscopy.org)
   (IDR). It comes from [idr0062](https://github.com/IDR/idr0062-blin-nuclearsegmentation), a study of nuclear
   segmentation in mouse tissue imaged by confocal microscopy: two channels, LaminB1 and DAPI, 271 × 275 pixels and
   236 slices.
-- **[Appose](https://github.com/apposed/appose) runs the Python.** It builds a Python environment from the packages a
+- [Appose](https://github.com/apposed/appose) runs the Python. It builds a Python environment from the packages a
   script names, runs the script in a separate worker process, and passes images through shared memory instead of
   copying them. A Script Editor script that starts with `#@script (language="appose-python")` runs this way, so
   nothing is installed by hand beyond the Fiji setup. The [Appose workshop](https://fiji.github.io/i2k-2025-appose/)

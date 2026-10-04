@@ -1,15 +1,15 @@
 # Java API
 
-**`icechunk-java` opens a repository in a `Storage`, reads or writes one version of it through a `Session`, and moves
-Zarr keys and bytes through that session's `Store`.**
+`icechunk-java` opens a repository in a `Storage`, reads or writes one version of it through a `Session`, and moves
+Zarr keys and bytes through that session's `Store`.
 
-- **Same concepts as icechunk-python**, under Java names: `readonly_session(tag="v1")` in Python is
+- The concepts are icechunk-python's, under Java names: `readonly_session(tag="v1")` in Python is
   `readonlySession(Version.tag("v1"))` here. The [icechunk docs](https://icechunk.io) explain repositories, sessions
   and version control in depth.
-- **Raw keys only.** To work with arrays, wrap a session for zarr-java or N5, as in
+- A `Store` handles raw keys only. To work with arrays, wrap a session for zarr-java or N5, as in
   [Read a version](#read-a-version).
-- **Close what you open.** `Storage`, `Repository`, `Session` and `Store` hold native resources; see
-  [Closing and threads](#closing-and-threads).
+- `Storage`, `Repository`, `Session` and `Store` hold native resources, so close them
+  ([Closing and threads](#closing-and-threads)).
 
 ## Open a repository
 
@@ -63,8 +63,8 @@ Array temperature = Array.open(new IcechunkZarrStore(session).resolve("temperatu
 ucar.ma2.Array firstStep = temperature.read(new long[] {0, 0, 0}, new long[] {1, 721, 1440});
 ```
 
-Or open it with N5 through `IcechunkKeyValueAccess` and n5-zarr's Zarr v3 classes. The [N5](n5.md) page covers this
-route.
+Or open the session with N5 through `IcechunkKeyValueAccess` and n5-zarr's Zarr v3 classes. The [N5](n5.md) page covers
+this route.
 
 ```java
 N5Reader n5 = new ZarrV3KeyValueReader(new IcechunkKeyValueAccess(session), "", new GsonBuilder(), false);
@@ -146,8 +146,8 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
 
 - Each kind of object has its own cutoff in `GcOptions`, and `extraRoots` keeps snapshots that no branch or tag leads
   to.
-- A session's chunks are unreachable until it commits, so **choose cutoffs earlier than the start of any session still
-  writing**.
+- A session's chunks are unreachable until it commits, so choose cutoffs earlier than the start of any session still
+  writing.
 - Readers working while either operation runs can see inconsistent histories.
 
 ## Closing and threads
@@ -163,15 +163,15 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
 
 ## Limitations
 
-- **Not on Maven Central.** Jars come from GitHub releases or a source build.
-- **zarr-java covers numeric data types only.** It cannot read float16, complex, string or datetime arrays, so many
+- Nothing is published to Maven Central. Jars come from GitHub releases or a source build.
+- zarr-java covers numeric data types only. It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
-- **Missing APIs.** There is no rebase, node move, or writing of virtual references yet, and repository configuration
-  is passed as a JSON document rather than typed builders.
-- **Fixed credentials only.** Credentials cannot refresh through a Java callback. The native HTTP client does not use
+- There is no rebase, node move, or writing of virtual references yet. Repository configuration is passed as a JSON
+  document rather than through typed builders.
+- Credentials are fixed: they cannot refresh through a Java callback. The native HTTP client does not use
   the JVM's proxy settings or trust store.
-- **Blocking calls only.** Each call occupies the calling thread until icechunk finishes, and there is no
+- Calls block. Each call occupies the calling thread until icechunk finishes, and there is no
   `CompletableFuture` API. For concurrency, use a thread pool, or `Store.getPartialValues` to fetch many keys in one
   call. A virtual thread holds its carrier thread for the length of a call.
-- **Logs go to standard error.** `Logging.initialize()` turns on icechunk's own log output, filtered by the
+- Logs go to standard error. `Logging.initialize()` turns on icechunk's own log output, filtered by the
   `ICECHUNK_LOG` environment variable; it is not forwarded to a Java logging framework.

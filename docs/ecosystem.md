@@ -1,12 +1,12 @@
 # How the pieces fit
 
-**icechunk-java connects icechunk, a versioned store for Zarr written in Rust, to Java's array libraries and the Fiji
-tools built on them.**
+icechunk-java connects icechunk, a versioned store for Zarr written in Rust, to Java's array libraries and the Fiji
+tools built on them.
 
-- **Storage side:** Zarr, icechunk, icechunk-python and Arraylake.
-- **Java side:** zarr-java, N5, n5-zarr and n5-universe, and the applications on top of them: Fiji, n5-ij,
+- On the storage side: Zarr, icechunk, icechunk-python and Arraylake.
+- On the Java side: zarr-java, N5, n5-zarr and n5-universe, and the applications on top of them: Fiji, n5-ij,
   BigDataViewer and Paintera.
-- **Which module you need** depends on which Java library you use. See [Which module to use](#which-module-to-use).
+- The module you need depends on which Java library you use ([Which module to use](#which-module-to-use)).
 
 ## The projects
 
@@ -54,7 +54,7 @@ tools built on them.**
 
 ## From Fiji to storage
 
-**A Fiji tool opens a repository from a URL such as `s3://bucket/repo|icechunk://branch.main/em/raw`**, and a read of
+A Fiji tool opens a repository from a URL such as `s3://bucket/repo|icechunk://branch.main/em/raw`, and a read of
 one chunk goes down this stack. [Open from a URL](n5.md#open-from-a-url) has the URL syntax.
 
 ```text
@@ -77,10 +77,10 @@ icechunk (Rust)      finds the chunk in the snapshot's manifests and fetches it
   └── virtual chunks: byte ranges in other files, read from where they live
 ```
 
-- **URLs open read-only**, because a write needs a commit and a URL has no place for one. To write from N5, use a
+- URLs open read-only, because a write needs a commit and a URL has no place for one. To write from N5, use a
   writable session in code, as in [Write and commit](n5.md#write-and-commit). Fiji writes through
   **File > Save As > icechunk...**, which commits ([Use in Fiji](fiji.md#save-into-a-repository)).
-- **Arraylake** repositories open the same way, as `al:org/repo`, once icechunk-arraylake-java is on the classpath. It
+- Arraylake repositories open the same way, as `al:org/repo`, once icechunk-arraylake-java is on the classpath. It
   supplies the storage and credentials, including those for virtual chunks.
 
 ## Which module to use
@@ -92,7 +92,7 @@ icechunk (Rust)      finds the chunk in the snapshot's manifests and fetches it
 | Read and write arrays with N5 and n5-zarr, or in an application built on them, such as Paintera | `icechunk-java`, `icechunk-n5` |
 | Open repositories by URL in Fiji's importer, BigDataViewer's N5 viewer, or other code that uses `N5Factory` | `icechunk-java`, `icechunk-n5`, `icechunk-n5-universe` |
 
-- **Codecs:** add `icechunk-n5-codecs` to either N5 row when arrays use `numcodecs.pcodec` or `numcodecs.zlib`, which
+- Add `icechunk-n5-codecs` to either N5 row when arrays use `numcodecs.pcodec` or `numcodecs.zlib`, which
   zarr-python can write and n5-zarr cannot decode on its own.
-- **Opening by URL needs unreleased forks** of n5-universe and n5-ij. [Changes in other projects](upstream.md) lists
+- Opening by URL needs unreleased forks of n5-universe and n5-ij. [Changes in other projects](upstream.md) lists
   what they change, and [Use in Fiji](fiji.md) installs them.

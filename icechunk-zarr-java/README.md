@@ -4,15 +4,15 @@
 > Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
 > notice. See the [top-level README](../README.md).
 
-**`IcechunkZarrStore` lets [zarr-java](https://github.com/zarr-developers/zarr-java) read and write arrays in an
-[icechunk](https://icechunk.io) repository.**
+`IcechunkZarrStore` lets [zarr-java](https://github.com/zarr-developers/zarr-java) read and write arrays in an
+[icechunk](https://icechunk.io) repository.
 
-- **A zarr-java `Store` over one session.** zarr-java's `Array` and `Group` work on a version of the repository as they
-  do on a directory or a bucket.
-- **The session stays yours.** The store does not own it: commit through the session to save writes, and close it
+- It is a zarr-java `Store` over one session: zarr-java's `Array` and `Group` work on a version of the repository as
+  they do on a directory or a bucket.
+- The store does not own the session: commit through the session to save writes, and close it
   yourself.
-- **Numeric data types only.** zarr-java cannot decode string, float16, complex or datetime arrays, which are common in
-  repositories written with xarray. See [Limitations](../docs/java-api.md#limitations).
+- zarr-java reads numeric data types only. It cannot decode string, float16, complex or datetime arrays, which are
+  common in repositories written with xarray. See [Limitations](../docs/java-api.md#limitations).
 
 Repositories, versions, branches and commits are covered in [Java API](../docs/java-api.md).
 

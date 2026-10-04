@@ -4,13 +4,13 @@
 > Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
 > notice. See the [top-level README](../README.md).
 
-**`IcechunkKeyValueAccess` lets [N5](https://github.com/saalfeldlab/n5) read and write an
-[icechunk](https://icechunk.io) repository.**
+`IcechunkKeyValueAccess` lets [N5](https://github.com/saalfeldlab/n5) read and write an
+[icechunk](https://icechunk.io) repository.
 
-- **An N5 `KeyValueAccess` over one session.** [n5-zarr](https://github.com/saalfeldlab/n5-zarr)'s Zarr v3 reader and
+- It is an N5 `KeyValueAccess` over one session: [n5-zarr](https://github.com/saalfeldlab/n5-zarr)'s Zarr v3 reader and
   writer work on a version of a repository as they do on a directory or a bucket.
-- **For N5 code**, such as a Fiji plugin or script, or [Paintera](https://github.com/saalfeldlab/paintera).
-- **Zarr v3 only.** Use n5-zarr's Zarr v3 classes, or pass `StorageFormat.ZARR3` to `N5Factory`.
+- It serves N5 code, such as a Fiji plugin or script, or [Paintera](https://github.com/saalfeldlab/paintera).
+- icechunk holds Zarr v3 only, so use n5-zarr's Zarr v3 classes, or pass `StorageFormat.ZARR3` to `N5Factory`.
 
 [N5](../docs/n5.md) is the guide: reading versions, keeping a writer across commits, and
 [how icechunk differs from a file system](../docs/n5.md#how-icechunk-differs-from-a-file-system).

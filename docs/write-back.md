@@ -1,12 +1,13 @@
 # Example: save results into icechunk
 
-**Each save into icechunk is a commit, so you can save a new result over an old one and still open the old one by
-its snapshot ID.**
+Each save into icechunk is a commit, so you can save a new result over an old one and still open the old one by its
+snapshot ID.
 
-- **Steps:** segment nuclei in one of Fiji's sample images with [StarDist](https://github.com/stardist/stardist),
-  save the image and the segmentation into a local repository, rerun with new settings and save over the result, then
-  reopen the first result.
-- **Overwrite** replaces what the branch holds at a path, but earlier snapshots still hold the replaced data.
+- The example segments nuclei in one of Fiji's sample images with [StarDist](https://github.com/stardist/stardist),
+  saves the image and the segmentation into a local repository, reruns with new settings and saves over the result,
+  then reopens the first result.
+- The save dialog's **Overwrite** option replaces what the branch holds at a path, but earlier snapshots still hold
+  the replaced data.
 
 ## What you need
 
@@ -73,8 +74,8 @@ The result opens as a 16-bit image named `labels`, with each nucleus a different
 model marks a small speck in the middle of the image and the letters of the note in the bottom right corner, which is
 part of the sample's pixels.
 
-![The labels from the first StarDist run, coloured with glasbey on dark: each nucleus a filled region of its own colour, a small speck below the
-largest one, and a row of small shapes along the bottom right where the note's text
+![The labels from the first StarDist run, coloured with glasbey on dark: each nucleus a filled region of its own
+colour, a small speck below the largest one, and a row of small shapes along the bottom right where the note's text
 is.](images/write-back/labels-1.png)
 
 ## Save the labels
@@ -111,8 +112,8 @@ This is the repository's second commit. Note its snapshot ID from the status bar
 
 Without **Overwrite**, the command refuses to replace what is already there and commits nothing:
 `labels/stardist already exists on branch main; check Overwrite to replace it`. With it, the command deletes
-`labels/stardist` and writes the new labels in its place, in one commit. `main` now holds three commits after the
-repository's first: the image, the first labels, and the second labels.
+`labels/stardist` and writes the new labels in its place, in one commit. `main` now holds three commits on top
+of the repository's initial snapshot: the image, the first labels, and the second labels.
 
 ## Open the earlier labels
 

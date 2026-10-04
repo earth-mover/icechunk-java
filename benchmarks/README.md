@@ -1,11 +1,11 @@
 # benchmarks
 
-**[JMH](https://github.com/openjdk/jmh) benchmarks of the `Store` API in [icechunk-java](../icechunk-java), and a
-probe of the process's peak memory while it streams chunks.**
+[JMH](https://github.com/openjdk/jmh) benchmarks of the `Store` API in [icechunk-java](../icechunk-java), and a
+probe of the process's peak memory while it streams chunks.
 
-- **What a native call costs**, so a change to a hot path can be compared before and after.
-- **For contributors** changing how calls or bytes cross between Java and Rust. Not published.
-- **Java 21**, unlike the published modules, which target Java 8.
+- They measure what a native call costs, so a change to a hot path can be compared before and after.
+- They are for contributors changing how calls or bytes cross between Java and Rust, and are not published.
+- The module targets Java 21, unlike the published modules, which target Java 8.
 
 ## Running
 

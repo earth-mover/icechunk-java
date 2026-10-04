@@ -4,16 +4,16 @@
 > Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
 > notice. See the [top-level README](../README.md).
 
-**Opens [icechunk](https://icechunk.io) repositories by URL in
-[n5-universe](https://github.com/saalfeldlab/n5-universe), and saves Fiji images into them.**
+Opens [icechunk](https://icechunk.io) repositories by URL in
+[n5-universe](https://github.com/saalfeldlab/n5-universe), and saves Fiji images into them.
 
-- **Open by URL.** With this jar on the classpath, `N5Factory` opens URLs such as
+- With this jar on the classpath, `N5Factory` opens URLs such as
   `s3://bucket/repo|icechunk://branch.main/em/raw`. So do the tools built on it: [Fiji](https://fiji.sc)'s N5/Zarr
   importer, BigDataViewer's N5 viewer and [Paintera](https://github.com/saalfeldlab/paintera). URLs open
-  **read-only**.
-- **Save from Fiji.** **File > Save As > icechunk...** saves the current image as OME-Zarr into a branch and commits
+  read-only.
+- In Fiji, **File > Save As > icechunk...** saves the current image as OME-Zarr into a branch and commits
   it.
-- **Needs an unreleased n5-universe**, so the default build skips this module.
+- The module needs an unreleased n5-universe, so the default build skips it.
 
 [Open from a URL](../docs/n5.md#open-from-a-url) gives the URL syntax, credentials and what the provider does.
 [Use in Fiji](../docs/fiji.md) installs it into Fiji.

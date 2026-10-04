@@ -1,12 +1,13 @@
 # native
 
-**The Rust crate `icechunk-jni`, which builds `icechunk_jni`, the native library behind the Java bindings.**
+The Rust crate `icechunk-jni`, which builds `icechunk_jni`, the native library behind the Java bindings.
 
-- **Every Java call into icechunk goes through it.** It implements the native methods declared in `Native.java` in
-  [icechunk-java](../icechunk-java) on top of the [icechunk](https://crates.io/crates/icechunk) Rust crate.
-- **For contributors**: add or change a native method, update icechunk, or debug the JNI layer. Users of the jars get
-  a prebuilt copy, bundled in release jars of `icechunk-java`.
-- **No panics.** Clippy denies `unwrap`, `expect` and `panic` outside tests, since a panic in native code becomes an
+- Every Java call into icechunk goes through the library. The crate implements the native methods declared in
+  `Native.java` in [icechunk-java](../icechunk-java) on top of the [icechunk](https://crates.io/crates/icechunk) Rust
+  crate.
+- This directory is for contributors who add or change a native method, update icechunk, or debug the JNI layer.
+  Users of the jars get a prebuilt copy, bundled in release jars of `icechunk-java`.
+- Clippy denies `unwrap`, `expect` and `panic` outside tests, since a panic in native code becomes an
   error the Java caller has to handle.
 
 ## Building and checking

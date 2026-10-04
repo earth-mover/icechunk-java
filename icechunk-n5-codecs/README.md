@@ -4,13 +4,13 @@
 > Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
 > notice. See the [top-level README](../README.md).
 
-**Decoders that let [n5-zarr](https://github.com/saalfeldlab/n5-zarr) read arrays zarr-python wrote with
-`numcodecs.pcodec` or `numcodecs.zlib`.**
+Codecs that let [n5-zarr](https://github.com/saalfeldlab/n5-zarr) read arrays zarr-python wrote with
+`numcodecs.pcodec` or `numcodecs.zlib`.
 
-- **Any store.** The codecs work wherever n5-zarr reads, not only on icechunk.
-- **Classpath only.** n5 finds the codecs through the SciJava annotation index this jar carries, so no code registers
-  them.
-- **pcodec reads only.** It decodes 16-, 32- and 64-bit integers, `float32` and `float64`, and cannot write.
+- The codecs work wherever n5-zarr reads, not only on icechunk.
+- n5 finds the codecs through the SciJava annotation index this jar carries, so putting the jar on the classpath is
+  enough; no code registers them.
+- pcodec is read-only. It decodes 16-, 32- and 64-bit integers, `float32` and `float64`, and cannot write.
 
 [numcodecs codecs](../docs/n5.md#numcodecs-codecs) lists the supported data types and which codecs n5-zarr handles
 itself.

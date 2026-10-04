@@ -1,19 +1,18 @@
 # icechunk-java
 
 > [!WARNING]
-> **EXPERIMENTAL - NOT OFFICIALLY SUPPORTED.**
-> This is not an Earthmover product and is not part of the icechunk project's supported surface. Nothing is
-> published to Maven Central, the API will change without notice, and there is no guarantee of fixes or
-> compatibility. Do not use it for data you cannot afford to lose.
+> Experimental and not officially supported. This is not an Earthmover product and is not part of the icechunk
+> project's supported surface. Nothing is published to Maven Central, the API will change without notice, and there
+> is no guarantee of fixes or compatibility. Do not use it for data you cannot afford to lose.
 
-**Java bindings for [icechunk](https://icechunk.io)**, plus connectors that let Java's Zarr and N5 tools use them.
+Java bindings for [icechunk](https://icechunk.io), plus connectors that let Java's Zarr and N5 tools use them.
 
-- **Read and write icechunk repositories from Java.** The same repositories, branches, tags and commits as
+- Read and write icechunk repositories from Java: the same repositories, branches, tags and commits as
   [icechunk-python](https://pypi.org/project/icechunk/), through icechunk's Rust library over JNI.
-- **zarr-java.** `IcechunkZarrStore` makes a session a [zarr-java](https://github.com/zarr-developers/zarr-java) store.
-- **N5 and Fiji.** N5 code, Fiji and BigDataViewer open repositories by URL, and Fiji saves images into them with
+- Use a session as a [zarr-java](https://github.com/zarr-developers/zarr-java) store, through `IcechunkZarrStore`.
+- Open repositories by URL from N5 code, Fiji and BigDataViewer, and save Fiji images into them with
   **File > Save As > icechunk...** ([Use in Fiji](docs/fiji.md)).
-- **Codecs.** pcodec and zlib for n5-zarr, which lacks them.
+- Add the pcodec and zlib codecs to n5-zarr, which lacks them.
 
 For what icechunk itself offers, such as version control for Zarr arrays and virtual chunks that read existing files
 in place, see the [icechunk docs](https://icechunk.io).
@@ -49,7 +48,7 @@ try (Storage storage = Storage.localFilesystem(Paths.get("/tmp/my-repo"));
 | `icechunk-zarr-java` | `IcechunkZarrStore`, a store for zarr-java. |
 | `icechunk-n5` | `IcechunkKeyValueAccess`, through which N5 and n5-zarr read and write a session. |
 | `icechunk-n5-universe` | Opens repositories by URL through n5-universe's `N5Factory`, as Fiji's importer and BigDataViewer do, and adds Fiji's **File > Save As > icechunk...**. Needs the n5-universe fork, so it builds only with `-Pn5-universe-provider`. |
-| `icechunk-n5-codecs` | Decoders for the `numcodecs.pcodec` and `numcodecs.zlib` codecs, for n5-zarr on any store. |
+| `icechunk-n5-codecs` | The `numcodecs.pcodec` and `numcodecs.zlib` codecs, for n5-zarr on any store. |
 | `examples` | Runnable programs. Not published. |
 
 zarr-java, n5 and n5-zarr are `provided` dependencies, so you choose their versions. Code that only moves Zarr keys
@@ -78,15 +77,15 @@ pixi run example ReadPublicData  # read ERA5 data from a public S3 bucket
 
 ### Using source-built jars
 
-- **Java 8 target.** The jars run on Java 8, so libraries such as [n5-ij](https://github.com/saalfeldlab/n5-ij) and
+- The jars run on Java 8, so libraries such as [n5-ij](https://github.com/saalfeldlab/n5-ij) and
   [n5-universe](https://github.com/saalfeldlab/n5-universe) can depend on them. The build itself needs JDK 21.
-- **Multi-release jar.** On Java 9 and later, `icechunk-java` loads newer versions of a few internal classes from
+- `icechunk-java` is a multi-release jar. On Java 9 and later it loads newer versions of a few internal classes from
   `META-INF/versions/` ([JEP 238](https://openjdk.org/jeps/238)), with no API change. An object you forget to close is
   then released by a [`Cleaner`](https://docs.oracle.com/javase/9/docs/api/java/lang/ref/Cleaner.html) once
   unreachable; on Java 8 it stays open until the JVM exits. If you shade the jar into an uber-jar, **keep
   `Multi-Release: true`** in the merged manifest, or every JVM gets the Java 8 classes
   ([DESIGN.md](dev/DESIGN.md#handles)).
-- **Native library.** A development build loads it from `native/target/debug`, through the `icechunk.native.dir`
+- A development build loads the native library from `native/target/debug`, through the `icechunk.native.dir`
   system property. Set the same property to use source-built jars from your own project, for example
   `-Dicechunk.native.dir=/path/to/icechunk-java/native/target/release`. Release jars bundle the library and need no
   property ([DESIGN.md](dev/DESIGN.md#packaging)).
