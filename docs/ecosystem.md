@@ -55,7 +55,7 @@ Pick the modules for the library your code already uses:
   either language: what [icechunk-python](https://pypi.org/project/icechunk/) writes with
   [zarr-python](https://zarr.readthedocs.io) and [xarray](https://xarray.dev), icechunk-java reads, and the reverse.
 - [Arraylake](https://earthmover.io) is Earthmover's managed service that hosts icechunk repositories and holds their
-  credentials. The separate [icechunk-arraylake-java](https://github.com/earth-mover/icechunk-arraylake-java) project opens Arraylake repositories as icechunk-java
+  credentials. The separate icechunk-arraylake-java project opens Arraylake repositories as icechunk-java
   `Repository` objects.
 
 ### Java array libraries

@@ -75,7 +75,7 @@ cp target/fiji/*.jar \
 
 - After a rebuild, copy the jars again. The file names stay the same, so they replace the earlier copies.
 - To switch back, delete the six jars from `jars/` and move the originals back from `fiji-original-jars/`.
-- To open Arraylake repositories too, add the jar of the separate [icechunk-arraylake-java](https://github.com/earth-mover/icechunk-arraylake-java) project.
+- To open Arraylake repositories too, add the jar of the separate icechunk-arraylake-java project.
 
 | Jar | Role in Fiji |
 |---|---|
