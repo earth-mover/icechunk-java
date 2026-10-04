@@ -6,15 +6,19 @@
 > published to Maven Central, the API will change without notice, and there is no guarantee of fixes or
 > compatibility. Do not use it for data you cannot afford to lose.
 
-Java bindings for [icechunk](https://icechunk.io), the transactional storage engine for [Zarr](https://zarr.dev). They
-call the icechunk Rust library through the [Java Native Interface](https://docs.oracle.com/en/java/javase/21/docs/specs/jni/index.html)
-(JNI), so Java programs get the same repositories, branches, tags and commits as
-[icechunk-python](https://pypi.org/project/icechunk/), and can read and write the same data.
+**Java bindings for [icechunk](https://icechunk.io)**, plus connectors that let Java's Zarr and N5 tools use them.
 
-icechunk-java gives you a Zarr store. You open a repository, start a session on a branch or an older version, and the
-session's `Store` maps Zarr keys to bytes. What reads and writes those keys is up to you: zarr-java through
-`IcechunkZarrStore`, as below, an adapter for another Zarr library, or your own code. Changes written in a session
-become a new version of the repository when you commit.
+- **Read and write icechunk repositories from Java.** The same repositories, branches, tags and commits as
+  [icechunk-python](https://pypi.org/project/icechunk/), through icechunk's Rust library over JNI.
+- **zarr-java.** `IcechunkZarrStore` makes a session a [zarr-java](https://github.com/zarr-developers/zarr-java) store.
+- **N5 and Fiji.** N5 code, Fiji and BigDataViewer open repositories by URL, and Fiji saves images into them with
+  **File > Save As > icechunk...** ([Use in Fiji](docs/fiji.md)).
+- **Codecs.** pcodec and zlib for n5-zarr, which lacks them.
+
+For what icechunk itself offers, such as version control for Zarr arrays and virtual chunks that read existing files
+in place, see the [icechunk docs](https://icechunk.io).
+
+Write an array with zarr-java and commit it:
 
 ```java
 try (Storage storage = Storage.localFilesystem(Paths.get("/tmp/my-repo"));
@@ -41,15 +45,15 @@ try (Storage storage = Storage.localFilesystem(Paths.get("/tmp/my-repo"));
 
 | Artifact | What it contains |
 |---|---|
-| `icechunk-java` | `Storage`, `Repository`, `Session` and `Store`. No runtime dependencies besides the native library. |
-| `icechunk-zarr-java` | `IcechunkZarrStore`, which lets [zarr-java](https://github.com/zarr-developers/zarr-java) read and write arrays in a session. zarr-java itself is a `provided` dependency, so you choose its version. |
-| `icechunk-n5` | `IcechunkKeyValueAccess`, which lets [N5](https://github.com/saalfeldlab/n5)'s Zarr v3 reader and writer ([n5-zarr](https://github.com/saalfeldlab/n5-zarr)), and the Fiji and Paintera tools built on them, read and write a session. n5 is a `provided` dependency. |
-| `icechunk-n5-codecs` | Decoders for the `numcodecs.pcodec` and `numcodecs.zlib` Zarr v3 codecs, which n5-zarr finds on the classpath. They work on any store, not only icechunk. n5 and n5-zarr are `provided` dependencies. |
-| `icechunk-n5-universe` | `IcechunkKeyValueAccessProvider`, which lets n5-universe's `N5Factory`, and Fiji tools such as n5-ij's importer, open repositories from URLs such as `s3://bucket/repo\|icechunk://branch.main/path`, read-only. It needs an n5-universe with the `KeyValueAccessProvider` interface, which no release has yet, so it builds only with `-Pn5-universe-provider`. |
+| `icechunk-java` | The core API: `Storage`, `Repository`, `Session` and `Store`, with the native library. |
+| `icechunk-zarr-java` | `IcechunkZarrStore`, a store for zarr-java. |
+| `icechunk-n5` | `IcechunkKeyValueAccess`, through which N5 and n5-zarr read and write a session. |
+| `icechunk-n5-universe` | Opens repositories by URL through n5-universe's `N5Factory`, as Fiji's importer and BigDataViewer do, and adds Fiji's **File > Save As > icechunk...**. Needs the n5-universe fork, so it builds only with `-Pn5-universe-provider`. |
+| `icechunk-n5-codecs` | Decoders for the `numcodecs.pcodec` and `numcodecs.zlib` codecs, for n5-zarr on any store. |
 | `examples` | Runnable programs. Not published. |
 
-Programs that only move Zarr keys and bytes, such as a store adapter for another library, need only
-`icechunk-java`. Programs that work with arrays use `icechunk-zarr-java` with zarr-java, or `icechunk-n5` with N5.
+zarr-java, n5 and n5-zarr are `provided` dependencies, so you choose their versions. Code that only moves Zarr keys
+and bytes needs only `icechunk-java`.
 
 [How the pieces fit](docs/ecosystem.md) explains where these modules sit among icechunk, Zarr, N5 and Fiji.
 
