@@ -1,6 +1,7 @@
 [project]
 site_name = "icechunk-java"
 site_description = "Experimental Java bindings for icechunk"
+site_url = "https://earth-mover.github.io/icechunk-java/"
 nav = [
   { "Home" = "index.md" },
   { "How the pieces fit" = "ecosystem.md" },
