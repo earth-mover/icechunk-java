@@ -43,7 +43,11 @@ jobs:
       - run: cargo build --manifest-path native/Cargo.toml
       - run: scripts/fetch-icechunk-fixtures.sh
         shell: bash
+      # pcodec 1.0.4 has no wheels for Python 3.15, and its PyO3 refuses to build for 3.15.
+      # Without a pin, uv uses a 3.15 it finds on PATH, as on macos-latest.
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.14"
       # The jars target Java 8, so the tests also run on a Java 8 JVM, against the Java 8
       # classes. The build itself needs JDK 21 for Error Prone. Temurin has no Java 8 build
       # for Apple silicon, so Java 8 comes from Zulu.
