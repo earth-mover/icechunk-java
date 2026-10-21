@@ -86,7 +86,11 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      # pcodec 1.0.4 has no wheels for Python 3.15, and its PyO3 refuses to build for 3.15.
+      # Without a pin, uv uses a 3.15 it finds on PATH, as on macos-latest.
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.14"
       - name: Set the version from the tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: mvn -B -q versions:set -DnewVersion="${GITHUB_REF_NAME#v}" -DgenerateBackupPoms=false
@@ -132,7 +136,11 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
+      # pcodec 1.0.4 has no wheels for Python 3.15, and its PyO3 refuses to build for 3.15.
+      # Without a pin, uv uses a 3.15 it finds on PATH, as on macos-latest.
       - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          python-version: "3.14"
       - name: Test against the bundled library
         shell: bash
         run: |
