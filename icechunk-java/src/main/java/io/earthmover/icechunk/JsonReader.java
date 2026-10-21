@@ -77,14 +77,18 @@ final class JsonReader {
     }
 
     static Set<String> stringSet(Map<String, Object> fields, String name) {
-        Set<String> strings = new LinkedHashSet<>();
+        return Collections.unmodifiableSet(new LinkedHashSet<>(stringList(fields, name)));
+    }
+
+    static List<String> stringList(Map<String, Object> fields, String name) {
+        List<String> strings = new ArrayList<>();
         for (Object value : array(fields, name)) {
             if (!(value instanceof String)) {
                 throw mistyped(name, "list of strings");
             }
             strings.add((String) value);
         }
-        return Collections.unmodifiableSet(strings);
+        return Collections.unmodifiableList(strings);
     }
 
     @SuppressWarnings("unchecked")

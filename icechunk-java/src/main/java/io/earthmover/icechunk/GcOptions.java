@@ -37,14 +37,19 @@ public final class GcOptions {
                 .put("delete_snapshots_older_than", builder.snapshotsCutoff)
                 .put("max_snapshots_in_memory", builder.maxSnapshotsInMemory)
                 .put("max_compressed_manifest_mem_bytes", builder.maxCompressedManifestMemBytes)
+                .put("max_decoded_manifest_mem_bytes", builder.maxDecodedManifestMemBytes)
                 .put("max_concurrent_manifest_fetches", builder.maxConcurrentManifestFetches)
+                .put("max_concurrent_deletes", builder.maxConcurrentDeletes)
+                .put("max_consecutive_delete_failures", builder.maxConsecutiveDeleteFailures)
+                .put("max_concurrent_listings", builder.maxConcurrentListings)
                 .put("dry_run", builder.dryRun)
                 .toString();
     }
 
     /**
      * A builder with no cutoffs, which deletes nothing until one is set, and the default limits: 50 snapshots in
-     * memory, 512 MiB of compressed manifests, and 500 concurrent manifest fetches.
+     * memory, 512 MiB of compressed and 4 GiB of decoded manifests, 500 concurrent manifest fetches, 10 concurrent
+     * deletes, stopping after 50 consecutive failed delete batches, and no limit on concurrent listings.
      */
     public static Builder builder() {
         return new Builder();
@@ -62,7 +67,11 @@ public final class GcOptions {
         private String snapshotsCutoff;
         private int maxSnapshotsInMemory = 50;
         private long maxCompressedManifestMemBytes = 512L * 1024 * 1024;
+        private long maxDecodedManifestMemBytes = 4L * 1024 * 1024 * 1024;
         private int maxConcurrentManifestFetches = 500;
+        private int maxConcurrentDeletes = 10;
+        private int maxConsecutiveDeleteFailures = 50;
+        private Integer maxConcurrentListings;
         private boolean dryRun;
 
         private Builder() {}
@@ -147,9 +156,41 @@ public final class GcOptions {
             return this;
         }
 
+        /** The most memory decoded manifests may use. Defaults to 4 GiB; must be positive. */
+        public Builder maxDecodedManifestMemBytes(long maxDecodedManifestMemBytes) {
+            if (maxDecodedManifestMemBytes < 1) {
+                throw new IllegalArgumentException(
+                        "maxDecodedManifestMemBytes must be positive: " + maxDecodedManifestMemBytes);
+            }
+            this.maxDecodedManifestMemBytes = maxDecodedManifestMemBytes;
+            return this;
+        }
+
         /** The most manifests fetched concurrently. Defaults to 500; must be between 1 and 65535. */
         public Builder maxConcurrentManifestFetches(int maxConcurrentManifestFetches) {
             this.maxConcurrentManifestFetches = checkU16("maxConcurrentManifestFetches", maxConcurrentManifestFetches);
+            return this;
+        }
+
+        /** The most delete requests in flight at once. Defaults to 10; must be between 1 and 65535. */
+        public Builder maxConcurrentDeletes(int maxConcurrentDeletes) {
+            this.maxConcurrentDeletes = checkU16("maxConcurrentDeletes", maxConcurrentDeletes);
+            return this;
+        }
+
+        /**
+         * How many delete batches may fail in a row before {@link Repository#garbageCollect(GcOptions)} gives up and
+         * throws {@link IcechunkException}. Defaults to 50; must be between 1 and 65535. Fewer failures than this are
+         * reported in {@link GcSummary#objectsFailedToDelete()} instead.
+         */
+        public Builder maxConsecutiveDeleteFailures(int maxConsecutiveDeleteFailures) {
+            this.maxConsecutiveDeleteFailures = checkU16("maxConsecutiveDeleteFailures", maxConsecutiveDeleteFailures);
+            return this;
+        }
+
+        /** The most object listings run concurrently. Unlimited by default; must be between 1 and 65535. */
+        public Builder maxConcurrentListings(int maxConcurrentListings) {
+            this.maxConcurrentListings = checkU16("maxConcurrentListings", maxConcurrentListings);
             return this;
         }
 

@@ -93,8 +93,9 @@ class JsonContractTest {
         assertEquals(
                 "{\"extra_roots\":[\"1CECHNKREP0F1RSTCMT0\"],\"delete_chunks_older_than\":\"2026-01-02T03:04:05Z\","
                         + "\"delete_snapshots_older_than\":\"2026-01-01T00:00:00Z\",\"max_snapshots_in_memory\":50,"
-                        + "\"max_compressed_manifest_mem_bytes\":536870912,\"max_concurrent_manifest_fetches\":500,"
-                        + "\"dry_run\":true}",
+                        + "\"max_compressed_manifest_mem_bytes\":536870912,\"max_decoded_manifest_mem_bytes\":4294967296,"
+                        + "\"max_concurrent_manifest_fetches\":500,\"max_concurrent_deletes\":10,"
+                        + "\"max_consecutive_delete_failures\":50,\"dry_run\":true}",
                 GcOptions.builder()
                         .extraRoots(Collections.singleton(SnapshotId.of("1CECHNKREP0F1RSTCMT0")))
                         .deleteChunksOlderThan(Instant.parse("2026-01-02T03:04:05Z"))

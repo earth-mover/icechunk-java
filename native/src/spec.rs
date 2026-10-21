@@ -349,7 +349,7 @@ impl ExpireSpec {
 
 /// `GcOptions` from Java. An absent cutoff keeps every object of that kind.
 ///
-/// icechunk's `GCConfig` also has a cutoff for attribute files, which icechunk 2.2 never
+/// icechunk's `GCConfig` also has a cutoff for attribute files, which icechunk never
 /// deletes, so it is always `Action::Keep`.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -361,7 +361,11 @@ pub(crate) struct GcSpec {
     delete_snapshots_older_than: Option<DateTime<Utc>>,
     max_snapshots_in_memory: NonZeroU16,
     max_compressed_manifest_mem_bytes: NonZeroUsize,
+    max_decoded_manifest_mem_bytes: NonZeroUsize,
     max_concurrent_manifest_fetches: NonZeroU16,
+    max_concurrent_deletes: NonZeroU16,
+    max_consecutive_delete_failures: NonZeroU16,
+    max_concurrent_listings: Option<NonZeroU16>,
     dry_run: bool,
 }
 
@@ -385,7 +389,11 @@ impl GcSpec {
             action(spec.delete_snapshots_older_than),
             spec.max_snapshots_in_memory,
             spec.max_compressed_manifest_mem_bytes,
+            spec.max_decoded_manifest_mem_bytes,
             spec.max_concurrent_manifest_fetches,
+            spec.max_concurrent_deletes,
+            spec.max_consecutive_delete_failures,
+            spec.max_concurrent_listings,
             spec.dry_run,
         ))
     }
@@ -531,7 +539,7 @@ mod tests {
     #[test]
     fn gc_options() {
         let config = GcSpec::parse(
-            r#"{"extra_roots":["1CECHNKREP0F1RSTCMT0"],"delete_chunks_older_than":"2026-01-02T03:04:05Z","delete_snapshots_older_than":"2026-01-01T00:00:00Z","max_snapshots_in_memory":50,"max_compressed_manifest_mem_bytes":536870912,"max_concurrent_manifest_fetches":500,"dry_run":true}"#,
+            r#"{"extra_roots":["1CECHNKREP0F1RSTCMT0"],"delete_chunks_older_than":"2026-01-02T03:04:05Z","delete_snapshots_older_than":"2026-01-01T00:00:00Z","max_snapshots_in_memory":50,"max_compressed_manifest_mem_bytes":536870912,"max_decoded_manifest_mem_bytes":4294967296,"max_concurrent_manifest_fetches":500,"max_concurrent_deletes":10,"max_consecutive_delete_failures":50,"dry_run":true}"#,
         )
         .unwrap();
         assert!(config.deletes_chunks() && config.deletes_snapshots());
@@ -541,7 +549,7 @@ mod tests {
 
     #[test]
     fn bad_gc_options_are_rejected() {
-        let limits = r#""max_compressed_manifest_mem_bytes":1,"max_concurrent_manifest_fetches":1,"dry_run":false"#;
+        let limits = r#""max_compressed_manifest_mem_bytes":1,"max_decoded_manifest_mem_bytes":1,"max_concurrent_manifest_fetches":1,"max_concurrent_deletes":1,"max_consecutive_delete_failures":1,"dry_run":false"#;
         let zero =
             format!(r#"{{"extra_roots":[],"max_snapshots_in_memory":0,{limits}}}"#);
         assert!(GcSpec::parse(&zero).is_err());
