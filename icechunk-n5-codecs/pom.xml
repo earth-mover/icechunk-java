@@ -15,7 +15,8 @@
 	<description>numcodecs Zarr v3 codecs for n5-zarr, for any store, icechunk or not.</description>
 
 	<properties>
-		<!-- The version n5 depends on; its annotation processor writes the index n5 finds codecs through. -->
+		<!-- The version n5 depends on. scijava-common's annotation processor writes the index that n5 finds
+		     codecs through. -->
 		<scijava-common.version>2.99.2</scijava-common.version>
 	</properties>
 

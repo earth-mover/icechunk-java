@@ -24,7 +24,7 @@ use crate::spec::{
 };
 
 /// How `repositoryOpen` treats an existing or missing repository. The values match the
-/// `Native.OPEN_*` constants.
+/// `Native.OPEN`, `Native.CREATE` and `Native.OPEN_OR_CREATE` constants.
 pub(crate) const OPEN: jint = 0;
 pub(crate) const CREATE: jint = 1;
 pub(crate) const OPEN_OR_CREATE: jint = 2;
@@ -218,8 +218,8 @@ fn ref_action(delete: bool) -> ExpiredRefAction {
 }
 
 native! { fn repositoryExpireSnapshots(env, repository: jlong, options: JString<'l>) -> JString<'l> {
-    // Drop the epoch guard before this long call, so it does not delay freeing objects
-    // closed meanwhile; see `handles`.
+    // Copy the `Arc` out and drop the `Ref` before this long call, so the `Ref`'s epoch
+    // guard does not delay freeing objects closed in the meantime; see `handles`.
     let repository = Arc::clone(&*handles::repository(repository)?);
     let spec = ExpireSpec::parse(&text(env, &options)?)?;
     let asset_manager = Arc::clone(repository.asset_manager());
@@ -240,8 +240,8 @@ native! { fn repositoryExpireSnapshots(env, repository: jlong, options: JString<
 }}
 
 native! { fn repositoryGarbageCollect(env, repository: jlong, options: JString<'l>) -> JString<'l> {
-    // Drop the epoch guard before this long call, so it does not delay freeing objects
-    // closed meanwhile; see `handles`.
+    // Copy the `Arc` out and drop the `Ref` before this long call, so the `Ref`'s epoch
+    // guard does not delay freeing objects closed in the meantime; see `handles`.
     let repository = Arc::clone(&*handles::repository(repository)?);
     let gc = GcSpec::parse(&text(env, &options)?)?;
     let asset_manager = Arc::clone(repository.asset_manager());

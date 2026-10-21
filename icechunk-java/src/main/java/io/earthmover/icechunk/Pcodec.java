@@ -14,8 +14,8 @@ public final class Pcodec {
      * type.
      *
      * @param encoded the encoded bytes
-     * @param dtype the Zarr data type name of the numbers: {@code uint16}, {@code int16}, {@code uint32}, {@code int32},
-     *     {@code uint64}, {@code int64}, {@code float32} or {@code float64}
+     * @param dtype the Zarr data type name of the numbers: {@code uint16}, {@code int16}, {@code uint32},
+     *     {@code int32}, {@code uint64}, {@code int64}, {@code float32} or {@code float64}
      * @return the numbers as little-endian bytes
      * @throws IllegalArgumentException if pcodec does not support {@code dtype}
      * @throws IcechunkException if {@code encoded} is not a valid pcodec file of numbers of type {@code dtype}

@@ -41,8 +41,8 @@ import java.util.stream.Stream;
  * {@code tests/test_stateful_repo_ops.py}, for spec version 2. The Java API has no amend, repository metadata or
  * operations log, so the rules and checks for those are left out.
  *
- * <p>The repository lives on the local filesystem, where an object's creation time, which garbage collection
- * compares with its cutoff, is the file's modification time.
+ * <p>Garbage collection compares each object's creation time with its cutoff. The repository lives on the local
+ * filesystem, where that creation time is the file's modification time.
  */
 class VersionControlTest {
     private static final String MAIN = "main";
@@ -84,7 +84,7 @@ class VersionControlTest {
         private final Map<SnapshotId, Commit> commits = new LinkedHashMap<>();
         /** Snapshots whose files are still in storage, expired or not. */
         private final Map<SnapshotId, Commit> onDisk = new LinkedHashMap<>();
-        /** Every snapshot ever made, for rules that should also try ones that are gone. */
+        /** Every snapshot ever made, so rules can also try snapshots that are gone. */
         private final List<SnapshotId> everMade = new ArrayList<>();
 
         private final Map<String, SnapshotId> branches = new TreeMap<>();
@@ -498,7 +498,8 @@ class VersionControlTest {
         /**
          * A cutoff for expiration or garbage collection: past every snapshot, just after one of them, or before all
          * of them. A snapshot and its transaction log are written separately, and expiration compares the snapshot's
-         * written time rather than its file's, so each snapshot's time is the latest of the three.
+         * written time rather than its file's. So each snapshot's time is the latest of three: the snapshot file's
+         * modification time, the transaction log's, and the written time.
          */
         private Instant drawOlderThan(TestCase tc) {
             List<Instant> times = new ArrayList<>();
@@ -545,7 +546,7 @@ class VersionControlTest {
 
     /**
      * Whether an object created at {@code createdAt} counts as created before {@code cutoff}. A store may floor a
-     * creation time to a whole second, so icechunk counts such a time as the whole second.
+     * creation time to a whole second, so icechunk counts a time with no fraction of a second as that whole second.
      */
     @SuppressWarnings("JavaInstantGetSecondsGetNano") // The fraction of the second is the point.
     private static boolean createdEntirelyBefore(Instant createdAt, Instant cutoff) {

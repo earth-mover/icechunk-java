@@ -8,7 +8,8 @@ use tracing_subscriber::EnvFilter;
 use crate::call::{native, optional_text};
 use crate::error::NativeError;
 
-// A null filter reads `ICECHUNK_LOG`. Calling again replaces the filter.
+// With a null filter, icechunk reads the filter from `ICECHUNK_LOG`. Calling again
+// replaces the filter.
 native! { fn initializeLogs(env, filter: JString<'l>) -> () {
     let filter = optional_text(env, &filter)?;
     // icechunk ignores directives it cannot parse, printing only a line to stderr, so

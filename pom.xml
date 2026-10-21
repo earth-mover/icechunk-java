@@ -31,8 +31,8 @@
 	</modules>
 
 	<profiles>
-		<!-- Needs n5-universe with the KeyValueAccessProvider interface, which no release has yet: install it locally
-		     first, then build with -Pn5-universe-provider. -->
+		<!-- icechunk-n5-universe needs an n5-universe with the KeyValueAccessProvider interface, which no release has
+		     yet. Install that n5-universe locally first, then build with -Pn5-universe-provider. -->
 		<profile>
 			<id>n5-universe-provider</id>
 			<modules>

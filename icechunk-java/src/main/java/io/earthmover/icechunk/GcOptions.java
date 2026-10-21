@@ -10,7 +10,8 @@ import java.util.Objects;
  * Which unreachable objects {@link Repository#garbageCollect(GcOptions)} deletes, and how much work it does at once.
  *
  * <p>An object is unreachable when no branch, tag or {@linkplain Builder#extraRoots extra root} leads to it. Each kind
- * of object has its own cutoff, and unreachable objects written before it are deleted; a kind with no cutoff is kept.
+ * of object has its own cutoff: unreachable objects of that kind written before the cutoff are deleted, and a kind
+ * with no cutoff is kept.
  *
  * <pre>{@code
  * GcOptions options = GcOptions.builder()
@@ -47,9 +48,9 @@ public final class GcOptions {
     }
 
     /**
-     * A builder with no cutoffs, which deletes nothing until one is set, and the default limits: 50 snapshots in
-     * memory, 512 MiB of compressed and 4 GiB of decoded manifests, 500 concurrent manifest fetches, 10 concurrent
-     * deletes, stopping after 50 consecutive failed delete batches, and no limit on concurrent listings.
+     * Start building options. Garbage collection deletes an unreachable object only if its kind has a cutoff, so set at
+     * least one, for example with {@link Builder#deleteObjectsOlderThan}; options without a cutoff delete nothing. Each
+     * limit starts at the default its setter documents.
      */
     public static Builder builder() {
         return new Builder();
@@ -129,9 +130,10 @@ public final class GcOptions {
         }
 
         /**
-         * Add {@code snapshots} to the roots: they stay reachable, along with everything they lead to, even if no branch
-         * or tag does, such as snapshots a {@link Repository#resetBranch} moved away from. Each must still be in the
-         * repository, or {@link Repository#garbageCollect(GcOptions)} throws {@link IcechunkException}.
+         * Add {@code snapshots} to the roots, so they and everything they lead to stay reachable even when no branch or
+         * tag leads to them, such as the snapshots a {@link Repository#resetBranch} moved a branch away from. Each
+         * snapshot must still be in the repository, or {@link Repository#garbageCollect(GcOptions)} throws
+         * {@link IcechunkException}.
          */
         public Builder extraRoots(Collection<SnapshotId> snapshots) {
             for (SnapshotId id : snapshots) {

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Run the benchmarks on a Coiled VM instead of this machine.
 #
-# Builds the benchmarks jar locally (it is platform independent), uploads it with the
-# native crate's sources, builds the native library on the VM, and runs the JMH grid and
-# the memory probe there. Results print to the terminal and are saved in
+# The benchmarks jar is platform independent, so it is built locally. The script uploads
+# the jar and the native crate's sources, and the VM builds the native library and runs
+# the JMH grid and the memory probe. Results print to the terminal and are saved in
 # benchmarks/target/coiled-run.log.
 #
 # Usage: scripts/bench-coiled.sh [VM_TYPE] [extra JMH arguments...]

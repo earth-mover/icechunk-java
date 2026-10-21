@@ -92,7 +92,7 @@ class StoreStateMachineTest {
             commits.put(repo.lookupBranch("main"), new TreeMap<>());
             session = repo.writableSession("main");
             store = session.store();
-            // Committed, so discarding changes or reopening the session keeps them.
+            // The root and DATA are committed, so discarding changes or reopening the session keeps them.
             addRoot();
             commits.put(session.commit("root"), copy(model));
             committed = copy(model);
@@ -103,7 +103,7 @@ class StoreStateMachineTest {
 
         @Rule
         void addGroup(TestCase tc) {
-            // A group may replace a group, which changes its attributes, but not an array.
+            // A new group may replace an existing group, changing its attributes, but may not replace an array.
             String path = childPath(tc, false);
             if (path == null) {
                 return;
@@ -313,8 +313,8 @@ class StoreStateMachineTest {
         }
 
         /**
-         * The value a range read of {@code key} is cut from. For a metadata document that is the store's own copy, as
-         * icechunk serializes it in its own way; the invariant compares that copy with the model.
+         * The value a range read of {@code key} is cut from. For a metadata document this is the store's own copy,
+         * because icechunk serializes metadata in its own way; the invariant compares that copy with the model.
          */
         private byte[] reference(String key) {
             if (key.endsWith("zarr.json") && model.containsKey(key)) {
@@ -486,7 +486,7 @@ class StoreStateMachineTest {
     }
 
     /**
-     * A range of each kind for the value of a key, {@code length} bytes long. Two kinds of read are left out until
+     * A range of a drawn kind for a value {@code length} bytes long. Two kinds of read are left out until
      * icechunk fixes them; remove these limits then:
      *
      * <ul>
@@ -515,9 +515,9 @@ class StoreStateMachineTest {
     }
 
     /**
-     * Whether icechunk accepts {@code range} of the value of {@code key}, {@code length} bytes long. It does not clamp.
-     * A chunk range must start inside the chunk and must not end or reach back past it; a metadata range may also
-     * start at the end, and read nothing.
+     * Whether icechunk accepts {@code range} of the value of {@code key}, {@code length} bytes long. icechunk does not
+     * clamp ranges. A chunk range must start inside the chunk and must not end or reach back past it; a metadata
+     * range may also start at the end, and read nothing.
      */
     private static boolean inBounds(String key, long length, ByteRange range) {
         long startLimit = key.endsWith("zarr.json") ? length : length - 1;

@@ -6,8 +6,8 @@ import java.util.Map;
 /**
  * What {@link Repository#garbageCollect} deleted, or would delete in a dry run.
  *
- * <p>A run can succeed with some deletes failing. Those objects stay in storage, and the next run deletes them; check
- * {@link #objectsFailedToDelete()} and {@link #skippedPhases()} to tell a partial run from a complete one.
+ * <p>A run can succeed with some deletes failing. Those objects stay in storage as garbage that a later run can delete.
+ * Check {@link #objectsFailedToDelete()} and {@link #skippedPhases()} to tell a partial run from a complete one.
  */
 public final class GcSummary {
     private final long bytesDeleted;
@@ -74,8 +74,10 @@ public final class GcSummary {
     }
 
     /**
-     * The delete phases that did not run because an earlier phase had failed deletes, in order. Each phase deletes one
-     * kind of object, after the kind that references it: {@code transaction_logs}, {@code manifests}, {@code chunks}.
+     * The delete phases that did not run because an earlier phase had failed deletes, in order. Garbage collection
+     * deletes one kind of object per phase, each only after the kind that references it: snapshots, then transaction
+     * logs, manifests and chunks. The snapshot phase is never skipped, so the values are {@code transaction_logs},
+     * {@code manifests} and {@code chunks}.
      */
     public List<String> skippedPhases() {
         return skippedPhases;

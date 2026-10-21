@@ -27,10 +27,10 @@ final class UrlKeyValueAccess implements KeyValueAccess {
     }
 
     /**
-     * The path relative to the node, percent-encoded, rather than n5's composition onto the URL's path. An opaque URL
-     * such as {@code al:org/repo|icechunk:} has no path to compose onto, and n5 resolves each name as a URI, which reads
-     * a name such as {@code t0:x} as a scheme. Encoding keeps {@code %}, {@code ?} or {@code #} in a name from being
-     * read as syntax.
+     * Joins the components into a path relative to the node and percent-encodes it, rather than composing onto the
+     * URL's path as n5 does. An opaque URL such as {@code al:org/repo|icechunk:} has no path to compose onto, and n5
+     * resolves each name as a URI, which reads a name such as {@code t0:x} as a scheme. Encoding keeps {@code %},
+     * {@code ?} or {@code #} in a name from being read as syntax.
      */
     @Override
     public String compose(URI uri, String... components) {
@@ -101,9 +101,9 @@ final class UrlKeyValueAccess implements KeyValueAccess {
     }
 
     /**
-     * Percent-encodes a path as n5 encodes names, colons included. Encoding it after a {@code /} keeps the URI
-     * constructor from reading a first name such as {@code 0:x} as a scheme, which it rejects, and the encoded colon
-     * keeps it from being read back as one.
+     * Percent-encodes a path as n5 encodes names, colons included. The path is encoded with a leading {@code /} so that
+     * the URI constructor does not read a first name such as {@code 0:x} as a scheme, which it would reject. Encoding
+     * the colon keeps a later parse of the result from reading that name as a scheme.
      */
     private static String encode(String path) {
         return N5URI.encodeAsUriPath("/" + path).getRawPath().substring(1).replace(":", "%3A");

@@ -110,8 +110,8 @@ jobs:
             icechunk-n5/target/icechunk-n5-*.jar
             icechunk-java/target/classes/io/earthmover/icechunk/native/
 
-  # Each platform's library was built on that platform, but only Linux x86_64 loaded it from
-  # the jar above. Run the tests once per platform against the bundled libraries.
+  # The package job runs on Linux x86_64, so its tests load only that platform's library
+  # from the jar. Run the tests once per platform against the bundled libraries.
   test-bundled:
     needs: package
     strategy:

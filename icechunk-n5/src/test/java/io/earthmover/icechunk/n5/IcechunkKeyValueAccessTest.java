@@ -241,7 +241,7 @@ class IcechunkKeyValueAccessTest {
                 Session writable = repo.writableSession("main")) {
             KeyValueAccess cached = new IcechunkKeyValueAccess(readonly);
             KeyValueAccess direct = new IcechunkKeyValueAccess(writable);
-            // The first listing loads the nodes the read-only answers come from.
+            // The first listing loads every node's metadata, which the read-only access then answers from.
             cached.list("");
             for (String path : paths) {
                 assertEquals(outcome(() -> direct.exists(path)), outcome(() -> cached.exists(path)), path);

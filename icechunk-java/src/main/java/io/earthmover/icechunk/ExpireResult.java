@@ -35,13 +35,13 @@ public final class ExpireResult {
     /**
      * Snapshots expiration took out of history. On spec version 2 repositories no branch or tag leads to them
      * afterwards. On spec version 1 repositories another branch or tag may still lead to one, and a tip older than the
-     * cutoff is both released and edited: it stays in its history, with the first snapshot as parent.
+     * cutoff is both released and edited: it stays in its history, with the repository's first snapshot as parent.
      */
     public Set<SnapshotId> releasedSnapshots() {
         return releasedSnapshots;
     }
 
-    /** Snapshots kept whose parent was released. Each now has the first snapshot of its history as parent. */
+    /** Snapshots kept whose parent was released. Expiration gives each the repository's first snapshot as parent. */
     public Set<SnapshotId> editedSnapshots() {
         return editedSnapshots;
     }

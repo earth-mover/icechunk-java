@@ -5,12 +5,12 @@ import java.util.Optional;
 /**
  * A view of one repository version, and for a writable session, the uncommitted changes made on top of it.
  *
- * <p>Read through {@link #store()}. A writable session collects every write in memory and on storage until
+ * <p>Read and write through {@link #store()}. A writable session collects every write in memory and on storage until
  * {@link #commit} makes them a new snapshot, or {@link #discardChanges} drops them.
  *
- * <p>A session is safe to use from several threads. Reads and writes run concurrently; {@link #commit} and
- * {@link #discardChanges} wait for running reads and writes, and block new ones until they finish. Closing a session
- * closes its store.
+ * <p>A session is safe to use from several threads. Reads and writes run concurrently. {@link #commit} and
+ * {@link #discardChanges} wait for running reads and writes to finish, and new reads and writes wait until the commit
+ * or discard is done. Closing a session closes its store.
  */
 public final class Session extends NativeHandle {
     private final Object storeLock = new Object();
@@ -126,7 +126,10 @@ public final class Session extends NativeHandle {
         }
     }
 
-    /** Close the store, then the session, under the lock {@link #store()} takes, so no new store can appear between. */
+    /**
+     * Close the store, then the session. Both close under the lock {@link #store()} takes, so no new store can be
+     * opened after the store closes and before the session does.
+     */
     @Override
     public void close() {
         synchronized (storeLock) {

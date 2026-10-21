@@ -70,7 +70,7 @@
 							<transformers>
 								<transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
 									<mainClass>org.openjdk.jmh.Main</mainClass>
-									<!-- Keeps icechunk-java's Java 9 classes in use; shading drops its manifest. -->
+									<!-- Shading drops icechunk-java's manifest; this enables its Java 9 classes. -->
 									<manifestEntries>
 										<Multi-Release>true</Multi-Release>
 									</manifestEntries>

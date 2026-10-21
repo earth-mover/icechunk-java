@@ -31,7 +31,11 @@ public final class ByteRange {
         return new ByteRange(Native.RANGE_BOUNDED, start, end);
     }
 
-    /** Everything from byte {@code offset} to the end. */
+    /**
+     * Everything from byte {@code offset} to the end.
+     *
+     * @throws IllegalArgumentException if {@code offset} is negative
+     */
     public static ByteRange from(long offset) {
         if (offset < 0) {
             throw new IllegalArgumentException("offset must not be negative: " + offset);
@@ -39,7 +43,11 @@ public final class ByteRange {
         return new ByteRange(Native.RANGE_FROM, offset, 0);
     }
 
-    /** The last {@code length} bytes. */
+    /**
+     * The last {@code length} bytes.
+     *
+     * @throws IllegalArgumentException if {@code length} is negative
+     */
     public static ByteRange suffix(long length) {
         if (length < 0) {
             throw new IllegalArgumentException("length must not be negative: " + length);

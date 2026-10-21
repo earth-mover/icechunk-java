@@ -60,7 +60,7 @@ public final class TestEnvironment {
         return target;
     }
 
-    /** The {@code uv} executable, if it is on the PATH. */
+    /** Whether the {@code uv} executable is on the PATH. */
     private static boolean hasUv() {
         try {
             Process process = new ProcessBuilder("uv", "--version")
