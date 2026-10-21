@@ -70,8 +70,9 @@ public final class RepositoryOptions {
         }
 
         /**
-         * The on-disk format version for a new repository. Defaults to the latest; ignored when opening. A version
-         * icechunk does not support makes opening or creating throw {@link IllegalArgumentException}.
+         * The on-disk format version for a new repository. Defaults to the latest. Opening an existing repository
+         * ignores the version, but a version icechunk does not support makes opening or creating throw
+         * {@link IllegalArgumentException}.
          */
         public Builder specVersion(int specVersion) {
             this.specVersion = specVersion;

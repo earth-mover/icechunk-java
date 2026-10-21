@@ -1,8 +1,8 @@
 """Write Zarr v3 arrays that use numcodecs codecs, for the n5 codec tests to read.
 
 Each array has shape (7, 10) in chunks of (3, 4), so the last row and column of
-chunks are partial. Element (y, x) is x + 10 * y, scaled by 0.25 and offset by -3
-for floating-point types, and offset by -30 for signed integer types.
+chunks are partial. Element (y, x) is x + 10 * y. Floating-point arrays scale that
+by 0.25 and subtract 3, and signed integer arrays subtract 30.
 
 Usage: write_codec_arrays.py PATH
 """

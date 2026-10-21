@@ -74,7 +74,7 @@ class HistoryTest {
         expectedNested.put("flag", true);
         assertEquals(expectedNested, metadata.get("nested"));
         assertEquals(metadata, repo.ancestry(Version.branch("main")).get(0).metadata());
-        // icechunk marks the first snapshot in metadata of its own.
+        // icechunk adds metadata of its own to the first snapshot.
         assertTrue(repo.lookupSnapshot(initial).metadata().containsKey("__icechunk"));
     }
 

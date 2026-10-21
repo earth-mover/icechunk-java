@@ -91,7 +91,8 @@ class ConcurrentStoreTest {
 
         @Rule(group = "write")
         void deleteChunk(TestCase tc) {
-            // Another worker can empty the pool after this check, and the draw then rejects the rule; that is rare.
+            // Another worker can empty the pool between this check and the draw, and the draw then rejects the
+            // rule. That is rare.
             if (deletable.isEmpty()) {
                 return;
             }

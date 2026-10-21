@@ -10,13 +10,13 @@
 //!
 //! Lookups take no lock and write no shared memory. Every Java thread looks up handles on
 //! every call, and with a lock or reference count those threads would contend on one
-//! cache line: with 8 threads, a `std::sync::RwLock` read costs microseconds. Instead a
-//! lookup pins the current thread with `crossbeam_epoch`, which is thread-local, and
-//! borrows the object for as long as the returned [`Ref`] lives. Closing a handle unlinks
-//! the object and defers freeing it until every thread that might still hold a `Ref` to
-//! it has unpinned. A `Ref` held across a long call therefore delays freeing objects
-//! closed during that call; extensions doing long network I/O can copy the `Arc` out of
-//! the `Ref` and drop it first.
+//! cache line. With 8 threads, a `std::sync::RwLock` read costs microseconds. Instead a
+//! lookup pins the current thread with `crossbeam_epoch`, which touches only thread-local
+//! state, and borrows the object for as long as the returned [`Ref`] lives. Closing a
+//! handle unlinks the object and defers freeing it until every thread that might still
+//! hold a `Ref` to it has unpinned. A `Ref` held across a long call therefore delays
+//! freeing objects closed during that call. Extensions doing long network I/O can copy
+//! the `Arc` out of the `Ref` and drop the `Ref` before the I/O starts.
 
 use std::any::Any;
 use std::ops::Deref;
@@ -284,8 +284,9 @@ mod tests {
         let handle =
             insert(Object::Extension(Arc::new(Flag(Arc::clone(&dropped))))).unwrap();
         remove(handle);
-        // No thread holds a `Ref` to it, so collections must run the destructor once
-        // tests on other threads unpin; a fixed number of tries can lose to them.
+        // No thread holds a `Ref` to the object, so a collection runs its destructor once
+        // tests on other threads unpin. A fixed number of tries can lose that race, so
+        // retry until a deadline.
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
         while std::time::Instant::now() < deadline {
             if dropped.load(Ordering::SeqCst) {

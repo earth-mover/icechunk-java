@@ -68,8 +68,8 @@
 					</execution>
 				</executions>
 			</plugin>
-			<!-- A JVM reads META-INF/versions only from a jar, so the default run tests the Java 8
-			     classes and this one tests the jar as shipped. -->
+			<!-- A JVM reads META-INF/versions only from a jar, so the default test run, on the class
+			     directory, tests the Java 8 classes. This second run tests the jar as shipped. -->
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>

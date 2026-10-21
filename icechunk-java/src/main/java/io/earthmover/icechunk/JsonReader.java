@@ -12,10 +12,17 @@ import java.util.Set;
 /**
  * Parses the JSON documents native methods return, such as snapshot listings and diffs.
  *
- * <p>Objects become unmodifiable {@code Map<String, Object>} in document order, arrays unmodifiable {@code List},
- * integers {@code Long} (or {@code BigInteger} beyond its range), other numbers {@code Double}. The input comes from
- * serde_json, so malformed documents are bugs and fail with {@link IllegalStateException}, as do missing or mistyped
- * fields read through the field accessors.
+ * <p>JSON values are read as:
+ *
+ * <ul>
+ *   <li>objects: unmodifiable {@code Map<String, Object>} in document order
+ *   <li>arrays: unmodifiable {@code List}
+ *   <li>integers: {@code Long}, or {@code BigInteger} beyond its range
+ *   <li>other numbers: {@code Double}
+ * </ul>
+ *
+ * <p>The input comes from serde_json, so malformed documents are bugs and fail with {@link IllegalStateException}, as
+ * do missing or mistyped fields read through the field accessors.
  */
 final class JsonReader {
     private final String text;

@@ -19,8 +19,9 @@ import java.util.Locale;
  * <ol>
  *   <li>the file named by the {@code icechunk.native.path} system property, if set and not empty;
  *   <li>the platform library file inside the directory named by {@code icechunk.native.dir}, if set and not empty;
- *   <li>an extended build of the library on the classpath under {@code /io/earthmover/icechunk/native-ext/<os>-<arch>/},
- *       shipped by an extension jar that adds its own native methods (see {@link NativeExtensions});
+ *   <li>an extended build of the library on the classpath under
+ *       {@code /io/earthmover/icechunk/native-ext/<os>-<arch>/}, shipped by an extension jar that adds its own native
+ *       methods (see {@link NativeExtensions});
  *   <li>the copy bundled in this jar under {@code /io/earthmover/icechunk/native/<os>-<arch>/};
  *   <li>{@code System.loadLibrary("icechunk_jni")}, which searches {@code java.library.path}.
  * </ol>
@@ -31,7 +32,7 @@ import java.util.Locale;
  *
  * <p>Each extraction uses a new file name, so the library can be loaded by more than one class loader in the same
  * JVM, which the JVM refuses for a single file. The copy is deleted once loaded, except on Windows, where a loaded
- * library cannot be deleted; there, the next extraction removes copies that are no longer in use.
+ * library cannot be deleted; there, a later extraction removes copies that are over an hour old and no longer in use.
  */
 final class NativeLoader {
     static final String LIBRARY = "icechunk_jni";
@@ -91,9 +92,9 @@ final class NativeLoader {
     }
 
     /**
-     * Delete copies left by earlier runs on Windows. Windows refuses to delete a library another JVM has loaded. A
-     * copy another JVM has only just extracted could still be deleted, so only copies older than an hour are touched.
-     * On other systems copies are deleted as soon as they load.
+     * Delete copies left by earlier runs on Windows. Windows refuses to delete a library another JVM has loaded, but
+     * it would delete a copy another JVM has just extracted and not yet loaded, so only copies older than an hour are
+     * touched. On other systems copies are deleted as soon as they load.
      */
     private static void removeStaleCopies(Path dir, String suffix) {
         long cutoff = System.currentTimeMillis() - STALE_AFTER_MILLIS;

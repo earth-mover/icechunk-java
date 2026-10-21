@@ -161,7 +161,7 @@ public class StoreBenchmark {
         writeStore.set(randomKey(), ByteBuffer.wrap(payload));
     }
 
-    /** As {@link #set}, from a direct buffer, which large values are read from in place. */
+    /** {@link #set} from a direct buffer, which icechunk reads large values from in place rather than copying. */
     @Benchmark
     public void setDirect() {
         writeStore.set(randomKey(), directPayload.duplicate());

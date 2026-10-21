@@ -1,13 +1,16 @@
 //! The JSON documents Java sends: storage, credentials, repository options, versions, and
 //! commit, expiration and garbage collection options.
 //!
-//! These types are the binding's own, not icechunk's serde types. Several inputs have no
-//! serde form in icechunk (`VersionInfo`, `GCConfig`, commit options). icechunk's
-//! credential serde exists so icechunk-python can pickle credentials, includes typetag
-//! tags for refreshable credential fetchers, and changed in a patch release (v1.0.2
-//! re-tagged GCS and Azure static credentials, icechunk#1109). Every field name here must
-//! match what the Java builders emit; `deny_unknown_fields` rejects a misspelled field
-//! instead of ignoring it.
+//! These types are the binding's own, not icechunk's serde types:
+//!
+//! - Several inputs have no serde form in icechunk (`VersionInfo`, `GCConfig`, commit
+//!   options).
+//! - icechunk's credential serde exists so icechunk-python can pickle credentials. It
+//!   includes typetag tags for refreshable credential fetchers, and it has changed in a
+//!   patch release (v1.0.2 re-tagged GCS and Azure static credentials, icechunk#1109).
+//!
+//! Every field name here must match what the Java builders emit. `deny_unknown_fields`
+//! rejects a misspelled field instead of ignoring it.
 
 use std::collections::{HashMap, HashSet};
 use std::num::{NonZeroU16, NonZeroUsize};
@@ -238,7 +241,8 @@ impl From<ContainerCredentialsSpec> for Credentials {
 #[serde(default, deny_unknown_fields)]
 pub(crate) struct RepositoryOptionsSpec {
     /// icechunk's own `RepositoryConfig` document, passed through unchanged. icechunk
-    /// persists this format in every repository, so it keeps reading older documents.
+    /// persists this format in every repository, so icechunk keeps reading older
+    /// documents.
     config: Option<serde_json::Value>,
     virtual_chunk_credentials: HashMap<String, ContainerCredentialsSpec>,
     spec_version: Option<u8>,
@@ -349,8 +353,8 @@ impl ExpireSpec {
 
 /// `GcOptions` from Java. An absent cutoff keeps every object of that kind.
 ///
-/// icechunk's `GCConfig` also has a cutoff for attribute files, which icechunk never
-/// deletes, so it is always `Action::Keep`.
+/// icechunk's `GCConfig` also has a cutoff for attribute files. icechunk never deletes
+/// attribute files, so `parse` always passes `Action::Keep` for that cutoff.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct GcSpec {

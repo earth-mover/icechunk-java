@@ -46,10 +46,16 @@ public final class CommitOptions {
 
         /**
          * Store {@code value} under {@code key} in the snapshot's metadata, which {@link SnapshotInfo#metadata()}
-         * returns. The value must be a JSON value: a {@code String}, {@code Boolean}, {@code Map} with string keys,
-         * {@code Collection}, null, or a number of type {@code Integer}, {@code Long}, {@code Short}, {@code Byte},
-         * {@code Double}, {@code Float} or {@code BigInteger} within the 64-bit range, with maps and collections nested
-         * at most 100 deep.
+         * returns. The value must be a JSON value, which is one of:
+         *
+         * <ul>
+         *   <li>a {@code String}, a {@code Boolean} or null
+         *   <li>an {@code Integer}, {@code Long}, {@code Short} or {@code Byte}
+         *   <li>a finite {@code Double} or {@code Float}
+         *   <li>a {@code BigInteger} within the range of a 64-bit signed or unsigned integer
+         *   <li>a {@code Map} with string keys or a {@code Collection}, whose values are JSON values, nested at most
+         *       100 deep
+         * </ul>
          */
         public Builder metadata(String key, Object value) {
             metadata.put(Objects.requireNonNull(key, "key"), value);

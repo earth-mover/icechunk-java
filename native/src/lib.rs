@@ -97,9 +97,9 @@ pub unsafe extern "system" fn JNI_OnLoad(
     vm: *mut jni::sys::JavaVM,
     _: *mut c_void,
 ) -> jint {
-    // SAFETY: the JVM guarantees `vm` is valid for the life of the library. Wrapping it
-    // registers the process-wide `JavaVM::singleton`, which dropping a global reference
-    // on a non-Java thread relies on.
+    // SAFETY: the JVM guarantees `vm` is valid for the life of the library. Wrapping the
+    // pointer registers the process-wide `JavaVM::singleton`. Dropping a global reference
+    // on a non-Java thread relies on that singleton.
     let _ = unsafe { JavaVM::from_raw(vm) };
     JNI_VERSION_1_8
 }

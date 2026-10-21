@@ -16,7 +16,7 @@ public final class Logging {
 
     /**
      * Log with {@code filter}, in the {@code tracing} crate's {@code EnvFilter} syntax, such as {@code "debug"} or
-     * {@code "icechunk=trace,warn"}. Calling it again replaces the filter.
+     * {@code "icechunk=trace,warn"}. Calling either {@code initialize} method again replaces the filter.
      *
      * @throws IllegalArgumentException if {@code filter} has a directive the syntax does not allow
      */

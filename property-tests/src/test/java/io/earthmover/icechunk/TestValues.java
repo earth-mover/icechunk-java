@@ -79,9 +79,9 @@ final class TestValues {
     }
 
     /**
-     * A chunk value: mostly small, some larger than the default inline threshold of 512 bytes, and a few larger than
-     * the 64 KiB above which a direct buffer is read in place, and at least {@code minLength} bytes long. The bytes come
-     * from a drawn seed, so a large value costs one draw.
+     * A chunk value at least {@code minLength} bytes long. Most values are small. Some are larger than the default
+     * inline threshold of 512 bytes, and a few are larger than 64 KiB, above which {@link Store#set} reads a direct
+     * buffer in place. The bytes come from a drawn seed, so a large value costs one draw.
      */
     static byte[] draw(TestCase tc, int minLength) {
         int tier = tc.draw(integers().min(0).max(9), "sizeTier");

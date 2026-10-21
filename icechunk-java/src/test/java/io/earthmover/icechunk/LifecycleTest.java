@@ -95,8 +95,8 @@ class LifecycleTest {
     }
 
     /**
-     * Only the multi-release jar on Java 9 or later carries the cleaner; the class directory and Java 8 use the class
-     * that never releases on its own.
+     * Only the multi-release jar, run on Java 9 or later, loads the {@link HandleCleaner} that releases unreachable
+     * handles. Tests run from the class directory, or on Java 8, load the one that never releases a handle on its own.
      */
     @Test
     void cleanerMatchesTheRuntime() {

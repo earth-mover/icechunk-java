@@ -236,7 +236,8 @@ class MaintenanceTest {
                 }
             }
 
-            // On spec version 1 an expired tip stays in its history: it is reported as released and edited.
+            // On spec version 1 an expired tip stays in the branch's history, and icechunk reports it as both
+            // released and edited.
             Instant afterTip = v1.lookupSnapshot(ids[2]).writtenAt().plusMillis(1);
             ExpireResult result = v1.expireSnapshots(afterTip);
 

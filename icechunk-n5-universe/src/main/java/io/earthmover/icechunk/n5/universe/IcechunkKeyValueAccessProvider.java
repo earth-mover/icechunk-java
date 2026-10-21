@@ -38,16 +38,16 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
 
 /**
  * Opens {@link IcechunkUrl icechunk URLs} through n5-universe, so any tool that opens a location with
- * {@link N5Factory}, such as n5-ij's importer, opens {@code s3://bucket/repo|icechunk://branch.main/em/raw} as a Zarr v3
- * container rooted at that node.
+ * {@link N5Factory}, such as n5-ij's importer, opens {@code s3://bucket/repo|icechunk://branch.main/em/raw} as a
+ * Zarr v3 container rooted at that node.
  *
  * <p>n5-universe finds this provider through {@code META-INF/services}, so putting the jar on the classpath is enough.
  * URLs open read-only: writes need a commit, which a URL has no place for.
  *
  * <p>S3 and Google Cloud Storage repositories are opened with the credentials the environment provides, such as the
  * AWS default chain, and anonymously if that fails, so public repositories open without credentials. An S3 bucket's
- * region is looked up from the bucket. Each repository is opened once and kept open; every URL opens a new session, so
- * a branch is read at its tip when the URL is opened.
+ * region is looked up from the bucket. Each repository is opened once and kept open. Each URL opened gets a new
+ * session, so a URL naming a branch reads the branch's tip at the time the URL is opened.
  *
  * <p>Virtual chunks are read from every container the repository declares, anonymously, so no credentials are ever
  * sent to a location the repository names. Containers on the local file system are not authorized. Setting the system
@@ -55,12 +55,13 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
  *
  * <p>icechunk splits a large read into ranged requests of about {@code icechunk.requestSize} bytes and sends them in
  * parallel. This provider sets that size to 2 MiB, overriding the repository's own setting; icechunk's default is
- * 12 MiB. It applies to every read from the repository: virtual chunks, and chunks and manifests on S3 or Google Cloud
- * Storage. Set the system property to another number of bytes to change it.
+ * 12 MiB. The request size applies to every read from the repository: virtual chunks, and chunks and manifests on S3
+ * or Google Cloud Storage. To use another size, set the system property {@code icechunk.requestSize} to a number of
+ * bytes.
  *
  * <p>A failed request is tried up to 10 times, waiting from 100 ms up to 10 s between tries. Some servers refuse
- * connections beyond a limit, and a viewer reading several chunks at once can reach it. The provider sets this over the
- * repository's settings, which for a repository on the local file system allow a single try.
+ * connections beyond a limit, and a viewer reading several chunks at once can reach that limit. These retries override
+ * the repository's settings, which for a repository on the local file system allow a single try.
  *
  * <p>A location that a {@link RepositoryResolver} on the classpath claims, such as an Arraylake repository name, is
  * opened by that resolver, which supplies the repository's credentials, including those for its virtual chunks. The
@@ -68,7 +69,7 @@ import org.janelia.saalfeldlab.n5.universe.N5Factory;
  */
 public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvider {
     private static final Map<String, Repository> REPOSITORIES = new ConcurrentHashMap<>();
-    /** Why each resolver that failed to load did, reported when no loaded resolver claims a location. */
+    /** The errors from resolvers that failed to load, reported when no loaded resolver claims a location. */
     private static final List<Throwable> RESOLVER_FAILURES = new ArrayList<>();
 
     private static final List<RepositoryResolver> RESOLVERS = resolvers();
@@ -105,7 +106,10 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
         return new UrlKeyValueAccess(new IcechunkKeyValueAccess(session), url.path());
     }
 
-    /** Opens outside the map: opening can take seconds, and computeIfAbsent would block other locations meanwhile. */
+    /**
+     * The repository at {@code location}, opened on first use and kept open. It is opened outside the map, since
+     * opening can take seconds and computeIfAbsent would block other locations meanwhile.
+     */
     static Repository repository(String location) {
         Repository cached = REPOSITORIES.get(location);
         if (cached != null) {
@@ -209,9 +213,10 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
 
     /**
      * Loads each resolver on its own, skipping any that fail: this runs while the provider class initializes, so one
-     * broken resolver jar would otherwise stop every icechunk URL from opening, not only its own. ServiceLoader throws a
-     * class that cannot be linked from {@code hasNext} and one that cannot be instantiated from {@code next}, and moves
-     * past either. It retries a failure to find the services files on every call, so that ends the loading.
+     * broken resolver jar would otherwise stop every icechunk URL from opening, not only its own. ServiceLoader reports
+     * a resolver class that cannot be linked from {@code hasNext}, and one that cannot be instantiated from
+     * {@code next}, and moves past either. After failing to read the services files, ServiceLoader retries on every
+     * call and fails again, so the loop stops at the first such failure.
      */
     private static List<RepositoryResolver> resolvers() {
         List<RepositoryResolver> resolvers = new ArrayList<>();
@@ -317,7 +322,7 @@ public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvi
 
     /**
      * The region S3 reports for {@code bucket}, or null if the lookup fails. S3 answers a request for any bucket with
-     * its region, with or without credentials.
+     * the bucket's region, with or without credentials.
      */
     private static String bucketRegion(String bucket) {
         try {

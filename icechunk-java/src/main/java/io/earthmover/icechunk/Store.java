@@ -25,16 +25,25 @@ import java.util.OptionalLong;
  * store.set("temperature/c/0/1", ByteBuffer.wrap(encodedChunk));
  * }</pre>
  *
- * <p>Reads copy the value into a new array and free icechunk's copy before returning, so memory stays bounded when
- * streaming through many values. Writes take a {@link ByteBuffer}. A heap buffer's bytes are copied once into
- * icechunk. A direct buffer of more than 64 KiB is read in place instead, and icechunk may keep using it after
- * {@code set} returns: in-memory storage keeps it for as long as the storage lives, and a value below the
- * repository's inline chunk threshold stays in the session until commit. Treat a direct buffer passed to
- * {@code set} as handed over, and do not modify it afterwards.
+ * <p>Reads copy each value into a new array and free icechunk's copy before returning, so memory stays bounded when
+ * streaming through many values.
  *
- * <p>A key is the {@code zarr.json} of a group or array, or the key of one of an array's chunks. A string icechunk
- * cannot parse as a key, such as a group's path, throws {@link IllegalArgumentException} where a key is expected.
- * Changes through a read-only session throw {@link IcechunkException}.
+ * <p>Writes take a {@link ByteBuffer}, and the kind of buffer decides how icechunk gets the bytes:
+ *
+ * <ul>
+ *   <li>A heap buffer is copied once into icechunk, or twice if it is read-only, because Java does not expose a
+ *       read-only buffer's array.
+ *   <li>A direct buffer of at most 64 KiB is copied once into icechunk.
+ *   <li>A direct buffer of more than 64 KiB is read in place, and icechunk may keep using it after {@code set}
+ *       returns. In-memory storage keeps the buffer for as long as the storage lives, and a value below the
+ *       repository's inline chunk threshold stays in the session until commit.
+ * </ul>
+ *
+ * <p>Treat any direct buffer passed to {@code set} as handed over, and do not modify it afterwards.
+ *
+ * <p>A key is the {@code zarr.json} of a group or array, or the key of one of an array's chunks. Passing a string
+ * that icechunk cannot parse as a key, such as a group's path, throws {@link IllegalArgumentException}. Changes
+ * through a read-only session throw {@link IcechunkException}.
  */
 public final class Store extends NativeHandle {
     Store(long handle) {
@@ -57,9 +66,9 @@ public final class Store extends NativeHandle {
     }
 
     /**
-     * Fetch several whole values concurrently. The result has one element per key, in order, empty where the key does
-     * not exist. Use this rather than one {@link #get} per key when reading from object storage, where each request
-     * pays a network round trip.
+     * Fetch several whole values concurrently. The result has one element per key, in the order of {@code keys}, and
+     * the element is empty where the key does not exist. Use this rather than one {@link #get} per key when reading
+     * from object storage, where each request pays a network round trip.
      */
     public List<Optional<byte[]>> getPartialValues(List<String> keys) {
         return getPartialValues(keys, Collections.nCopies(keys.size(), ByteRange.all()));
@@ -175,8 +184,8 @@ public final class Store extends NativeHandle {
      * The total size in bytes of the metadata and chunks of the group or array at {@code prefix} and everything below
      * it. An empty prefix sizes the whole store.
      *
-     * <p>The total is not a snapshot: with concurrent writes it may or may not include keys written or deleted while
-     * it runs.
+     * <p>The total is not taken at a single point in time: it may or may not include keys that other threads write or
+     * delete while it runs.
      *
      * @throws IcechunkException if {@code prefix} is not a group or array
      */

@@ -39,7 +39,7 @@ import org.janelia.saalfeldlab.n5.readdata.VolatileReadData;
  * N5Writer cached = factory.openWriter(StorageFormat.ZARR3, kva, URI.create("icechunk://my-repo"));
  * }</pre>
  *
- * <p>n5-universe's {@code N5FactoryWithCache} caches readers and writers by URI, so give each repository its own.
+ * <p>n5-universe's {@code N5FactoryWithCache} caches readers and writers by URI, so give each repository its own URI.
  *
  * <p>icechunk stores groups and arrays rather than files and directories. A path is a directory if it is the root or
  * holds a {@code zarr.json}, and {@link #createDirectories} does nothing: a group or array exists once its
@@ -47,7 +47,9 @@ import org.janelia.saalfeldlab.n5.readdata.VolatileReadData;
  * {@code zarr.json}: icechunk refuses the write. Writes go to the session and become a snapshot when it commits.
  *
  * <p>Over a read-only session, the first listing reads every group and array's {@code zarr.json} from the session's
- * snapshot in one call, and later listings, existence checks and {@code zarr.json} reads are answered from it. A writable session is asked each time, since writes would make that copy stale.
+ * snapshot in one call and keeps them in memory. Later listings, existence checks and {@code zarr.json} reads are
+ * answered from that copy. Over a writable session, every call goes to the store, since writes would make a copy
+ * stale.
  *
  * <p>Errors from icechunk are thrown as {@link N5IOException}, with the {@link IcechunkException} as the cause. A path
  * that is not a key icechunk can hold, such as a group's path, is not a file; reading or writing it throws
@@ -192,8 +194,9 @@ public final class IcechunkKeyValueAccess implements KeyValueAccess {
     }
 
     /**
-     * The listing of the current store if it is read-only, or null. Only a listing reads it, so that opening one
-     * dataset by its path costs a few lookups rather than every node's metadata.
+     * The groups and arrays of the current store if it is read-only, or null. They are read from the store only when
+     * {@code load} is true, which only the listing methods pass, so that opening one dataset by its path costs a few
+     * lookups rather than a read of every node's metadata.
      */
     private Nodes nodes(String normalPath, boolean load) {
         Store current = store.get();

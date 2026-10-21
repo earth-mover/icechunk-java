@@ -257,8 +257,8 @@ public final class Repository extends NativeHandle {
     /**
      * The changes made after {@code from}, up to and including {@code to}.
      *
-     * @throws IcechunkException unless {@code from} is an earlier snapshot in the history of {@code to}; two versions
-     *     that resolve to the same snapshot also throw
+     * @throws IcechunkException if {@code from} is not an earlier snapshot in the history of {@code to}, including
+     *     when both versions resolve to the same snapshot
      */
     public Diff diff(Version from, Version to) {
         String json;
@@ -270,19 +270,30 @@ public final class Repository extends NativeHandle {
         return Diff.fromJson(json);
     }
 
-    /** Expire snapshots older than {@code olderThan}, keeping the tips of all branches and tags. */
+    /**
+     * Remove snapshots written before {@code olderThan} from every history, keeping every branch and tag and the
+     * snapshot each points to. See {@link #expireSnapshots(Instant, ExpireOptions)}.
+     */
     public ExpireResult expireSnapshots(Instant olderThan) {
         return expireSnapshots(olderThan, ExpireOptions.defaults());
     }
 
     /**
-     * Remove snapshots written before {@code olderThan} from every history. A snapshot written exactly at
-     * {@code olderThan} is kept, and so is each history's first snapshot and the tip of {@code main}. Kept snapshots
-     * whose parent is removed get the first snapshot of their history as parent.
+     * Remove snapshots written before {@code olderThan} from every history. Expiration keeps these snapshots:
      *
-     * <p>Expiration deletes no snapshots or chunks; {@link #garbageCollect} deletes released snapshots and the data
-     * only they use. Other {@code Repository} objects open on the same storage may keep returning the old history from
-     * their caches until reopened. Readers working concurrently can see inconsistent histories.
+     * <ul>
+     *   <li>snapshots written at or after {@code olderThan}
+     *   <li>the first snapshot of each history
+     *   <li>the tip of {@code main}
+     *   <li>the tips of other branches and of tags, unless {@code options} delete those branches or tags
+     * </ul>
+     *
+     * <p>A kept snapshot whose parent is removed gets the first snapshot of its history as parent.
+     *
+     * <p>Expiration deletes no snapshots or chunks. {@link #garbageCollect} deletes the snapshots expiration
+     * released, and the data only they use. Other {@code Repository} objects open on the same storage may keep
+     * returning the old history from their caches until reopened. Readers working concurrently can see inconsistent
+     * histories.
      *
      * @throws IllegalArgumentException if {@code olderThan} is outside the years 0000 to 9999
      * @throws IcechunkException if the storage or repository is read-only

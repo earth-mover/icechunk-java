@@ -34,8 +34,8 @@ import org.scijava.ui.UIService;
  *
  * <p>n5-ij's {@link N5ScalePyramidExporter} writes the image, so the metadata, pyramid and compression are those of
  * Fiji's own OME-Zarr export. The exporter opens its container from a URL with {@link N5Factory}, so this command
- * registers a {@link KeyValueAccessProvider} for one URL made up for the save, whose store is a writable session on
- * the branch. The session is committed once the exporter returns; if anything fails, nothing is committed.
+ * makes up a URL for the save and registers a {@link KeyValueAccessProvider} that opens that URL as a writable session
+ * on the branch. The session is committed once the exporter returns; if anything fails, nothing is committed.
  *
  * <p>A branch that does not exist is created at the tip of {@code main}, and deleted again if the save fails. A
  * repository is created only at a local path, and only when asked.
@@ -224,7 +224,10 @@ public final class SaveToIcechunk implements Command {
         }
     }
 
-    /** Opens the repository, first creating it if it is missing, asked to be, and at a local path. */
+    /**
+     * Opens the repository. A missing repository is created first, but only at a local path and only when
+     * {@code create} is set.
+     */
     private Repository repository(String repositoryLocation) {
         if (IcechunkUrl.hasScheme(repositoryLocation)) {
             try {
@@ -282,8 +285,8 @@ public final class SaveToIcechunk implements Command {
                 downsampling,
                 N5Importer.MetadataOmeZarrKey,
                 compression);
-        // Unset, the exporter asks in a dialog whether to overwrite. clear has emptied the path, so it finds nothing
-        // to.
+        // Left unset, the exporter asks in a dialog whether to overwrite. clear has already emptied the path, so there
+        // is nothing for the exporter to overwrite.
         exporter.setOverwrite(false);
         KeyValueAccessProvider.register(provider);
         try {
