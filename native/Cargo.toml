@@ -13,7 +13,7 @@ name = "icechunk_jni"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-icechunk = { version = "=2.2.2", features = ["logs"] }
+icechunk = { version = "=2.3.0", features = ["logs"] }
 jni = "0.22.4"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "sync"] }
 bytes = "1.11.1"

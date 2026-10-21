@@ -165,6 +165,8 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
 
 - Each kind of object has its own cutoff in `GcOptions`, and `extraRoots` keeps snapshots that no branch or tag leads
   to.
+- A run can succeed with some deletes failing; the objects stay for the next run. `objectsFailedToDelete()` and
+  `skippedPhases()` on `GcSummary` tell a partial run from a complete one.
 - A session's chunks are unreachable until it commits, so choose cutoffs earlier than the start of any session still
   writing.
 - Readers working while either operation runs can see inconsistent histories.

@@ -149,6 +149,7 @@ impl From<GCError> for NativeError {
             GCError::Repository(err) => err.into(),
             GCError::StorageError(err) => err.into(),
             GCError::FormatError(err) => Self::icechunk(&err),
+            GCError::DeletesFailing { .. } => Self::icechunk(&err),
         }
     }
 }

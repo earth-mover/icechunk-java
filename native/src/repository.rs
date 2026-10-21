@@ -39,26 +39,37 @@ async fn open(
         check_clean_root,
     } = options;
     let repository = match mode {
-        OPEN => Repository::open(config, storage, virtual_chunk_credentials).await?,
+        OPEN => {
+            let mut builder = Repository::open(storage)
+                .authorize_virtual_chunk_access(virtual_chunk_credentials);
+            if let Some(config) = config {
+                builder = builder.config(config);
+            }
+            builder.execute().await?
+        }
         CREATE => {
-            Repository::create(
-                config,
-                storage,
-                virtual_chunk_credentials,
-                spec_version,
-                check_clean_root,
-            )
-            .await?
+            let mut builder = Repository::create(storage)
+                .authorize_virtual_chunk_access(virtual_chunk_credentials)
+                .check_clean_root(check_clean_root);
+            if let Some(config) = config {
+                builder = builder.config(config);
+            }
+            if let Some(spec_version) = spec_version {
+                builder = builder.spec_version(spec_version);
+            }
+            builder.execute().await?
         }
         OPEN_OR_CREATE => {
-            Repository::open_or_create(
-                config,
-                storage,
-                virtual_chunk_credentials,
-                spec_version,
-                check_clean_root,
-            )
-            .await?
+            let mut builder = Repository::open_or_create(storage)
+                .authorize_virtual_chunk_access(virtual_chunk_credentials)
+                .check_clean_root(check_clean_root);
+            if let Some(config) = config {
+                builder = builder.config(config);
+            }
+            if let Some(spec_version) = spec_version {
+                builder = builder.spec_version(spec_version);
+            }
+            builder.execute().await?
         }
         other => {
             return Err(NativeError::invalid_argument(format!(

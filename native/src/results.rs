@@ -143,24 +143,32 @@ impl<'a> From<&'a ExpireResult> for ExpirationResult<'a> {
     }
 }
 
-/// icechunk's `GCSummary` without `attributes_deleted`, which icechunk 2.2 never counts.
+/// icechunk's `GCSummary` without `attributes_deleted`, which icechunk never counts.
 #[derive(Debug, Serialize)]
-pub(crate) struct GcSummaryResult {
+pub(crate) struct GcSummaryResult<'a> {
     bytes_deleted: u64,
     chunks_deleted: u64,
     manifests_deleted: u64,
     snapshots_deleted: u64,
     transaction_logs_deleted: u64,
+    objects_failed_to_delete: u64,
+    throttled_batches: u64,
+    delete_errors: &'a [String],
+    skipped_phases: &'a [String],
 }
 
-impl From<&GCSummary> for GcSummaryResult {
-    fn from(summary: &GCSummary) -> Self {
+impl<'a> From<&'a GCSummary> for GcSummaryResult<'a> {
+    fn from(summary: &'a GCSummary) -> Self {
         Self {
             bytes_deleted: summary.bytes_deleted,
             chunks_deleted: summary.chunks_deleted,
             manifests_deleted: summary.manifests_deleted,
             snapshots_deleted: summary.snapshots_deleted,
             transaction_logs_deleted: summary.transaction_logs_deleted,
+            objects_failed_to_delete: summary.objects_failed_to_delete,
+            throttled_batches: summary.throttled_batches,
+            delete_errors: &summary.delete_errors,
+            skipped_phases: &summary.skipped_phases,
         }
     }
 }
@@ -248,10 +256,14 @@ mod tests {
             snapshots_deleted: 3,
             attributes_deleted: 4,
             transaction_logs_deleted: 5,
+            objects_failed_to_delete: 6,
+            throttled_batches: 7,
+            delete_errors: vec!["denied".to_owned()],
+            skipped_phases: vec!["manifests".to_owned(), "chunks".to_owned()],
         };
         assert_eq!(
             serde_json::to_string(&GcSummaryResult::from(&summary)).unwrap(),
-            r#"{"bytes_deleted":1099511627776,"chunks_deleted":1,"manifests_deleted":2,"snapshots_deleted":3,"transaction_logs_deleted":5}"#
+            r#"{"bytes_deleted":1099511627776,"chunks_deleted":1,"manifests_deleted":2,"snapshots_deleted":3,"transaction_logs_deleted":5,"objects_failed_to_delete":6,"throttled_batches":7,"delete_errors":["denied"],"skipped_phases":["manifests","chunks"]}"#
         );
     }
 }

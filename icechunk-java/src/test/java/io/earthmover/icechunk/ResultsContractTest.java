@@ -64,12 +64,18 @@ class ResultsContractTest {
     @Test
     void gcSummary() {
         GcSummary summary = GcSummary.fromJson("{\"bytes_deleted\":1099511627776,\"chunks_deleted\":1,"
-                + "\"manifests_deleted\":2,\"snapshots_deleted\":3,\"transaction_logs_deleted\":5}");
+                + "\"manifests_deleted\":2,\"snapshots_deleted\":3,\"transaction_logs_deleted\":5,"
+                + "\"objects_failed_to_delete\":6,\"throttled_batches\":7,\"delete_errors\":[\"denied\"],"
+                + "\"skipped_phases\":[\"manifests\",\"chunks\"]}");
         assertEquals(1L << 40, summary.bytesDeleted());
         assertEquals(1, summary.chunksDeleted());
         assertEquals(2, summary.manifestsDeleted());
         assertEquals(3, summary.snapshotsDeleted());
         assertEquals(5, summary.transactionLogsDeleted());
+        assertEquals(6, summary.objectsFailedToDelete());
+        assertEquals(7, summary.throttledBatches());
+        assertEquals(Collections.singletonList("denied"), summary.deleteErrors());
+        assertEquals(Arrays.asList("manifests", "chunks"), summary.skippedPhases());
     }
 
     @Test
