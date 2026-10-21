@@ -3,7 +3,9 @@
 //! A native method runs on the calling Java thread from start to finish: it reads its
 //! arguments, drives the icechunk future to completion with [`block_on`], and converts
 //! the result to a Java value. Errors become Java exceptions through [`ThrowIcechunk`],
-//! thrown before the method returns.
+//! thrown before the method returns. Snapshot expiration and garbage collection are the
+//! exception: their futures run on a runtime worker, through [`block_on_worker`], while
+//! the Java thread waits.
 
 use std::future::Future;
 
@@ -50,6 +52,31 @@ pub fn block_on<F: Future>(future: F) -> NativeResult<F::Output> {
     // `futures`' executor parks this thread without touching memory shared with other
     // callers, unlike tokio's `Handle::block_on`.
     Ok(futures::executor::block_on(future))
+}
+
+/// Run `future` as a task on a runtime worker and wait for it on the calling thread.
+///
+/// For snapshot expiration and garbage collection, whose futures nest deeply enough to
+/// overflow a 1 MiB Java thread stack in a debug build, and a 256 KiB one in a release
+/// build. A worker polls them on its own 2 MiB stack instead. The spawn costs a few
+/// microseconds, which these calls do not notice.
+pub(crate) fn block_on_worker<F>(future: F) -> NativeResult<F::Output>
+where
+    F: Future + Send + 'static,
+    F::Output: Send + 'static,
+{
+    let task = runtime::handle()?.spawn(future);
+    match block_on(task)? {
+        Ok(output) => Ok(output),
+        // Rethrow on this thread, so jni-rs reports the panic like one raised here.
+        Err(err) => match err.try_into_panic() {
+            Ok(payload) => std::panic::resume_unwind(payload),
+            Err(err) => Err(NativeError::new(
+                ErrorKind::Icechunk,
+                format!("icechunk task did not finish: {err}"),
+            )),
+        },
+    }
 }
 
 /// Run a native method body, turning an error or panic into a pending Java exception.

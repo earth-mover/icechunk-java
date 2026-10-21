@@ -1,7 +1,8 @@
 //! The tokio runtime that drives icechunk's I/O.
 //!
 //! Java threads run each operation themselves, through `call::block_on`, so the
-//! runtime's own workers only poll I/O and run the tasks icechunk spawns internally. They
+//! runtime's own workers only poll I/O, run the tasks icechunk spawns internally, and run
+//! snapshot expiration and garbage collection, through `call::block_on_worker`. They
 //! do not call into Java, so they are not attached to the JVM and do not pin the class
 //! loader that loaded this library. The one exception is brief: releasing a Java buffer
 //! that a write borrowed (see `buffers`) attaches the releasing thread for the duration

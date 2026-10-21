@@ -78,6 +78,12 @@ A native method runs on the calling Java thread from start to finish:
 
 The runtime's own threads only poll I/O and run tasks icechunk spawns internally. They never call into Java.
 
+Snapshot expiration and garbage collection are the exception to step 2. Their futures nest deeply enough to overflow
+the calling thread's stack: garbage collection needs more than 1 MiB in a debug build and more than 256 KiB in a
+release build, and Linux x86_64 and Windows x64 give Java threads 1 MiB by default. A stack overflow in native code
+kills the JVM without an exception. So these two calls run their future as a task on a runtime worker, with tokio's
+2 MiB stack, and the Java thread waits for it. They take far longer than the spawn costs.
+
 Both choices come from measurements with the benchmarks in `benchmarks/`:
 
 - Running each call as a task on a runtime thread and waking the Java thread with the result cost about 18 µs per
