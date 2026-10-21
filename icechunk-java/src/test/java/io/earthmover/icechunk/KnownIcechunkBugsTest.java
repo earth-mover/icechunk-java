@@ -2,6 +2,7 @@ package io.earthmover.icechunk;
 
 import static io.earthmover.icechunk.RepositoryTest.GROUP;
 import static io.earthmover.icechunk.StoreTest.ARRAY;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -30,24 +31,32 @@ class KnownIcechunkBugsTest {
 
     /**
      * icechunk passes an empty range of a native chunk to the object store, which rejects it; the same range of an
-     * inline chunk reads as empty.
+     * inline chunk reads as empty. Either half changing means icechunk has made the two agree.
      */
     @Test
     void emptyRangeOfNativeChunkFails() {
+        IcechunkException e = assertThrows(IcechunkException.class, () -> emptyRangeOfChunk(0));
+        assertTrue(e.getMessage().contains("Invalid range"), e.getMessage());
+    }
+
+    @Test
+    void emptyRangeOfInlineChunkIsEmpty() {
+        assertArrayEquals(new byte[0], emptyRangeOfChunk(512));
+    }
+
+    private static byte[] emptyRangeOfChunk(int inlineThreshold) {
         try (Storage storage = Storage.inMemory();
                 Repository repo = Repository.create(
                         storage,
                         RepositoryOptions.builder()
-                                .configJson("{\"inline_chunk_threshold_bytes\":0}")
+                                .configJson("{\"inline_chunk_threshold_bytes\":" + inlineThreshold + "}")
                                 .build());
                 Session session = repo.writableSession("main")) {
             Store store = session.store();
             store.set("zarr.json", ByteBuffer.wrap(GROUP));
             store.set("data/zarr.json", ByteBuffer.wrap(ARRAY));
             store.set("data/c/0", ByteBuffer.wrap(new byte[] {1, 2, 3, 4}));
-            IcechunkException e =
-                    assertThrows(IcechunkException.class, () -> store.get("data/c/0", ByteRange.of(1, 1)));
-            assertTrue(e.getMessage().contains("Invalid range"), e.getMessage());
+            return store.get("data/c/0", ByteRange.of(1, 1)).get();
         }
     }
 }

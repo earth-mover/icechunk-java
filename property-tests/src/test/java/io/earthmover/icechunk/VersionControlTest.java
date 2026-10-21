@@ -162,7 +162,8 @@ class VersionControlTest {
             }
             session.discardChanges();
             assertFalse(session.hasUncommittedChanges());
-            checkoutBranch(branch);
+            store = new TreeMap<>(commits.get(branches.get(branch)).store);
+            changed = false;
         }
 
         @Rule
