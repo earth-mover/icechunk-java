@@ -78,6 +78,9 @@ and run `pixi run test-strict`. The fixture script reads the new version from `C
 from its release tag. To test against an unreleased icechunk, point the dependency at a git revision instead; the
 script handles that too.
 
+`KnownIcechunkBugsTest` asserts the behaviour of icechunk bugs that the tests work around. If one of its tests fails
+after an update, that bug is fixed: delete the test and remove the workaround it names.
+
 ## Commits
 
 Describe what the change does and why. Keep unrelated changes in separate commits.
