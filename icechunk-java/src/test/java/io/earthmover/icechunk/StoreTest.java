@@ -79,6 +79,17 @@ class StoreTest {
     }
 
     @Test
+    void chunksOfMissingArraysAreEmpty() {
+        assertEquals(Optional.empty(), store.get("nope/c/0"));
+        assertEquals(Optional.empty(), store.get("nope/c/0", ByteRange.suffix(2)));
+        assertEquals(
+                Optional.empty(),
+                store.getPartialValues(Arrays.asList("nope/c/0")).get(0));
+        assertFalse(store.exists("nope/c/0"));
+        assertEquals(OptionalLong.empty(), store.getSize("nope/c/0"));
+    }
+
+    @Test
     void sizes() {
         assertEquals(OptionalLong.of(4), store.getSize("data/c/0"));
         assertEquals(OptionalLong.of(ARRAY.length), store.getSize("data/zarr.json"));

@@ -51,11 +51,17 @@ fn byte_range(kind: jlong, a: jlong, b: jlong) -> NativeResult<ByteRange> {
     }
 }
 
-/// Map "key not found" to `None` and every other error through.
+/// Map "key not found" to `None` and every other error through. A chunk key of an array
+/// that does not exist is reported as a missing node rather than a missing key.
 fn found<T>(result: Result<T, StoreError>) -> NativeResult<Option<T>> {
     match result {
         Ok(value) => Ok(Some(value)),
-        Err(StoreError { kind: StoreErrorKind::NotFound(_), .. }) => Ok(None),
+        Err(StoreError {
+            kind:
+                StoreErrorKind::NotFound(_)
+                | StoreErrorKind::SessionError(SessionErrorKind::NodeNotFound { .. }),
+            ..
+        }) => Ok(None),
         Err(err) => Err(err.into()),
     }
 }
