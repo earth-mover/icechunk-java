@@ -4,6 +4,7 @@ import static io.earthmover.icechunk.RepositoryTest.GROUP;
 import static io.earthmover.icechunk.StoreTest.ARRAY;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -14,6 +15,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -141,6 +143,31 @@ class MaintenanceTest {
         try (Session session = repo.readonlySession(Version.branch("main"))) {
             assertArrayEquals(chunk(3), session.store().get("a/c/0").get());
         }
+    }
+
+    /** Overflowing the stack in native code kills the JVM, so a failure here shows up as a crashed test run. */
+    @Test
+    void maintenanceRunsOnAThreadWithASmallStack() throws InterruptedException {
+        commitChunk("main", 1);
+        SnapshotId second = commitChunk("main", 2);
+        AtomicReference<GcSummary> summary = new AtomicReference<>();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
+        Thread thread = new Thread(
+                null,
+                () -> {
+                    try {
+                        repo.expireSnapshots(writtenAt(second));
+                        summary.set(repo.garbageCollect(Instant.now().plusSeconds(60)));
+                    } catch (Throwable e) {
+                        failure.set(e);
+                    }
+                },
+                "small-stack",
+                256 * 1024);
+        thread.start();
+        thread.join();
+        assertNull(failure.get());
+        assertEquals(1, summary.get().snapshotsDeleted());
     }
 
     @Test

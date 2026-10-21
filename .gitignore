@@ -17,3 +17,6 @@ dependency-reduced-pom.xml
 .factorypath
 .project
 .settings/
+
+# hegel example databases
+.hegel/

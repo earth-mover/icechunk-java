@@ -9,7 +9,9 @@ use icechunk::ops::gc::{ExpiredRefAction, expire, garbage_collect};
 use jni::objects::{JObjectArray, JString};
 use jni::sys::{jboolean, jint, jlong};
 
-use crate::call::{block_on, json_string, native, optional_text, strings, text};
+use crate::call::{
+    block_on, block_on_worker, json_string, native, optional_text, strings, text,
+};
 use crate::error::{NativeError, NativeResult};
 use crate::handles::{self, Object};
 use crate::results::{
@@ -220,15 +222,20 @@ native! { fn repositoryExpireSnapshots(env, repository: jlong, options: JString<
     // closed meanwhile; see `handles`.
     let repository = Arc::clone(&*handles::repository(repository)?);
     let spec = ExpireSpec::parse(&text(env, &options)?)?;
-    let config = repository.config();
-    let result = block_on(expire(
-        Arc::clone(repository.asset_manager()),
-        spec.older_than,
-        ref_action(spec.delete_expired_branches),
-        ref_action(spec.delete_expired_tags),
-        Some(config.repo_update_retries()),
-        config.num_updates_per_repo_info_file(),
-    ))??;
+    let asset_manager = Arc::clone(repository.asset_manager());
+    let retries = *repository.config().repo_update_retries();
+    let updates_per_file = repository.config().num_updates_per_repo_info_file();
+    let result = block_on_worker(async move {
+        expire(
+            asset_manager,
+            spec.older_than,
+            ref_action(spec.delete_expired_branches),
+            ref_action(spec.delete_expired_tags),
+            Some(&retries),
+            updates_per_file,
+        )
+        .await
+    })??;
     json_string(env, &ExpirationResult::from(&result))
 }}
 
@@ -237,12 +244,11 @@ native! { fn repositoryGarbageCollect(env, repository: jlong, options: JString<'
     // closed meanwhile; see `handles`.
     let repository = Arc::clone(&*handles::repository(repository)?);
     let gc = GcSpec::parse(&text(env, &options)?)?;
-    let config = repository.config();
-    let summary = block_on(garbage_collect(
-        Arc::clone(repository.asset_manager()),
-        &gc,
-        Some(config.repo_update_retries()),
-        config.num_updates_per_repo_info_file(),
-    ))??;
+    let asset_manager = Arc::clone(repository.asset_manager());
+    let retries = *repository.config().repo_update_retries();
+    let updates_per_file = repository.config().num_updates_per_repo_info_file();
+    let summary = block_on_worker(async move {
+        garbage_collect(asset_manager, &gc, Some(&retries), updates_per_file).await
+    })??;
     json_string(env, &GcSummaryResult::from(&summary))
 }}

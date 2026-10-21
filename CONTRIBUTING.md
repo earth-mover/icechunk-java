@@ -40,6 +40,7 @@ Spotless (palantir-java-format), so warnings and formatting fail the build. Clip
 | `native/src/error.rs` | The native error type, and how icechunk's errors map onto Java exceptions. |
 | `icechunk-java/` | The public Java API and its internals (`Native`, `NativeHandle`, `NativeLoader`, `Json`, `JsonReader`). |
 | `benchmarks/` | JMH benchmarks of the Store API. |
+| `property-tests/` | Stateful property tests, run with [hegel](https://github.com/hegeldev/hegel-java), which compare random sequences of operations with a model. Built for Java 21, so CI skips them on Java 8. Set `HEGEL_TEST_CASES` for a longer run; a failure prints the shrunk steps and a `reproduceFailure` string that replays them. |
 | `icechunk-zarr-java/` | The zarr-java adapter, and the zarr-java, fixture and Python interop tests. |
 | `icechunk-n5/` | The N5 adapter, and its n5-zarr and Python interop tests. |
 | `icechunk-n5-universe/` | Opens icechunk URLs through n5-universe's `N5Factory`. Builds only with `-Pn5-universe-provider`. |
@@ -76,6 +77,9 @@ Change the icechunk version in `native/Cargo.toml`, run `cargo update -p icechun
 and run `pixi run test-strict`. The fixture script reads the new version from `Cargo.lock` and fetches the fixtures
 from its release tag. To test against an unreleased icechunk, point the dependency at a git revision instead; the
 script handles that too.
+
+`KnownIcechunkBugsTest` asserts the behaviour of icechunk bugs that the tests work around. If one of its tests fails
+after an update, that bug is fixed: delete the test and remove the workaround it names.
 
 ## Commits
 

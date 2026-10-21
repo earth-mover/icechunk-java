@@ -113,7 +113,11 @@ public final class Session extends NativeHandle {
         return Diff.fromJson(json);
     }
 
-    /** Drop all uncommitted changes. */
+    /**
+     * Drop all uncommitted changes.
+     *
+     * @throws IcechunkException if the session is read-only
+     */
     public void discardChanges() {
         try {
             Native.sessionDiscardChanges(handle());

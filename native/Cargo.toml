@@ -13,6 +13,8 @@ name = "icechunk_jni"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+# When updating icechunk, KnownIcechunkBugsTest pins the icechunk bugs the tests work around;
+# a failure there means a bug is fixed and its workaround can go.
 icechunk = { version = "=2.3.0", features = ["logs"] }
 jni = "0.22.4"
 tokio = { version = "1.52.3", features = ["rt-multi-thread", "sync"] }

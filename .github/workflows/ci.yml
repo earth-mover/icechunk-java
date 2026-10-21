@@ -63,6 +63,7 @@ jobs:
           cache: maven
       - name: Test on JDK 21
         run: mvn -B verify "-Dicechunk.tests.strict=true"
+      # hegel needs Java 17, so the property tests run only on JDK 21.
       - name: Test on JDK 8
         shell: bash
-        run: mvn -B verify "-Dicechunk.tests.strict=true" "-Djvm=${{ steps.jdk8.outputs.path }}/bin/java"
+        run: mvn -B verify -pl '!property-tests' "-Dicechunk.tests.strict=true" "-Djvm=${{ steps.jdk8.outputs.path }}/bin/java"
