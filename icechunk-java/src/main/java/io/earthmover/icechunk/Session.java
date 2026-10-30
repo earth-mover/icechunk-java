@@ -94,9 +94,82 @@ public final class Session extends NativeHandle {
      * @see #commit(String)
      */
     public SnapshotId commit(String message, CommitOptions options) {
+        return commit(message, options, Native.COMMIT);
+    }
+
+    /**
+     * Replace the snapshot at the tip of the branch with one holding its changes and this session's, with {@code
+     * message}. The replaced snapshot leaves the branch's history. The session must have started from the branch's
+     * current tip.
+     *
+     * @return the new snapshot
+     * @throws ConflictException if another writer committed to the branch since this session started
+     * @throws IcechunkException if the session is read-only, has no changes, or the tip is the repository's first
+     *     snapshot
+     */
+    public SnapshotId amend(String message) {
+        return amend(message, CommitOptions.defaults());
+    }
+
+    /** {@link #amend(String)}, with metadata or other {@code options}. */
+    public SnapshotId amend(String message, CommitOptions options) {
+        return commit(message, options, Native.AMEND);
+    }
+
+    /**
+     * Write the uncommitted changes as a snapshot without moving the branch, as icechunk-python's {@code flush} does.
+     * Open a session on the returned snapshot, or point a branch or tag at it, to use it. After a flush the session is
+     * read-only.
+     *
+     * @return the new snapshot
+     */
+    public SnapshotId flush(String message) {
+        return flush(message, CommitOptions.defaults());
+    }
+
+    /** {@link #flush(String)}, with metadata or other {@code options}. */
+    public SnapshotId flush(String message, CommitOptions options) {
+        return commit(message, options, Native.FLUSH);
+    }
+
+    private SnapshotId commit(String message, CommitOptions options, int kind) {
         String json = options.toJson();
         try {
-            return SnapshotId.of(Native.sessionCommit(handle(), message, json));
+            return SnapshotId.of(Native.sessionCommit(handle(), message, json, kind));
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
+    /**
+     * Move this session's uncommitted changes on top of every commit made to its branch since the session started, so
+     * that a following {@link #commit} succeeds. {@code solver} decides what happens when the changes conflict.
+     *
+     * @throws RebaseFailedException if the solver cannot resolve a conflict; the session is then rebased onto the
+     *     commits before the one that conflicts
+     * @throws IcechunkException if the session is read-only
+     */
+    public void rebase(ConflictSolver solver) {
+        String json = solver.toJson();
+        try {
+            Native.sessionRebase(handle(), json);
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
+    /**
+     * Move or rename the group or array at {@code from}, with everything under it, to {@code to}. Paths are absolute
+     * node paths such as {@code /group/array}; the parent of {@code to} must exist. Works only in a session from
+     * {@link Repository#rearrangeSession}, and only in repositories with the version 2 format.
+     *
+     * @throws IcechunkException if the session cannot move nodes, {@code from} does not exist, {@code to} exists, or
+     *     {@code to} is inside {@code from}
+     * @throws IllegalArgumentException if a path is not an absolute node path
+     */
+    public void move(String from, String to) {
+        try {
+            Native.sessionMove(handle(), from, to);
         } finally {
             HandleCleaner.reachabilityFence(this);
         }

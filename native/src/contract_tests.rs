@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 use crate::error::ErrorKind;
-use crate::{repository, store};
+use crate::{repository, session, store};
 
 const NATIVE_JAVA: &str =
     include_str!("../../icechunk-java/src/main/java/io/earthmover/icechunk/Native.java");
@@ -41,6 +41,9 @@ fn constants_match_native_java() {
         ("LIST_ALL", store::LIST_ALL.into()),
         ("LIST_PREFIX", store::LIST_PREFIX.into()),
         ("LIST_DIR", store::LIST_DIR.into()),
+        ("COMMIT", session::COMMIT.into()),
+        ("AMEND", session::AMEND.into()),
+        ("FLUSH", session::FLUSH.into()),
     ];
     let java = java_constants();
     for (name, value) in rust {
@@ -62,6 +65,7 @@ fn error_kinds_match_icechunk_exception() {
     // Kinds without a case fall through to a plain IcechunkException.
     let mapped = [
         ErrorKind::Conflict,
+        ErrorKind::RebaseFailed,
         ErrorKind::InvalidArgument,
         ErrorKind::Closed,
         ErrorKind::RuntimeThread,
@@ -72,6 +76,7 @@ fn error_kinds_match_icechunk_exception() {
     let all = [
         ErrorKind::Icechunk,
         ErrorKind::Conflict,
+        ErrorKind::RebaseFailed,
         ErrorKind::InvalidArgument,
         ErrorKind::Closed,
         ErrorKind::RuntimeThread,
