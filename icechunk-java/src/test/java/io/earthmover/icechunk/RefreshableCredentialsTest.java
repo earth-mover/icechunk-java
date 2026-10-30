@@ -188,14 +188,17 @@ final class RefreshableCredentialsTest {
     @Test
     void manyThreadsSurviveASupplierCalledOnEveryRequest() throws Exception {
         AtomicInteger calls = new AtomicInteger();
-        // Inside the 120-second refresh window, so every request asks the supplier again: thousands of callback
-        // round trips from runtime and Java threads at once.
+        // Inside the 120-second refresh window even with the cache's jitter, so every request asks the supplier
+        // again: thousands of callback round trips from runtime and Java threads at once.
         try (Storage storage = storage(counting(calls, 11), null);
                 Repository repo = Repository.create(storage)) {
             writeRoot(repo);
             int reads = readConcurrently(repo, 8, 5);
             System.out.printf("callback stress: %d reads on 8 threads, supplier called %d times%n", reads, calls.get());
-            assertTrue(calls.get() >= reads, "calls " + calls.get() + " < reads " + reads);
+            // Requests that need credentials while a fetch is in flight share it, so there can be fewer calls than
+            // reads, but each of the eight threads waits for a fresh fetch on every read.
+            assertTrue(calls.get() >= reads / 8, "calls " + calls.get() + ", reads " + reads);
+            assertTrue(calls.get() > 100, "calls " + calls.get());
         }
     }
 
