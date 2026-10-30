@@ -9,6 +9,7 @@
 use std::collections::{BTreeMap, BTreeSet, HashSet};
 
 use chrono::SecondsFormat;
+use icechunk::conflicts::Conflict;
 use icechunk::diff::Diff;
 use icechunk::format::snapshot::{SnapshotInfo, SnapshotProperties};
 use icechunk::format::{ChunkIndices, Path, SnapshotId};
@@ -173,6 +174,85 @@ impl<'a> From<&'a GCSummary> for GcSummaryResult<'a> {
     }
 }
 
+/// Why a rebase failed: the snapshot it could not rebase onto, and the conflicts its
+/// solver could not resolve. Sent as the message of a `REBASE_FAILED` error, which
+/// `IcechunkException.fromNative` turns into a `RebaseFailedException`.
+#[derive(Debug, Serialize)]
+pub(crate) struct RebaseFailedResult<'a> {
+    message: &'a str,
+    snapshot: String,
+    conflicts: Vec<ConflictResult<'a>>,
+}
+
+impl<'a> RebaseFailedResult<'a> {
+    pub(crate) fn new(
+        message: &'a str,
+        snapshot: &SnapshotId,
+        conflicts: &'a [Conflict],
+    ) -> Self {
+        Self {
+            message,
+            snapshot: snapshot.to_string(),
+            conflicts: conflicts.iter().map(ConflictResult::from).collect(),
+        }
+    }
+}
+
+/// One conflict. `type` is the snake_case name of icechunk's `Conflict` variant, which
+/// `Conflict.Type` in Java mirrors.
+#[derive(Debug, Serialize)]
+struct ConflictResult<'a> {
+    #[serde(rename = "type")]
+    kind: &'static str,
+    path: Option<String>,
+    /// Chunk indices, sorted, for `chunk_double_update` only.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    chunks: Option<BTreeSet<&'a ChunkIndices>>,
+}
+
+impl<'a> From<&'a Conflict> for ConflictResult<'a> {
+    fn from(conflict: &'a Conflict) -> Self {
+        let (kind, path, chunks) = match conflict {
+            Conflict::NewNodeConflictsWithExistingNode(path) => {
+                ("new_node_conflicts_with_existing_node", Some(path), None)
+            }
+            Conflict::NewNodeInInvalidGroup(path) => {
+                ("new_node_in_invalid_group", Some(path), None)
+            }
+            Conflict::ZarrMetadataDoubleUpdate(path) => {
+                ("zarr_metadata_double_update", Some(path), None)
+            }
+            Conflict::ZarrMetadataUpdateOfDeletedArray(path) => {
+                ("zarr_metadata_update_of_deleted_array", Some(path), None)
+            }
+            Conflict::ZarrMetadataUpdateOfDeletedGroup(path) => {
+                ("zarr_metadata_update_of_deleted_group", Some(path), None)
+            }
+            Conflict::ChunkDoubleUpdate { path, chunk_coordinates, .. } => (
+                "chunk_double_update",
+                Some(path),
+                Some(chunk_coordinates.iter().collect()),
+            ),
+            Conflict::ChunksUpdatedInDeletedArray { path, .. } => {
+                ("chunks_updated_in_deleted_array", Some(path), None)
+            }
+            Conflict::ChunksUpdatedInUpdatedArray { path, .. } => {
+                ("chunks_updated_in_updated_array", Some(path), None)
+            }
+            Conflict::DeleteOfUpdatedArray { path, .. } => {
+                ("delete_of_updated_array", Some(path), None)
+            }
+            Conflict::DeleteOfUpdatedGroup { path, .. } => {
+                ("delete_of_updated_group", Some(path), None)
+            }
+            Conflict::MoveOperationCannotBeRebased => {
+                ("move_operation_cannot_be_rebased", None, None)
+            }
+        };
+        Self { kind, path: path.map(ToString::to_string), chunks }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -264,6 +344,30 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&GcSummaryResult::from(&summary)).unwrap(),
             r#"{"bytes_deleted":1099511627776,"chunks_deleted":1,"manifests_deleted":2,"snapshots_deleted":3,"transaction_logs_deleted":5,"objects_failed_to_delete":6,"throttled_batches":7,"delete_errors":["denied"],"skipped_phases":["manifests","chunks"]}"#
+        );
+    }
+
+    #[test]
+    fn rebase_failed() {
+        let path = |p: &str| Path::try_from(p).unwrap();
+        let node_id = NodeId::random();
+        let conflicts = vec![
+            Conflict::ChunkDoubleUpdate {
+                path: path("/a"),
+                node_id: node_id.clone(),
+                chunk_coordinates: HashSet::from([
+                    ChunkIndices(vec![1, 0]),
+                    ChunkIndices(vec![0, 1]),
+                ]),
+            },
+            Conflict::ZarrMetadataDoubleUpdate(path("/g")),
+            Conflict::MoveOperationCannotBeRebased,
+        ];
+        let id = SnapshotId::try_from("1CECHNKREP0F1RSTCMT0").unwrap();
+        assert_eq!(
+            serde_json::to_string(&RebaseFailedResult::new("m", &id, &conflicts))
+                .unwrap(),
+            r#"{"message":"m","snapshot":"1CECHNKREP0F1RSTCMT0","conflicts":[{"type":"chunk_double_update","path":"/a","chunks":[[0,1],[1,0]]},{"type":"zarr_metadata_double_update","path":"/g"},{"type":"move_operation_cannot_be_rebased","path":null}]}"#
         );
     }
 }

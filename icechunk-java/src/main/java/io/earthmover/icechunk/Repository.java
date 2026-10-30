@@ -347,6 +347,18 @@ public final class Repository extends NativeHandle {
         }
     }
 
+    /**
+     * Open a session on the tip of {@code branch} that can only move and rename nodes, with {@link Session#move}, and
+     * commit those moves. It cannot write chunks or metadata. Needs a repository with the version 2 format.
+     */
+    public Session rearrangeSession(String branch) {
+        try {
+            return new Session(Native.repositoryRearrangeSession(handle(), branch));
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
     private static Set<String> sortedSet(String[] names) {
         return Collections.unmodifiableSet(new LinkedHashSet<>(Arrays.asList(names)));
     }

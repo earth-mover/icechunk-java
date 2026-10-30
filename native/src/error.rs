@@ -10,6 +10,8 @@ use icechunk::session::{SessionError, SessionErrorKind};
 use icechunk::storage::StorageError;
 use icechunk::store::{StoreError, StoreErrorKind};
 
+use crate::results::RebaseFailedResult;
+
 /// Error categories the Java side maps to exception classes.
 ///
 /// The string forms are part of the contract with `IcechunkException.fromNative` in
@@ -20,6 +22,9 @@ pub enum ErrorKind {
     Icechunk,
     /// A commit lost a race with another writer on the same branch.
     Conflict,
+    /// A rebase found conflicts its solver could not resolve. The message is a
+    /// `RebaseFailedResult` JSON document listing them.
+    RebaseFailed,
     /// The Java caller passed a value the native layer cannot use.
     InvalidArgument,
     /// The handle was closed, or never referred to a live object.
@@ -35,6 +40,7 @@ impl ErrorKind {
         match self {
             ErrorKind::Icechunk => "ICECHUNK",
             ErrorKind::Conflict => "CONFLICT",
+            ErrorKind::RebaseFailed => "REBASE_FAILED",
             ErrorKind::InvalidArgument => "INVALID_ARGUMENT",
             ErrorKind::Closed => "CLOSED",
             ErrorKind::RuntimeThread => "RUNTIME_THREAD",
@@ -115,8 +121,16 @@ impl From<RefError> for NativeError {
 impl From<SessionError> for NativeError {
     fn from(err: SessionError) -> Self {
         match &err.kind {
-            SessionErrorKind::Conflict { .. } | SessionErrorKind::RebaseFailed { .. } => {
+            SessionErrorKind::Conflict { .. } => {
                 Self::new(ErrorKind::Conflict, err.to_string())
+            }
+            SessionErrorKind::RebaseFailed { snapshot, conflicts } => {
+                let message = err.to_string();
+                let result = RebaseFailedResult::new(&message, snapshot, conflicts);
+                match serde_json::to_string(&result) {
+                    Ok(json) => Self::new(ErrorKind::RebaseFailed, json),
+                    Err(_) => Self::new(ErrorKind::Conflict, message),
+                }
             }
             _ => Self::icechunk(&err),
         }

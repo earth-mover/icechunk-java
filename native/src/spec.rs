@@ -24,6 +24,9 @@ use icechunk::config::{
 };
 use serde::Deserialize;
 
+use icechunk::conflicts::ConflictSolver;
+use icechunk::conflicts::basic_solver::{BasicConflictSolver, VersionSelection};
+use icechunk::conflicts::detector::ConflictDetector;
 use icechunk::format::SnapshotId;
 use icechunk::format::format_constants::SpecVersionBin;
 use icechunk::format::snapshot::SnapshotProperties;
@@ -328,6 +331,57 @@ impl VersionSpec {
 pub(crate) struct CommitSpec {
     pub(crate) metadata: Option<SnapshotProperties>,
     pub(crate) allow_empty: bool,
+    /// The solver for rebasing onto commits made since the session started, if any.
+    pub(crate) rebase_with: Option<ConflictSolverSpec>,
+    /// How many times to rebase and retry when another writer wins the race.
+    pub(crate) rebase_tries: Option<u16>,
+}
+
+/// A `ConflictSolver` from Java.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
+pub(crate) enum ConflictSolverSpec {
+    /// Fail on any conflict.
+    Detector,
+    /// icechunk's `BasicConflictSolver`.
+    Basic {
+        on_chunk_conflict: VersionSelectionSpec,
+        fail_on_delete_of_updated_array: bool,
+        fail_on_delete_of_updated_group: bool,
+    },
+}
+
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(crate) enum VersionSelectionSpec {
+    Fail,
+    UseOurs,
+    UseTheirs,
+}
+
+impl ConflictSolverSpec {
+    pub(crate) fn parse(json: &str) -> NativeResult<ConflictSolverSpec> {
+        Ok(serde_json::from_str(json)?)
+    }
+
+    pub(crate) fn solver(self) -> Box<dyn ConflictSolver + Send + Sync> {
+        match self {
+            ConflictSolverSpec::Detector => Box::new(ConflictDetector),
+            ConflictSolverSpec::Basic {
+                on_chunk_conflict,
+                fail_on_delete_of_updated_array,
+                fail_on_delete_of_updated_group,
+            } => Box::new(BasicConflictSolver {
+                on_chunk_conflict: match on_chunk_conflict {
+                    VersionSelectionSpec::Fail => VersionSelection::Fail,
+                    VersionSelectionSpec::UseOurs => VersionSelection::UseOurs,
+                    VersionSelectionSpec::UseTheirs => VersionSelection::UseTheirs,
+                },
+                fail_on_delete_of_updated_array,
+                fail_on_delete_of_updated_group,
+            }),
+        }
+    }
 }
 
 impl CommitSpec {
@@ -528,6 +582,24 @@ mod tests {
         assert_eq!(metadata.get("n"), Some(&serde_json::json!(1)));
         let defaults = CommitSpec::parse(r#"{"allow_empty":false}"#).unwrap();
         assert!(defaults.metadata.is_none() && !defaults.allow_empty);
+        assert!(defaults.rebase_with.is_none() && defaults.rebase_tries.is_none());
+        let rebasing = CommitSpec::parse(
+            r#"{"allow_empty":false,"rebase_with":{"type":"basic","on_chunk_conflict":"use_theirs","fail_on_delete_of_updated_array":true,"fail_on_delete_of_updated_group":false},"rebase_tries":5}"#,
+        )
+        .unwrap();
+        assert!(matches!(
+            rebasing.rebase_with,
+            Some(ConflictSolverSpec::Basic {
+                on_chunk_conflict: VersionSelectionSpec::UseTheirs,
+                fail_on_delete_of_updated_array: true,
+                fail_on_delete_of_updated_group: false,
+            })
+        ));
+        assert_eq!(rebasing.rebase_tries, Some(5));
+        assert!(matches!(
+            ConflictSolverSpec::parse(r#"{"type":"detector"}"#).unwrap(),
+            ConflictSolverSpec::Detector
+        ));
     }
 
     #[test]

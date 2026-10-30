@@ -7,7 +7,10 @@ package io.earthmover.icechunk;
  *
  * <ul>
  *   <li>{@link Session#commit}, when another writer committed to the same branch since the session started. Open a
- *       new writable session and redo the changes.
+ *       new writable session and redo the changes, or {@link Session#rebase} the session onto the new commits and
+ *       commit again; {@link CommitOptions.Builder#rebaseWith} does this automatically.
+ *   <li>{@link Session#rebase}, as its subclass {@link RebaseFailedException}, when the solver cannot resolve the
+ *       conflicts.
  *   <li>{@link Repository#resetBranch(String, SnapshotId, SnapshotId)}, when the branch no longer points to the
  *       expected snapshot.
  *   <li>Operations that update the repository's list of branches, tags and snapshots, such as creating a branch or

@@ -83,4 +83,31 @@ class ResultsContractTest {
         IllegalStateException e = assertThrows(IllegalStateException.class, () -> Diff.fromJson("{\"new_groups\":[]}"));
         assertEquals("native result field new_arrays is missing or not a list", e.getMessage());
     }
+
+    @Test
+    void rebaseFailed() {
+        RebaseFailedException e = (RebaseFailedException) IcechunkException.fromNative(
+                "REBASE_FAILED",
+                "{\"message\":\"m\",\"snapshot\":\"1CECHNKREP0F1RSTCMT0\",\"conflicts\":[{\"type\":"
+                        + "\"chunk_double_update\",\"path\":\"/a\",\"chunks\":[[0,1],[1,0]]},{\"type\":"
+                        + "\"zarr_metadata_double_update\",\"path\":\"/g\"},{\"type\":"
+                        + "\"move_operation_cannot_be_rebased\",\"path\":null}]}");
+        assertEquals(SnapshotId.of("1CECHNKREP0F1RSTCMT0"), e.snapshotId());
+        assertEquals(3, e.conflicts().size());
+        Conflict chunks = e.conflicts().get(0);
+        assertEquals(Conflict.Type.CHUNK_DOUBLE_UPDATE, chunks.type());
+        assertEquals("/a", chunks.path().get());
+        assertEquals(Arrays.asList(Arrays.asList(0L, 1L), Arrays.asList(1L, 0L)), chunks.chunks());
+        assertEquals(
+                Conflict.Type.ZARR_METADATA_DOUBLE_UPDATE, e.conflicts().get(1).type());
+        assertEquals(Collections.emptyList(), e.conflicts().get(1).chunks());
+        assertEquals(
+                Conflict.Type.MOVE_OPERATION_CANNOT_BE_REBASED,
+                e.conflicts().get(2).type());
+        assertEquals(false, e.conflicts().get(2).path().isPresent());
+        assertEquals(
+                "m: [CHUNK_DOUBLE_UPDATE /a [[0, 1], [1, 0]], ZARR_METADATA_DOUBLE_UPDATE /g, "
+                        + "MOVE_OPERATION_CANNOT_BE_REBASED]",
+                e.getMessage());
+    }
 }
