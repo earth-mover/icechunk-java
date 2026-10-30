@@ -8,6 +8,9 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.ServerSocket;
+import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -15,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -58,6 +62,73 @@ public final class TestEnvironment {
             }
         }
         return target;
+    }
+
+    private static String s3Endpoint;
+
+    /**
+     * The URL of an S3-compatible server for tests, with access key {@code testkey} / {@code testsecret}: the one named
+     * by {@code -Dicechunk.tests.s3.endpoint}, or else a moto server this JVM starts through {@code uv} and stops on
+     * exit. Skips the test, as {@link #require} does, when neither is available.
+     */
+    public static synchronized String s3Endpoint() {
+        if (s3Endpoint == null) {
+            String configured = System.getProperty("icechunk.tests.s3.endpoint", "");
+            s3Endpoint = configured.isEmpty() ? startMoto() : configured;
+        }
+        require(!s3Endpoint.isEmpty(), "an S3 endpoint (icechunk.tests.s3.endpoint, or uv to start moto)");
+        return s3Endpoint;
+    }
+
+    /** Starts moto's S3 server, returning its URL, or an empty string if it cannot start. */
+    private static String startMoto() {
+        if (!hasUv()) {
+            return "";
+        }
+        try {
+            int port;
+            try (ServerSocket socket = new ServerSocket(0)) {
+                port = socket.getLocalPort();
+            }
+            Path log = Files.createTempFile("icechunk-moto-", ".log");
+            log.toFile().deleteOnExit();
+            Process process = new ProcessBuilder(
+                            "uv",
+                            "run",
+                            "--no-project",
+                            "--with",
+                            "moto[server]",
+                            "moto_server",
+                            "-H",
+                            "127.0.0.1",
+                            "-p",
+                            Integer.toString(port))
+                    .redirectErrorStream(true)
+                    .redirectOutput(log.toFile())
+                    .start();
+            Runtime.getRuntime().addShutdownHook(new Thread(process::destroy));
+            String url = "http://127.0.0.1:" + port;
+            long until = System.nanoTime() + TimeUnit.MINUTES.toNanos(3); // the first run downloads moto
+            while (System.nanoTime() < until && process.isAlive()) {
+                try {
+                    HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
+                    connection.setConnectTimeout(1000);
+                    connection.getResponseCode();
+                    connection.disconnect();
+                    return url;
+                } catch (IOException e) {
+                    Thread.sleep(250);
+                }
+            }
+            process.destroy();
+            System.err.println("moto did not start:\n" + readQuietly(log));
+            return "";
+        } catch (IOException e) {
+            return "";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "";
+        }
     }
 
     /** Whether the {@code uv} executable is on the PATH. */

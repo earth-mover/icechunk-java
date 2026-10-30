@@ -176,8 +176,9 @@ So the work is handed off:
    message; the AWS SDK's own message ("dispatch failure") hides it, so errors now carry their cause chain.
 
 icechunk's AWS identity cache asks for new credentials when the current ones are within 120 seconds of
-`expiresAfter`, so credentials valid for an hour are fetched about once an hour; credentials without an expiry are
-fetched once.
+`expiresAfter`, after moving `expiresAfter` later by a random 0 to 60 seconds, so credentials valid for an hour are
+fetched about once an hour; credentials without an expiry are fetched once. Credentials that expire within two minutes
+are fetched again on almost every request.
 
 **Lifetime.** The fetcher holds the callback's global reference, so the supplier, and the class loader that loaded
 it, stay reachable while a storage, repository or session uses the credentials, and become collectable when the last
@@ -188,7 +189,8 @@ again when deserialized in the same process, and fails with a clear message in a
 Virtual chunk containers do not take refreshable credentials yet: their credentials travel in the repository options
 JSON, which has no callback slot, so `Credentials.s3` and `Credentials.gcs` reject them.
 
-`RefreshableCredentialsTest`, against an S3-compatible server, covers caching until shortly before expiry, a stress run
+`RefreshableCredentialsTest`, against an S3-compatible server, covers caching of long-lived credentials, refetching
+of expiring ones, a stress run
 where every request calls the supplier (thousands of round trips from eight threads), a supplier that throws, one that
 returns the wrong type, one that never answers, a slow supplier while other calls continue, a supplier that uses
 icechunk itself, and the release of the supplier when its objects close.

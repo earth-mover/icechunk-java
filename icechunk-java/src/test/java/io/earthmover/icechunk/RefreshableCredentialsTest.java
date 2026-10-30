@@ -28,13 +28,11 @@ import org.junit.jupiter.api.Test;
 /**
  * Credentials refreshed through a Java {@link Supplier}.
  *
- * <p>The tests that talk to S3 need an S3-compatible server, named by {@code -Dicechunk.tests.s3.endpoint} (for
- * example {@code http://127.0.0.1:9000} running moto or MinIO), with access key {@code testkey} / {@code testsecret}.
- * They skip without one. moto ignores signatures, so they check that the supplier is called and that operations keep
+ * <p>The tests that talk to S3 need an S3-compatible server: {@link TestEnvironment#s3Endpoint} names one, or starts
+ * moto. moto ignores signatures, so they check that the supplier is called and that operations keep
  * working across expiry, not that the server rejects stale credentials.
  */
 final class RefreshableCredentialsTest {
-    private static final String ENDPOINT = System.getProperty("icechunk.tests.s3.endpoint", "");
     private static final String BUCKET = "refreshable";
 
     @Test
@@ -101,27 +99,28 @@ final class RefreshableCredentialsTest {
     }
 
     private static Storage storage(Supplier<S3Credentials> supplier, Duration timeout) {
-        requireS3();
+        String endpoint = createBucket();
         return Storage.s3(S3Options.builder(BUCKET)
                 .prefix("t-" + UUID.randomUUID())
                 .region("us-east-1")
-                .endpointUrl(ENDPOINT)
+                .endpointUrl(endpoint)
                 .allowHttp(true)
                 .forcePathStyle(true)
                 .credentials(S3Credentials.refreshable(supplier, timeout))
                 .build());
     }
 
-    private static void requireS3() {
-        TestEnvironment.require(!ENDPOINT.isEmpty(), "an S3 endpoint (icechunk.tests.s3.endpoint)");
+    private static String createBucket() {
+        String endpoint = TestEnvironment.s3Endpoint();
         try {
-            HttpURLConnection put = (HttpURLConnection) new URL(ENDPOINT + "/" + BUCKET).openConnection();
+            HttpURLConnection put = (HttpURLConnection) new URL(endpoint + "/" + BUCKET).openConnection();
             put.setRequestMethod("PUT");
             put.getResponseCode(); // 200, or 409 when the bucket exists
             put.disconnect();
         } catch (java.io.IOException e) {
-            TestEnvironment.require(false, "S3 endpoint " + ENDPOINT + " (" + e + ")");
+            TestEnvironment.require(false, "S3 endpoint " + endpoint + " (" + e + ")");
         }
+        return endpoint;
     }
 
     /** Reads on {@code threads} threads for {@code seconds}, each read opening a session from storage. */
@@ -159,19 +158,30 @@ final class RefreshableCredentialsTest {
     }
 
     @Test
-    void credentialsAreCachedUntilShortlyBeforeTheyExpire() throws Exception {
+    void credentialsThatDoNotExpireSoonAreFetchedOnce() throws Exception {
         AtomicInteger calls = new AtomicInteger();
-        // icechunk's AWS identity cache fetches new credentials 120 seconds before expiry, so credentials that
-        // expire in 123 seconds are good for about 3 seconds: over 7 seconds, a few fetches, not one per request.
-        try (Storage storage = storage(counting(calls, 123), null);
+        try (Storage storage = storage(counting(calls, 3600), null);
                 Repository repo = Repository.create(storage)) {
             writeRoot(repo);
-            int reads = readConcurrently(repo, 8, 7);
-            System.out.printf(
-                    "refresh under load: %d reads on 8 threads, supplier called %d times%n", reads, calls.get());
-            assertTrue(calls.get() >= 2, "the supplier ran only " + calls.get() + " times");
-            assertTrue(calls.get() <= 10, "credentials were not cached: " + calls.get() + " fetches");
-            assertTrue(reads > 8 * calls.get(), "reads: " + reads);
+            int reads = readConcurrently(repo, 8, 3);
+            System.out.printf("cached: %d reads on 8 threads, supplier called %d times%n", reads, calls.get());
+            assertEquals(1, calls.get(), "credentials were not cached");
+        }
+    }
+
+    @Test
+    void expiringCredentialsAreFetchedAgain() throws Exception {
+        AtomicInteger calls = new AtomicInteger();
+        // icechunk's AWS identity cache asks for new credentials 120 seconds before they expire, after moving the
+        // expiry later by a random 0 to 60 seconds. Credentials that expire in 62 seconds are therefore due again at
+        // most 2 seconds after each fetch, so 6 seconds of reads must see the supplier called more than once, and the
+        // reads must keep working across each refresh.
+        try (Storage storage = storage(counting(calls, 62), null);
+                Repository repo = Repository.create(storage)) {
+            writeRoot(repo);
+            int reads = readConcurrently(repo, 2, 6);
+            System.out.printf("refresh: %d reads, supplier called %d times%n", reads, calls.get());
+            assertTrue(calls.get() >= 3, "the supplier ran only " + calls.get() + " times");
         }
     }
 
