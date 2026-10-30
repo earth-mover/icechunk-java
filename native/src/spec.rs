@@ -475,6 +475,36 @@ mod tests {
         ));
     }
 
+    /// `JsonContractTest.typedRepositoryConfig` builds this document.
+    #[test]
+    fn typed_repository_config() {
+        let json = r#"{"config":{"inline_chunk_threshold_bytes":12,"get_partial_values_concurrency":4,"max_concurrent_requests":64,"max_concurrent_decodes":2,"compression":{"level":5},"caching":{"num_snapshot_nodes":1,"num_bytes_chunks":2},"storage":{"concurrency":{"max_concurrent_requests_for_object":4,"ideal_concurrent_request_size":1048576},"retries":{"max_tries":3,"initial_backoff_ms":10,"max_backoff_ms":1000},"unsafe_use_conditional_update":false,"storage_class":"STANDARD_IA"},"virtual_chunk_containers":{"s3://b/":{"url_prefix":"s3://b/","store":{"s3":{"region":"us-east-1","anonymous":true,"allow_http":false,"force_path_style":false,"requester_pays":false}}},"memory://":{"url_prefix":"memory://","store":"in_memory"},"https://e/":{"url_prefix":"https://e/","store":{"http":{}}}},"manifest":{"preload":{"max_total_refs":100,"max_arrays_to_scan":10},"max_concurrent_manifest_fetches_during_commit":8}},"virtual_chunk_credentials":{},"check_clean_root":true}"#;
+        let config = RepositoryOptionsSpec::parse(json).unwrap().config.unwrap();
+        assert_eq!(config.inline_chunk_threshold_bytes, Some(12));
+        assert_eq!(config.get_partial_values_concurrency, Some(4));
+        assert_eq!(config.max_concurrent_requests, Some(64));
+        assert_eq!(config.max_concurrent_decodes, Some(2));
+        assert_eq!(config.compression.unwrap().level, Some(5));
+        let caching = config.caching.unwrap();
+        assert_eq!(
+            (caching.num_snapshot_nodes, caching.num_bytes_chunks),
+            (Some(1), Some(2))
+        );
+        let storage = config.storage.unwrap();
+        assert_eq!(storage.retries.unwrap().max_tries.map(NonZeroU16::get), Some(3));
+        assert_eq!(
+            storage.concurrency.unwrap().ideal_concurrent_request_size.map(|n| n.get()),
+            Some(1_048_576)
+        );
+        assert_eq!(storage.unsafe_use_conditional_update, Some(false));
+        let containers = config.virtual_chunk_containers.unwrap();
+        assert_eq!(containers.len(), 3);
+        assert_eq!(containers["s3://b/"].url_prefix(), "s3://b/");
+        let manifest = config.manifest.unwrap();
+        assert_eq!(manifest.preload.unwrap().max_total_refs, Some(100));
+        assert_eq!(manifest.max_concurrent_manifest_fetches_during_commit, Some(8));
+    }
+
     #[test]
     fn empty_repository_options() {
         let options = RepositoryOptionsSpec::parse("{}").unwrap();

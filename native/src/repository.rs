@@ -99,6 +99,12 @@ native! { fn repositoryConfig(env, repository: jlong) -> JString<'l> {
     json_string(env, repository.config())
 }}
 
+native! { fn repositorySaveConfig(_, repository: jlong) -> () {
+    let repository = handles::repository(repository)?;
+    block_on(repository.save_config())??;
+    Ok(())
+}}
+
 native! { fn repositoryListBranches(env, repository: jlong) -> JObjectArray<'l, JString<'l>> {
     let repository = handles::repository(repository)?;
     let names = block_on(repository.list_branches())??;

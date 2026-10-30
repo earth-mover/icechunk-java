@@ -55,10 +55,20 @@ public final class RepositoryOptions {
          * Repository configuration as a JSON document in icechunk's {@code RepositoryConfig} format, layered over the
          * config stored in the repository. {@link Repository#configJson()} returns a document in this format. Defaults
          * to none. A document icechunk cannot parse makes opening or creating the repository throw
-         * {@link IllegalArgumentException}.
+         * {@link IllegalArgumentException}. {@link #config(RepositoryConfig)} builds the common settings with types;
+         * this method covers the rest.
          */
         public Builder configJson(String configJson) {
             this.configJson = configJson;
+            return this;
+        }
+
+        /**
+         * Typed repository configuration, layered over the config stored in the repository. Replaces any earlier
+         * {@link #configJson}.
+         */
+        public Builder config(RepositoryConfig config) {
+            this.configJson = Objects.requireNonNull(config, "config").toJson();
             return this;
         }
 
