@@ -16,11 +16,19 @@ public final class Credentials {
 
     /** Read an S3 or S3-compatible container with {@code credentials}. */
     public static Credentials s3(S3Credentials credentials) {
+        if (credentials.isRefreshable()) {
+            throw new IllegalArgumentException(
+                    "refreshable credentials work for storage, not yet for virtual chunk containers");
+        }
         return new Credentials(Json.object().put("type", "s3").put("credentials", credentials.toJson()));
     }
 
     /** Read a Google Cloud Storage container with {@code credentials}. */
     public static Credentials gcs(GcsCredentials credentials) {
+        if (credentials.isRefreshable()) {
+            throw new IllegalArgumentException(
+                    "refreshable credentials work for storage, not yet for virtual chunk containers");
+        }
         return new Credentials(Json.object().put("type", "gcs").put("credentials", credentials.toJson()));
     }
 

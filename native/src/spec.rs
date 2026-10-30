@@ -30,6 +30,7 @@ use icechunk::format::snapshot::SnapshotProperties;
 use icechunk::ops::gc::{Action, GCConfig};
 use icechunk::repository::VersionInfo;
 
+use crate::credentials::{Callbacks, DEFAULT_TIMEOUT};
 use crate::error::{NativeError, NativeResult};
 
 #[derive(Debug, Deserialize)]
@@ -106,26 +107,59 @@ pub(crate) enum S3CredentialsSpec {
         access_key_id: String,
         secret_access_key: String,
         session_token: Option<String>,
+        /// When temporary credentials expire; icechunk fetches new ones from a
+        /// refreshable source shortly before.
+        #[serde(default)]
+        expires_after: Option<DateTime<Utc>>,
+    },
+    /// Fetched from a Java `Supplier`, the `callback`-th object passed with the spec.
+    Refreshable {
+        callback: usize,
+        #[serde(default)]
+        timeout_seconds: Option<u64>,
     },
 }
 
-impl From<S3CredentialsSpec> for S3Credentials {
-    fn from(spec: S3CredentialsSpec) -> Self {
-        match spec {
+impl S3CredentialsSpec {
+    /// The icechunk credentials, with refreshable ones bound to their Java callback.
+    pub(crate) fn resolve(self, callbacks: &Callbacks) -> NativeResult<S3Credentials> {
+        Ok(match self {
             S3CredentialsSpec::FromEnv => S3Credentials::FromEnv,
             S3CredentialsSpec::Anonymous => S3Credentials::Anonymous,
+            spec @ S3CredentialsSpec::Static { .. } => {
+                S3Credentials::Static(spec.into_static().ok_or_else(|| {
+                    NativeError::invalid_argument("not static credentials")
+                })?)
+            }
+            S3CredentialsSpec::Refreshable { callback, timeout_seconds } => {
+                S3Credentials::Refreshable(
+                    callbacks.s3_fetcher(callback, timeout(timeout_seconds))?,
+                )
+            }
+        })
+    }
+
+    /// Static credentials, as a refreshable supplier must return.
+    pub(crate) fn into_static(self) -> Option<S3StaticCredentials> {
+        match self {
             S3CredentialsSpec::Static {
                 access_key_id,
                 secret_access_key,
                 session_token,
-            } => S3Credentials::Static(S3StaticCredentials {
+                expires_after,
+            } => Some(S3StaticCredentials {
                 access_key_id,
                 secret_access_key,
                 session_token,
-                expires_after: None,
+                expires_after,
             }),
+            _ => None,
         }
     }
+}
+
+fn timeout(seconds: Option<u64>) -> std::time::Duration {
+    seconds.map_or(DEFAULT_TIMEOUT, std::time::Duration::from_secs)
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -145,12 +179,21 @@ pub(crate) enum GcsCredentialsSpec {
     },
     BearerToken {
         token: String,
+        #[serde(default)]
+        expires_after: Option<DateTime<Utc>>,
+    },
+    /// Bearer tokens from a Java `Supplier`, the `callback`-th object passed with the spec.
+    Refreshable {
+        callback: usize,
+        #[serde(default)]
+        timeout_seconds: Option<u64>,
     },
 }
 
-impl From<GcsCredentialsSpec> for GcsCredentials {
-    fn from(spec: GcsCredentialsSpec) -> Self {
-        match spec {
+impl GcsCredentialsSpec {
+    /// The icechunk credentials, with refreshable ones bound to their Java callback.
+    pub(crate) fn resolve(self, callbacks: &Callbacks) -> NativeResult<GcsCredentials> {
+        Ok(match self {
             GcsCredentialsSpec::FromEnv => GcsCredentials::FromEnv,
             GcsCredentialsSpec::Anonymous => GcsCredentials::Anonymous,
             GcsCredentialsSpec::ServiceAccountFile { path } => {
@@ -162,11 +205,26 @@ impl From<GcsCredentialsSpec> for GcsCredentials {
             GcsCredentialsSpec::ApplicationCredentialsFile { path } => {
                 GcsCredentials::Static(GcsStaticCredentials::ApplicationCredentials(path))
             }
-            GcsCredentialsSpec::BearerToken { token } => {
+            GcsCredentialsSpec::BearerToken { token, expires_after } => {
                 GcsCredentials::Static(GcsStaticCredentials::BearerToken(
-                    GcsBearerCredential { bearer: token, expires_after: None },
+                    GcsBearerCredential { bearer: token, expires_after },
                 ))
             }
+            GcsCredentialsSpec::Refreshable { callback, timeout_seconds } => {
+                GcsCredentials::Refreshable(
+                    callbacks.gcs_fetcher(callback, timeout(timeout_seconds))?,
+                )
+            }
+        })
+    }
+
+    /// A bearer token, as a refreshable supplier must return.
+    pub(crate) fn into_bearer(self) -> Option<GcsBearerCredential> {
+        match self {
+            GcsCredentialsSpec::BearerToken { token, expires_after } => {
+                Some(GcsBearerCredential { bearer: token, expires_after })
+            }
+            _ => None,
         }
     }
 }
@@ -217,14 +275,28 @@ pub(crate) enum ContainerCredentialsSpec {
     Http,
 }
 
-impl From<ContainerCredentialsSpec> for Credentials {
-    fn from(spec: ContainerCredentialsSpec) -> Self {
-        match spec {
+impl ContainerCredentialsSpec {
+    /// Virtual chunk containers take no Java callbacks yet, so refreshable credentials
+    /// are rejected here.
+    fn resolve(self) -> NativeResult<Credentials> {
+        let none = Callbacks::default();
+        let refreshable = || {
+            NativeError::invalid_argument(
+                "refreshable credentials are supported for storage, not yet for virtual chunk containers",
+            )
+        };
+        Ok(match self {
             ContainerCredentialsSpec::S3 { credentials } => {
-                Credentials::S3(credentials.into())
+                if matches!(credentials, S3CredentialsSpec::Refreshable { .. }) {
+                    return Err(refreshable());
+                }
+                Credentials::S3(credentials.resolve(&none)?)
             }
             ContainerCredentialsSpec::Gcs { credentials } => {
-                Credentials::Gcs(credentials.into())
+                if matches!(credentials, GcsCredentialsSpec::Refreshable { .. }) {
+                    return Err(refreshable());
+                }
+                Credentials::Gcs(credentials.resolve(&none)?)
             }
             ContainerCredentialsSpec::Azure { credentials } => {
                 Credentials::Azure(credentials.into())
@@ -233,7 +305,7 @@ impl From<ContainerCredentialsSpec> for Credentials {
                 Credentials::LocalFileSystemAccess
             }
             ContainerCredentialsSpec::Http => Credentials::HttpAccess,
-        }
+        })
     }
 }
 
@@ -261,13 +333,14 @@ impl RepositoryOptionsSpec {
     pub(crate) fn parse(json: &str) -> NativeResult<RepositoryOptions> {
         let spec: RepositoryOptionsSpec = serde_json::from_str(json)?;
         let config = spec.config.map(serde_json::from_value).transpose()?;
+        let virtual_chunk_credentials = spec
+            .virtual_chunk_credentials
+            .into_iter()
+            .map(|(prefix, credentials)| Ok((prefix, Some(credentials.resolve()?))))
+            .collect::<NativeResult<_>>()?;
         Ok(RepositoryOptions {
             config,
-            virtual_chunk_credentials: spec
-                .virtual_chunk_credentials
-                .into_iter()
-                .map(|(prefix, credentials)| (prefix, Some(credentials.into())))
-                .collect(),
+            virtual_chunk_credentials,
             spec_version: spec
                 .spec_version
                 .map(|v| {
@@ -437,9 +510,38 @@ mod tests {
         assert_eq!(options.region.as_deref(), Some("us-east-1"));
         assert!(options.allow_http && options.force_path_style && !options.anonymous);
         assert!(matches!(
-            S3Credentials::from(credentials),
-            S3Credentials::Static(S3StaticCredentials { session_token: None, .. })
+            credentials.resolve(&Callbacks::default()),
+            Ok(S3Credentials::Static(S3StaticCredentials { session_token: None, .. }))
         ));
+    }
+
+    #[test]
+    fn refreshable_and_expiring_credentials() {
+        let json = r#"{"type":"static","access_key_id":"a","secret_access_key":"s",
+            "expires_after":"2030-01-01T00:00:00Z"}"#;
+        let spec: S3CredentialsSpec = serde_json::from_str(json).unwrap();
+        let expiry = spec.into_static().and_then(|c| c.expires_after);
+        assert_eq!(
+            expiry.map(|e| e.to_rfc3339()).as_deref(),
+            Some("2030-01-01T00:00:00+00:00")
+        );
+
+        let spec: S3CredentialsSpec = serde_json::from_str(
+            r#"{"type":"refreshable","callback":0,"timeout_seconds":5}"#,
+        )
+        .unwrap();
+        // The callback object must accompany the spec.
+        assert!(spec.resolve(&Callbacks::default()).is_err());
+
+        let gcs: GcsCredentialsSpec = serde_json::from_str(
+            r#"{"type":"bearer_token","token":"t","expires_after":"2030-01-01T00:00:00Z"}"#,
+        )
+        .unwrap();
+        assert!(gcs.into_bearer().is_some_and(|b| b.expires_after.is_some()));
+
+        let container = r#"{"virtual_chunk_credentials":{"s3://b/":{"type":"s3",
+            "credentials":{"type":"refreshable","callback":0}}}}"#;
+        assert!(RepositoryOptionsSpec::parse(container).is_err());
     }
 
     #[test]

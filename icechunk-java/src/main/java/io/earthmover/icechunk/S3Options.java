@@ -44,6 +44,10 @@ public final class S3Options {
         return new Builder(bucket);
     }
 
+    Object[] callbacks() {
+        return credentials.callbacks();
+    }
+
     Json toJson() {
         return Json.object()
                 .put("type", "s3")

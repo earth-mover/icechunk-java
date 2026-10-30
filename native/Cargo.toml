@@ -17,7 +17,11 @@ crate-type = ["cdylib", "rlib"]
 # a failure there means a bug is fixed and its workaround can go.
 icechunk = { version = "=2.3.0", features = ["logs"] }
 jni = "0.22.4"
-tokio = { version = "1.52.3", features = ["rt-multi-thread", "sync"] }
+tokio = { version = "1.52.3", features = ["rt-multi-thread", "sync", "time"] }
+# Refreshable credentials implement icechunk's credential fetcher traits, which are
+# `async_trait` and `typetag` traits; the versions follow icechunk's.
+async-trait = "0.1.89"
+typetag = "0.2.22"
 bytes = "1.11.1"
 crossbeam-epoch = "0.9.21"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
