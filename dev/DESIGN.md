@@ -102,12 +102,16 @@ Consequences:
 - **A panic does not crash the JVM.** jni-rs catches panics at every native method and the binding throws them as
   `RuntimeException`.
 - **Runtime threads stay detached from the JVM.** So they never keep the JVM from exiting, and never hold a reference
-  to the class loader that loaded the binding. The one exception is brief: when a runtime thread drops the last
-  reference to a Java buffer a write borrowed, it attaches for the duration of that drop.
+  to the class loader that loaded the binding. The exceptions are brief:
+  - when a runtime thread drops the last reference to a Java buffer a write borrowed, it attaches for the duration of
+    that drop;
+  - when a runtime thread asks a refreshable credentials callback for credentials, it attaches for one non-blocking
+    call that queues the request, and the same for dropping the callback's last reference (see
+    [Refreshable credentials](#refreshable-credentials)).
 
 A call made from a runtime thread is rejected with `IllegalStateException`, because blocking there would hold up the
-threads that drive the call. No Java code runs on runtime threads today; the check is there for when Java callbacks
-arrive.
+threads that drive the call. User code never runs on runtime threads: credential suppliers run on their own Java
+threads.
 
 ## Handles
 
@@ -142,6 +146,54 @@ the class directory and against the packaged jar. An application that shades the
 Ownership between objects follows the Rust side: a `Repository` holds its own reference to its storage, and a
 `Session` to its repository, so closing a parent does not break its children. The one exception is a session's
 `Store`, which closes with the session, since a store has no use without it.
+
+## Refreshable credentials
+
+`S3Credentials.refreshable(Supplier)` and `GcsCredentials.refreshable(Supplier)` let a caller supply temporary
+credentials, such as an STS session or the delegated credentials a data service vends, which icechunk asks for again
+shortly before they expire. icechunk calls its credential fetcher from whatever thread polls the request that needs
+credentials: a Java thread inside `block_on`, or a runtime worker. Neither may run the supplier, which can block on
+HTTP for seconds and may itself use icechunk:
+
+- a runtime worker that blocks holds up every other call (and runtime threads stay detached);
+- the waiting Java thread is inside a native call, so a supplier that called icechunk would nest `block_on` on it.
+
+So the work is handed off:
+
+1. The supplier is wrapped in a `CredentialsCallback`. `Storage.s3` and `Storage.gcs` pass it to `storageOpen` next to
+   the JSON spec, which refers to it by index (`{"type": "refreshable", "callback": 0}`), keeping the
+   [JSON-only](#configuration-as-json) boundary for everything else.
+2. The native side takes a global reference to it and builds icechunk's `S3CredentialsFetcher` or
+   `GcsCredentialsFetcher`.
+3. When icechunk calls the fetcher, the current thread attaches (if it is a runtime thread) for one call,
+   `CredentialsCallback.request(id)`, which only queues the supplier on a Java executor, and detaches again. The
+   fetcher then awaits a oneshot channel: no thread blocks.
+4. The executor (daemon threads named `icechunk-credentials-N`, created on demand and stopped after a minute idle) runs
+   the supplier and reports the credentials JSON, or the exception's message, with `Native.credentialsComplete`, an
+   ordinary native call from a Java thread that completes the channel.
+5. A supplier that does not answer within its timeout (two minutes unless set) fails the fetch. An exception or a
+   timeout fails the operation that needed credentials with an `IcechunkException` that includes the supplier's
+   message; the AWS SDK's own message ("dispatch failure") hides it, so errors now carry their cause chain.
+
+icechunk's AWS identity cache asks for new credentials when the current ones are within 120 seconds of
+`expiresAfter`, after moving `expiresAfter` later by a random 0 to 60 seconds, so credentials valid for an hour are
+fetched about once an hour; credentials without an expiry are fetched once. Credentials that expire within two minutes
+are fetched again on almost every request.
+
+**Lifetime.** The fetcher holds the callback's global reference, so the supplier, and the class loader that loaded
+it, stay reachable while a storage, repository or session uses the credentials, and become collectable when the last
+one is freed; `RefreshableCredentialsTest.theSupplierIsReleasedWhenNothingUsesItAnyMore` checks this. icechunk
+serializes credentials with sessions; a fetcher serializes only its callback id and process id, finds its callback
+again when deserialized in the same process, and fails with a clear message in any other.
+
+Virtual chunk containers do not take refreshable credentials yet: their credentials travel in the repository options
+JSON, which has no callback slot, so `Credentials.s3` and `Credentials.gcs` reject them.
+
+`RefreshableCredentialsTest`, against an S3-compatible server, covers caching of long-lived credentials, refetching
+of expiring ones, a stress run
+where every request calls the supplier (thousands of round trips from eight threads), a supplier that throws, one that
+returns the wrong type, one that never answers, a slow supplier while other calls continue, a supplier that uses
+icechunk itself, and the release of the supplier when its objects close.
 
 ## Runtime and class loaders
 
@@ -315,8 +367,8 @@ waited about 170 µs on the others.
 
 ## Open questions
 
-- **Refreshable credentials.** icechunk can call back for fresh credentials. A Java callback would run on a runtime
-  thread and may block on HTTP, so it should run on tokio's blocking pool or a Java executor, never on a worker.
+- **Refreshable credentials for virtual chunk containers.** Storage takes them (see
+  [Refreshable credentials](#refreshable-credentials)); the repository options would need the same callback slot.
 - **Timeouts and cancellation.** Blocking calls cannot be interrupted. A per-call or per-session timeout, applied with
   `tokio::time::timeout` inside `block_on`, would bound them.
 - **Async API.** `CompletableFuture` variants would spawn the operation on the runtime and complete the future from a

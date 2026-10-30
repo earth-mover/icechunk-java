@@ -36,6 +36,37 @@ Repository repo = Repository.open(s3);   // or create(...), openOrCreate(...)
 `Repository.open` takes an optional `RepositoryOptions`, which carries credentials for virtual chunk containers and
 configuration overrides.
 
+### Refreshable credentials
+
+Temporary credentials, such as an STS session or credentials vended by a data service, can come from a `Supplier`
+that icechunk calls again shortly before they expire:
+
+```java
+Storage s3 = Storage.s3(S3Options.builder("my-bucket")
+        .prefix("my-repo")
+        .region("us-east-1")
+        .credentials(S3Credentials.refreshable(() -> {
+            Sts session = myCredentialService.fetch();   // may block on HTTP
+            return S3Credentials.of(session.keyId(), session.secret(), session.token(), session.expiration());
+        }))
+        .build());
+
+Storage gcs = Storage.gcs(GcsOptions.builder("my-bucket")
+        .credentials(GcsCredentials.refreshable(() -> GcsCredentials.bearerToken(token(), expiry())))
+        .build());
+```
+
+- The supplier returns `S3Credentials.of(..., expiresAfter)` or `GcsCredentials.bearerToken(token, expiresAfter)`.
+  icechunk caches them and asks again about two minutes before `expiresAfter`; credentials without an expiry are
+  fetched once.
+- The supplier is not called when the storage opens, only when a request first needs credentials.
+- It runs on an icechunk daemon thread, never on the thread that is waiting, so it may block and may use icechunk
+  itself.
+- If it throws, or does not answer within two minutes (`refreshable(supplier, timeout)` changes this), the operation
+  that needed credentials fails with an `IcechunkException` carrying the supplier's message.
+- Refreshable credentials work for `Storage.s3` and `Storage.gcs`, not yet for virtual chunk containers
+  (`Credentials.s3`, `Credentials.gcs`), which reject them.
+
 ## Read a version
 
 A session reads one version: the tip of a branch, a tag, a snapshot, or a branch as it was at a point in time.
@@ -189,8 +220,8 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
 - There is no rebase, node move, or writing of virtual references yet. Repository configuration is passed as a JSON
   document rather than through typed builders.
-- Credentials are fixed: they cannot refresh through a Java callback. The native HTTP client does not use
-  the JVM's proxy settings or trust store.
+- Refreshable credentials work for storage but not for virtual chunk containers. The native HTTP client does not
+  use the JVM's proxy settings or trust store.
 - Calls block. Each call occupies the calling thread until icechunk finishes, and there is no
   `CompletableFuture` API. For concurrency, use a thread pool, or `Store.getPartialValues` to fetch many keys in one
   call. A virtual thread holds its carrier thread for the length of a call.

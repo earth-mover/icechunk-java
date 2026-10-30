@@ -14,7 +14,7 @@ final class Native {
      * signatures, the constants below, and the JSON documents they exchange. A library built for another version
      * would read arguments it does not understand, or crash the JVM, so loading checks it first.
      */
-    static final int ABI_VERSION = 5;
+    static final int ABI_VERSION = 6;
 
     static final int OPEN = 0;
     static final int CREATE = 1;
@@ -58,7 +58,11 @@ final class Native {
 
     static native void initializeLogs(String filter);
 
-    static native long storageOpen(String specJson);
+    /** {@code callbacks} are the objects {@code specJson} refers to by index, such as a {@link CredentialsCallback}. */
+    static native long storageOpen(String specJson, Object[] callbacks);
+
+    /** Answer the credentials request {@code request} with credentials JSON, or with an error message. */
+    static native void credentialsComplete(long request, String json, String error);
 
     static native long repositoryOpen(long storage, int mode, String optionsJson);
 
