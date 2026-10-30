@@ -104,6 +104,19 @@ public final class Repository extends NativeHandle {
         }
     }
 
+    /**
+     * Store this repository's configuration, including any set through {@link RepositoryOptions.Builder#config}, in
+     * the repository, so that later opens use it. Virtual chunk containers must be saved this way before other
+     * readers can resolve virtual chunks in them.
+     */
+    public void saveConfig() {
+        try {
+            Native.repositorySaveConfig(handle());
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
     /** The names of all branches, sorted. */
     public Set<String> listBranches() {
         try {
