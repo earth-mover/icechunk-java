@@ -26,6 +26,9 @@ use serde::Deserialize;
 
 use icechunk::format::SnapshotId;
 use icechunk::format::format_constants::SpecVersionBin;
+use icechunk::format::manifest::{
+    Checksum, SecondsSinceEpoch, VirtualChunkLocation, VirtualChunkRef,
+};
 use icechunk::format::snapshot::SnapshotProperties;
 use icechunk::ops::gc::{Action, GCConfig};
 use icechunk::repository::VersionInfo;
@@ -403,6 +406,67 @@ impl GcSpec {
     }
 }
 
+/// A virtual chunk reference from Java's `VirtualChunkRef`.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct VirtualRefSpec {
+    pub(crate) location: String,
+    pub(crate) offset: u64,
+    pub(crate) length: u64,
+    #[serde(default)]
+    pub(crate) etag: Option<String>,
+    /// Seconds since the epoch.
+    #[serde(default)]
+    pub(crate) last_modified: Option<u32>,
+}
+
+impl VirtualRefSpec {
+    pub(crate) fn parse(json: &str) -> NativeResult<VirtualRefSpec> {
+        Ok(serde_json::from_str(json)?)
+    }
+
+    pub(crate) fn into_ref(self) -> NativeResult<VirtualChunkRef> {
+        let location = VirtualChunkLocation::from_url(&self.location).map_err(|err| {
+            NativeError::invalid_argument(format!(
+                "invalid virtual chunk location {:?}: {err}",
+                self.location
+            ))
+        })?;
+        // icechunk does not export the `ETag` newtype, so build the checksum through
+        // `Checksum`'s serde form.
+        let checksum = match (self.etag, self.last_modified) {
+            (Some(etag), _) => Some(serde_json::from_value::<Checksum>(
+                serde_json::json!({ "ETag": etag }),
+            )?),
+            (None, Some(seconds)) => {
+                Some(Checksum::LastModified(SecondsSinceEpoch(seconds)))
+            }
+            (None, None) => None,
+        };
+        Ok(VirtualChunkRef {
+            location,
+            offset: self.offset,
+            length: self.length,
+            checksum,
+        })
+    }
+}
+
+/// One element of the list `Store.setVirtualRefs` sends: chunk grid indices and a ref.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct IndexedVirtualRefSpec {
+    pub(crate) index: Vec<u32>,
+    #[serde(flatten)]
+    pub(crate) reference: VirtualRefSpec,
+}
+
+impl IndexedVirtualRefSpec {
+    pub(crate) fn parse_list(json: &str) -> NativeResult<Vec<IndexedVirtualRefSpec>> {
+        Ok(serde_json::from_str(json)?)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -590,5 +654,34 @@ mod tests {
         let bad_root =
             format!(r#"{{"extra_roots":["nope"],"max_snapshots_in_memory":1,{limits}}}"#);
         assert!(GcSpec::parse(&bad_root).is_err());
+    }
+
+    /// `JsonContractTest.virtualRefs` writes these documents.
+    #[test]
+    fn virtual_refs() {
+        let reference = VirtualRefSpec::parse(
+            r#"{"location":"s3://bucket/file.nc","offset":10,"length":20,"etag":"abc"}"#,
+        )
+        .unwrap()
+        .into_ref()
+        .unwrap();
+        assert_eq!(reference.location.url(), "s3://bucket/file.nc");
+        assert_eq!((reference.offset, reference.length), (10, 20));
+        assert!(matches!(reference.checksum, Some(Checksum::ETag(_))));
+        let list = IndexedVirtualRefSpec::parse_list(
+            r#"[{"index":[0,1],"location":"file:///data/x","offset":0,"length":4,"last_modified":1700000000}]"#,
+        )
+        .unwrap();
+        assert_eq!(list[0].index, vec![0, 1]);
+        let reference = list.into_iter().next().unwrap().reference.into_ref().unwrap();
+        assert_eq!(
+            reference.checksum,
+            Some(Checksum::LastModified(SecondsSinceEpoch(1_700_000_000)))
+        );
+        let bad =
+            VirtualRefSpec::parse(r#"{"location":"no-scheme","offset":0,"length":1}"#)
+                .unwrap()
+                .into_ref();
+        assert!(bad.is_err());
     }
 }

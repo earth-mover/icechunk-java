@@ -156,4 +156,21 @@ class JsonContractTest {
                         .build()
                         .toJson());
     }
+
+    /** The {@code virtual_refs} test in {@code spec.rs} parses the same documents. */
+    @Test
+    void virtualRefs() {
+        assertEquals(
+                "{\"location\":\"s3://bucket/file.nc\",\"offset\":10,\"length\":20,\"etag\":\"abc\"}",
+                VirtualChunkRef.of("s3://bucket/file.nc", 10, 20)
+                        .withEtag("abc")
+                        .toJson()
+                        .toString());
+        assertEquals(
+                "{\"location\":\"file:///data/x\",\"offset\":0,\"length\":4,\"last_modified\":1700000000}",
+                VirtualChunkRef.of("file:///data/x", 0, 4)
+                        .withLastModified(Instant.ofEpochSecond(1_700_000_000L))
+                        .toJson()
+                        .toString());
+    }
 }
