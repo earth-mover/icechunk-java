@@ -145,6 +145,17 @@ repo.resetBranch("experiment", parent, tip);  // ConflictException unless experi
 `diff(from, to)` lists the changes made after `from` up to `to`, so `from` must be an earlier snapshot in `to`'s
 history.
 
+### Repository metadata
+
+Metadata can also live with the repository rather than with a snapshot, for a title, a license or a contact. It needs
+the version 2 format.
+
+```java
+repo.setMetadata(Collections.singletonMap("title", "ERA5 subset"));        // replace all
+Map<String, Object> merged = repo.updateMetadata(Collections.singletonMap("license", "CC-BY-4.0"));  // merge
+Map<String, Object> metadata = repo.getMetadata();
+```
+
 ## Expire snapshots and collect garbage
 
 - **Expiration** removes old snapshots from every history.

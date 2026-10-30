@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -102,6 +103,60 @@ public final class Repository extends NativeHandle {
         } finally {
             HandleCleaner.reachabilityFence(this);
         }
+    }
+
+    /**
+     * The repository's own metadata: key-value pairs stored with the repository rather than with a snapshot, such as
+     * a description or a license. Values are read as {@link SnapshotInfo#metadata()} reads commit metadata.
+     *
+     * @throws IcechunkException for a repository in the version 1 format, which has no repository metadata
+     */
+    public Map<String, Object> getMetadata() {
+        String json;
+        try {
+            json = Native.repositoryGetMetadata(handle());
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+        return Collections.unmodifiableMap(JsonReader.readObject(json));
+    }
+
+    /**
+     * Replace the repository's metadata with {@code metadata}. Values must be JSON values, as for {@link
+     * CommitOptions.Builder#metadata(String, Object)}.
+     *
+     * @throws IllegalArgumentException if a value is not a JSON value
+     */
+    public void setMetadata(Map<String, ?> metadata) {
+        String json = metadataJson(metadata);
+        try {
+            Native.repositorySetMetadata(handle(), json);
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
+    /**
+     * Add or replace the entries of {@code metadata} in the repository's metadata, keeping the others, and return the
+     * result. Safe against concurrent updates: icechunk retries if another writer changes the metadata meanwhile.
+     */
+    public Map<String, Object> updateMetadata(Map<String, ?> metadata) {
+        String json = metadataJson(metadata);
+        String merged;
+        try {
+            merged = Native.repositoryUpdateMetadata(handle(), json);
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+        return Collections.unmodifiableMap(JsonReader.readObject(merged));
+    }
+
+    private static String metadataJson(Map<String, ?> metadata) {
+        Json json = Json.object();
+        for (Map.Entry<String, ?> entry : metadata.entrySet()) {
+            json.putValue(Objects.requireNonNull(entry.getKey(), "metadata key"), entry.getValue());
+        }
+        return json.toString();
     }
 
     /** The names of all branches, sorted. */
