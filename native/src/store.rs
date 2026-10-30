@@ -2,17 +2,18 @@
 
 use bytes::Bytes;
 use futures::TryStreamExt as _;
-use icechunk::format::{ByteRange, Path};
+use icechunk::format::{ByteRange, ChunkIndices, Path};
 use icechunk::session::SessionErrorKind;
-use icechunk::store::{StoreError, StoreErrorKind};
+use icechunk::store::{SetVirtualRefsResult, StoreError, StoreErrorKind};
 use jni::Env;
 use jni::objects::{JByteArray, JByteBuffer, JLongArray, JObjectArray, JString};
 use jni::sys::{jboolean, jint, jlong};
 
 use crate::buffers;
-use crate::call::{block_on, native, strings, text};
+use crate::call::{block_on, json_string, native, strings, text};
 use crate::error::{NativeError, NativeResult};
 use crate::handles;
+use crate::spec::{IndexedVirtualRefSpec, VirtualRefSpec};
 
 /// Byte range kinds; the values match the `Native.RANGE_*` constants. Each range
 /// travels as a `(kind, a, b)` triple of longs.
@@ -164,6 +165,42 @@ native! { fn storeSetBuffer(
     };
     let bytes = buffers::borrow(env, &value, position, len)?;
     set(store, &key, bytes, only_if_new)
+}}
+
+// Point the chunk `key` at a range of an object outside the repository.
+native! { fn storeSetVirtualRef(
+    env, store: jlong, key: JString<'l>, reference: JString<'l>, validate_container: jboolean
+) -> () {
+    let store = handles::store(store)?;
+    let key = text(env, &key)?;
+    let reference = VirtualRefSpec::parse(&text(env, &reference)?)?.into_ref()?;
+    Ok(block_on(store.set_virtual_ref(&key, reference, validate_container))??)
+}}
+
+// Set many virtual refs of the array at `array_path`; returns a JSON list of the chunk
+// indices whose location matched no virtual chunk container.
+native! { fn storeSetVirtualRefs(
+    env, store: jlong, array_path: JString<'l>, references: JString<'l>,
+    validate_containers: jboolean
+) -> JString<'l> {
+    let store = handles::store(store)?;
+    let array_path = text(env, &array_path)?;
+    let path = Path::try_from(array_path.as_str()).map_err(|err| {
+        NativeError::invalid_argument(format!("invalid array path {array_path:?}: {err}"))
+    })?;
+    let references = IndexedVirtualRefSpec::parse_list(&text(env, &references)?)?
+        .into_iter()
+        .map(|spec| Ok((ChunkIndices(spec.index), spec.reference.into_ref()?)))
+        .collect::<NativeResult<Vec<_>>>()?;
+    let result =
+        block_on(store.set_virtual_refs(&path, validate_containers, references))??;
+    let failed: Vec<Vec<u32>> = match result {
+        SetVirtualRefsResult::Done => Vec::new(),
+        SetVirtualRefsResult::FailedRefs(failed) => {
+            failed.into_iter().map(|indices| indices.0).collect()
+        }
+    };
+    json_string(env, &failed)
 }}
 
 native! { fn storeExists(env, store: jlong, key: JString<'l>) -> jboolean {

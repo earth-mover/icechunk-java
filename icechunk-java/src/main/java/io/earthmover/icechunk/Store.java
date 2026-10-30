@@ -142,6 +142,76 @@ public final class Store extends NativeHandle {
         }
     }
 
+    /**
+     * Make the chunk at {@code key}, such as {@code temperature/c/0/0}, a virtual chunk read from {@code reference},
+     * checking that its location belongs to a virtual chunk container in the repository's configuration.
+     *
+     * @throws IcechunkException if the session is read-only, there is no array at the key's path, or no container
+     *     matches the location
+     * @throws IllegalArgumentException if {@code key} is not a chunk key or the location is not a URL
+     */
+    public void setVirtualRef(String key, VirtualChunkRef reference) {
+        setVirtualRef(key, reference, true);
+    }
+
+    /** As {@link #setVirtualRef(String, VirtualChunkRef)}, checking the container only if {@code validateContainer}. */
+    public void setVirtualRef(String key, VirtualChunkRef reference, boolean validateContainer) {
+        Objects.requireNonNull(key, "key");
+        String json = reference.toJson().toString();
+        try {
+            Native.storeSetVirtualRef(handle(), key, json, validateContainer);
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+    }
+
+    /**
+     * Make many chunks of the array at {@code arrayPath}, such as {@code /group/temperature}, virtual in one call.
+     * {@code references} maps chunk grid indices to references. With {@code validateContainers}, a reference whose
+     * location matches no virtual chunk container is skipped; the others are still written.
+     *
+     * @return the indices of the skipped chunks; empty if all were written
+     * @throws IcechunkException if the session is read-only or there is no array at {@code arrayPath}
+     */
+    public List<List<Long>> setVirtualRefs(
+            String arrayPath, Map<List<Long>, VirtualChunkRef> references, boolean validateContainers) {
+        Objects.requireNonNull(arrayPath, "arrayPath");
+        StringBuilder json = new StringBuilder("[");
+        for (Map.Entry<List<Long>, VirtualChunkRef> entry : references.entrySet()) {
+            if (json.length() > 1) {
+                json.append(',');
+            }
+            StringBuilder index = new StringBuilder("[");
+            for (Long coordinate : entry.getKey()) {
+                if (coordinate == null || coordinate < 0 || coordinate > 0xFFFF_FFFFL) {
+                    throw new IllegalArgumentException("chunk index out of range: " + entry.getKey());
+                }
+                if (index.length() > 1) {
+                    index.append(',');
+                }
+                index.append(coordinate);
+            }
+            json.append(
+                    entry.getValue().toJson().putRaw("index", index.append(']').toString()));
+        }
+        String failed;
+        try {
+            failed = Native.storeSetVirtualRefs(
+                    handle(), arrayPath, json.append(']').toString(), validateContainers);
+        } finally {
+            HandleCleaner.reachabilityFence(this);
+        }
+        List<List<Long>> result = new ArrayList<>();
+        for (Object indices : (List<?>) JsonReader.parse(failed)) {
+            List<Long> chunk = new ArrayList<>();
+            for (Object coordinate : (List<?>) indices) {
+                chunk.add(((Number) coordinate).longValue());
+            }
+            result.add(Collections.unmodifiableList(chunk));
+        }
+        return Collections.unmodifiableList(result);
+    }
+
     /** Returns true if {@code key} has a value. */
     public boolean exists(String key) {
         try {

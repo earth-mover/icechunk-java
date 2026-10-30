@@ -140,6 +140,39 @@ try (Session session = repo.writableSession("main")) {
 
 Metadata values are JSON values: strings, booleans, numbers, lists, maps with string keys, and null.
 
+## Virtual chunks
+
+A virtual chunk is a byte range of an object outside the repository, such as part of a NetCDF, HDF5 or TIFF file.
+Declare the container the objects live in, save it, then point chunk keys at byte ranges:
+
+```java
+RepositoryConfig config = RepositoryConfig.builder()
+        .virtualChunkContainer(VirtualChunkContainer.s3("s3://source-bucket/").region("us-east-1").build())
+        .build();
+RepositoryOptions options = RepositoryOptions.builder()
+        .config(config)
+        .authorizeVirtualChunkAccess("s3://source-bucket/", Credentials.s3(S3Credentials.fromEnvironment()))
+        .build();
+try (Repository repo = Repository.open(storage, options);
+        Session session = repo.writableSession("main")) {
+    repo.saveConfig();
+    Store store = session.store();
+    store.setVirtualRef("temperature/c/0/0",
+            VirtualChunkRef.of("s3://source-bucket/era5/2026-01.nc", 4096, 1_048_576).withEtag(etag));
+
+    Map<List<Long>, VirtualChunkRef> refs = new LinkedHashMap<>();
+    refs.put(Arrays.asList(0L, 1L), VirtualChunkRef.of("s3://source-bucket/era5/2026-01.nc", 1_052_672, 1_048_576));
+    List<List<Long>> skipped = store.setVirtualRefs("/temperature", refs, true);
+    session.commit("Reference January");
+}
+```
+
+- The array's metadata must exist before its chunks are set.
+- `setVirtualRef` throws if the location matches no container; pass `validateContainer = false` to skip the check.
+  `setVirtualRefs` writes the references that match and returns the indices of those that do not.
+- `withEtag` or `withLastModified` records a checksum: reading the chunk fails if the object has changed since.
+- Readers need `authorizeVirtualChunkAccess` for each container whose chunks they read.
+
 ## Large values and memory
 
 - `Store.get` copies each value into a new `byte[]` and frees icechunk's copy before returning, so reading through many
@@ -213,8 +246,8 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
 - Nothing is published to Maven Central. Jars come from GitHub releases or a source build.
 - zarr-java covers numeric data types only. It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
-- There is no rebase, node move, or writing of virtual references yet. Manifest splitting and preload conditions are
-  configured only through `configJson`.
+- There is no rebase or node move yet. Manifest splitting and preload conditions are configured only through
+  `configJson`.
 - Credentials are fixed: they cannot refresh through a Java callback. The native HTTP client does not use
   the JVM's proxy settings or trust store.
 - Calls block. Each call occupies the calling thread until icechunk finishes, and there is no

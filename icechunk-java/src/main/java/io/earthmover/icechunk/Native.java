@@ -14,7 +14,7 @@ final class Native {
      * signatures, the constants below, and the JSON documents they exchange. A library built for another version
      * would read arguments it does not understand, or crash the JVM, so loading checks it first.
      */
-    static final int ABI_VERSION = 6;
+    static final int ABI_VERSION = 7;
 
     static final int OPEN = 0;
     static final int CREATE = 1;
@@ -126,6 +126,12 @@ final class Native {
 
     static native void storeSetBuffer(
             long store, String key, ByteBuffer direct, int position, int length, boolean onlyIfNew);
+
+    static native void storeSetVirtualRef(long store, String key, String referenceJson, boolean validateContainer);
+
+    /** Returns a JSON list of the chunk indices whose location matched no container. */
+    static native String storeSetVirtualRefs(
+            long store, String arrayPath, String referencesJson, boolean validateContainers);
 
     static native boolean storeExists(long store, String key);
 
