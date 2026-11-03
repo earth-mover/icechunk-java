@@ -46,7 +46,7 @@ jobs:
     env:
       MACOSX_DEPLOYMENT_TARGET: "11.0"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@v7.0.1
       - name: Install Rust
         shell: bash
         run: |
@@ -57,7 +57,7 @@ jobs:
         run: |
           rustup target add ${{ matrix.target }}
           cargo build --release --manifest-path native/Cargo.toml --target ${{ matrix.target }}
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: native-${{ matrix.platform }}
           path: native/target/${{ matrix.target }}/release/${{ matrix.file }}
@@ -67,8 +67,8 @@ jobs:
     needs: native
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/download-artifact@v8.0.1
         with:
           pattern: native-*
           path: artifacts
@@ -81,14 +81,14 @@ jobs:
             cp "$dir"/* "$dest/$platform/"
           done
           find "$dest" -type f | sort
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
       # pcodec 1.0.4 has no wheels for Python 3.15, and its PyO3 refuses to build for 3.15.
       # Without a pin, uv uses a 3.15 it finds on PATH, as on macos-latest.
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.14"
       - name: Set the version from the tag
@@ -100,7 +100,7 @@ jobs:
         run: |
           scripts/fetch-icechunk-fixtures.sh
           mvn -B verify -Dicechunk.native.dir= -Dicechunk.tests.strict=true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@v7.0.1
         with:
           name: jars
           path: |
@@ -120,8 +120,8 @@ jobs:
         runner: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/checkout@v7.0.1
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: jars
           path: jars
@@ -131,14 +131,14 @@ jobs:
           mkdir -p icechunk-java/src/main/resources/io/earthmover/icechunk
           cp -R "$(find jars -type d -name native -path '*io/earthmover/icechunk/native' | head -1)" \
             icechunk-java/src/main/resources/io/earthmover/icechunk/
-      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+      - uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
           java-version: "21"
           cache: maven
       # pcodec 1.0.4 has no wheels for Python 3.15, and its PyO3 refuses to build for 3.15.
       # Without a pin, uv uses a 3.15 it finds on PATH, as on macos-latest.
-      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+      - uses: astral-sh/setup-uv@v10.2.0
         with:
           python-version: "3.14"
       - name: Test against the bundled library
@@ -154,7 +154,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - uses: actions/download-artifact@v8.0.1
         with:
           name: jars
           path: jars
