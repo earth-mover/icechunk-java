@@ -60,8 +60,24 @@ impl NativeError {
         Self::new(ErrorKind::InvalidArgument, message)
     }
 
-    fn icechunk(err: &impl fmt::Display) -> Self {
-        Self::new(ErrorKind::Icechunk, err.to_string())
+    /// An icechunk error, with the messages of the errors that caused it.
+    ///
+    /// The top message alone is often unhelpful: when refreshable credentials cannot be
+    /// loaded, the AWS SDK reports "dispatch failure" and keeps the reason, such as the
+    /// supplier's exception, further down the chain.
+    fn icechunk(err: &(dyn std::error::Error + 'static)) -> Self {
+        let mut message = err.to_string();
+        let mut source = err.source();
+        while let Some(cause) = source {
+            let text = cause.to_string();
+            let text = text.trim();
+            if !text.is_empty() && !message.contains(text) {
+                message.push_str(": ");
+                message.push_str(text);
+            }
+            source = cause.source();
+        }
+        Self::new(ErrorKind::Icechunk, message)
     }
 }
 

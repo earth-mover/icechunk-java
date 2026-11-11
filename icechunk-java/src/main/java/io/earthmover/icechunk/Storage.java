@@ -25,7 +25,12 @@ public final class Storage extends NativeHandle {
     }
 
     private static Storage open(Json spec, String description) {
-        return new Storage(Native.storageOpen(spec.toString()), description);
+        return open(spec, description, new Object[0]);
+    }
+
+    /** {@code callbacks} are the Java objects the spec refers to by index, such as a refreshable credentials supplier. */
+    private static Storage open(Json spec, String description, Object[] callbacks) {
+        return new Storage(Native.storageOpen(spec.toString(), callbacks), description);
     }
 
     /** Storage held in memory and discarded when the last reference to it closes. */
@@ -42,12 +47,12 @@ public final class Storage extends NativeHandle {
 
     /** An S3 bucket or S3-compatible service. */
     public static Storage s3(S3Options options) {
-        return open(options.toJson(), "s3");
+        return open(options.toJson(), "s3", options.callbacks());
     }
 
     /** A Google Cloud Storage bucket. */
     public static Storage gcs(GcsOptions options) {
-        return open(options.toJson(), "gcs");
+        return open(options.toJson(), "gcs", options.callbacks());
     }
 
     /** An Azure Blob Storage container. */

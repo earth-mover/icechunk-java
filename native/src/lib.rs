@@ -15,6 +15,7 @@ mod call;
 mod codecs;
 #[cfg(test)]
 mod contract_tests;
+mod credentials;
 mod error;
 mod handles;
 mod logging;
@@ -81,7 +82,7 @@ pub mod ext {
 /// The version of the contract with `Native.java`, which checks it on load; it must equal
 /// `Native.ABI_VERSION`. Raise both whenever a native method's name or signature, a shared
 /// constant, or a JSON document format changes.
-pub(crate) const ABI_VERSION: jint = 5;
+pub(crate) const ABI_VERSION: jint = 6;
 
 call::native! { fn abiVersion(_) -> jint {
     Ok(ABI_VERSION)

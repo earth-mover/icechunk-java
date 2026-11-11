@@ -28,6 +28,10 @@ public final class GcsOptions {
         return new Builder(bucket);
     }
 
+    Object[] callbacks() {
+        return credentials.callbacks();
+    }
+
     Json toJson() {
         return Json.object()
                 .put("type", "gcs")
