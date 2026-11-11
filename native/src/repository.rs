@@ -213,6 +213,13 @@ native! { fn repositoryWritableSession(env, repository: jlong, branch: JString<'
     handles::insert(Object::Session(Arc::new(tokio::sync::RwLock::new(session))))
 }}
 
+native! { fn repositoryRearrangeSession(env, repository: jlong, branch: JString<'l>) -> jlong {
+    let repository = handles::repository(repository)?;
+    let branch = text(env, &branch)?;
+    let session = block_on(repository.rearrange_session(&branch))??;
+    handles::insert(Object::Session(Arc::new(tokio::sync::RwLock::new(session))))
+}}
+
 fn ref_action(delete: bool) -> ExpiredRefAction {
     if delete { ExpiredRefAction::Delete } else { ExpiredRefAction::Ignore }
 }

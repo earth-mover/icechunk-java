@@ -93,6 +93,49 @@ try (Session session = repo.writableSession("main")) {
 session.commit("Add March data", CommitOptions.builder().metadata("source", "era5").build());
 ```
 
+### Conflicts and rebasing
+
+When another writer commits to the branch first, `commit` throws `ConflictException`. Instead of redoing the writes,
+rebase the session onto the new commits and commit again:
+
+```java
+try {
+    session.commit("Add March data");
+} catch (ConflictException e) {
+    session.rebase(ConflictSolver.basic());   // keep our chunks where both sides wrote the same chunk
+    session.commit("Add March data");
+}
+
+// Or let the commit rebase and retry by itself:
+session.commit("Add March data", CommitOptions.builder().rebaseWith(ConflictSolver.basic()).build());
+```
+
+- `ConflictSolver.detector()` resolves nothing. `ConflictSolver.basic(onChunkConflict, failOnDeleteOfUpdatedArray,
+  failOnDeleteOfUpdatedGroup)` keeps our chunks (`VersionSelection.USE_OURS`) or theirs (`USE_THEIRS`) when both sides
+  wrote a chunk, and by default lets our deletes win over their updates.
+- A conflict the solver cannot resolve, such as both sides changing an array's metadata, throws
+  `RebaseFailedException`, a `ConflictException` whose `conflicts()` lists each `Conflict` with its type, node path,
+  and chunk indices.
+
+### Amend and flush
+
+- `session.amend(message)` replaces the snapshot at the branch tip with one holding its changes and the session's,
+  instead of adding a new snapshot.
+- `session.flush(message)` writes a snapshot without moving the branch, and returns its id; open a session on it, or
+  point a branch or tag at it.
+
+### Move and rename
+
+A rearrange session moves and renames groups and arrays without rewriting their chunks. It can only move nodes, and
+needs a repository with the version 2 format (the default for new repositories):
+
+```java
+try (Session session = repo.rearrangeSession("main")) {
+    session.move("/raw/temperature", "/temperature");
+    session.commit("Move temperature to the root");
+}
+```
+
 With zarr-java, wrap the writable session in an `IcechunkZarrStore` and write arrays as usual:
 
 ```java
@@ -187,8 +230,8 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
 - Nothing is published to Maven Central. Jars come from GitHub releases or a source build.
 - zarr-java covers numeric data types only. It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
-- There is no rebase, node move, or writing of virtual references yet. Repository configuration is passed as a JSON
-  document rather than through typed builders.
+- There is no writing of virtual references yet. Repository configuration is passed as a JSON document rather than
+  through typed builders.
 - Credentials are fixed: they cannot refresh through a Java callback. The native HTTP client does not use
   the JVM's proxy settings or trust store.
 - Calls block. Each call occupies the calling thread until icechunk finishes, and there is no

@@ -22,6 +22,8 @@ public class IcechunkException extends RuntimeException {
         switch (kind) {
             case "CONFLICT":
                 return new ConflictException(message);
+            case "REBASE_FAILED":
+                return RebaseFailedException.fromJson(message);
             case "INVALID_ARGUMENT":
                 return new IllegalArgumentException(message);
             case "CLOSED":

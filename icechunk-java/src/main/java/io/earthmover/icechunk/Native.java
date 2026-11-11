@@ -14,7 +14,7 @@ final class Native {
      * signatures, the constants below, and the JSON documents they exchange. A library built for another version
      * would read arguments it does not understand, or crash the JVM, so loading checks it first.
      */
-    static final int ABI_VERSION = 5;
+    static final int ABI_VERSION = 6;
 
     static final int OPEN = 0;
     static final int CREATE = 1;
@@ -27,6 +27,10 @@ final class Native {
     static final int LIST_ALL = 0;
     static final int LIST_PREFIX = 1;
     static final int LIST_DIR = 2;
+
+    static final int COMMIT = 0;
+    static final int AMEND = 1;
+    static final int FLUSH = 2;
 
     static {
         NativeLoader.load();
@@ -100,6 +104,8 @@ final class Native {
 
     static native long repositoryWritableSession(long repository, String branch);
 
+    static native long repositoryRearrangeSession(long repository, String branch);
+
     static native String sessionSnapshotId(long session);
 
     static native String sessionBranch(long session);
@@ -108,7 +114,12 @@ final class Native {
 
     static native boolean sessionHasUncommittedChanges(long session);
 
-    static native String sessionCommit(long session, String message, String optionsJson);
+    /** {@code kind} is {@link #COMMIT}, {@link #AMEND} or {@link #FLUSH}. */
+    static native String sessionCommit(long session, String message, String optionsJson, int kind);
+
+    static native void sessionRebase(long session, String solverJson);
+
+    static native void sessionMove(long session, String from, String to);
 
     static native String sessionStatus(long session);
 

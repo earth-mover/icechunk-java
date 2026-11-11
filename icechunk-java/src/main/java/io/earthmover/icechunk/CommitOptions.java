@@ -21,10 +21,15 @@ public final class CommitOptions {
         if (!builder.metadata.isEmpty()) {
             json.putValue("metadata", builder.metadata);
         }
-        this.json = json.put("allow_empty", builder.allowEmpty).toString();
+        json.put("allow_empty", builder.allowEmpty);
+        if (builder.rebaseWith != null) {
+            json.putRaw("rebase_with", builder.rebaseWith.toJson());
+            json.put("rebase_tries", builder.rebaseTries);
+        }
+        this.json = json.toString();
     }
 
-    /** No metadata, and a commit with no changes throws. */
+    /** No metadata, no rebasing, and a commit with no changes throws. */
     public static CommitOptions defaults() {
         return DEFAULTS;
     }
@@ -41,6 +46,8 @@ public final class CommitOptions {
     public static final class Builder {
         private final Map<String, Object> metadata = new LinkedHashMap<>();
         private boolean allowEmpty;
+        private ConflictSolver rebaseWith;
+        private int rebaseTries = 1000;
 
         private Builder() {}
 
@@ -73,6 +80,28 @@ public final class CommitOptions {
         /** Whether a commit with no changes succeeds instead of throwing. Defaults to false. */
         public Builder allowEmpty(boolean allowEmpty) {
             this.allowEmpty = allowEmpty;
+            return this;
+        }
+
+        /**
+         * If another writer committed to the branch since the session started, rebase onto their commits with
+         * {@code solver} and try again, instead of throwing {@link ConflictException}. Defaults to none. A conflict
+         * the solver cannot resolve throws {@link RebaseFailedException}.
+         */
+        public Builder rebaseWith(ConflictSolver solver) {
+            this.rebaseWith = Objects.requireNonNull(solver, "solver");
+            return this;
+        }
+
+        /**
+         * How many times a commit with {@link #rebaseWith} rebases and retries before giving up with {@link
+         * ConflictException}. Defaults to 1000, as in icechunk-python.
+         */
+        public Builder rebaseTries(int rebaseTries) {
+            if (rebaseTries < 1 || rebaseTries > 65535) {
+                throw new IllegalArgumentException("rebaseTries must be between 1 and 65535");
+            }
+            this.rebaseTries = rebaseTries;
             return this;
         }
 

@@ -111,4 +111,20 @@ class JsonContractTest {
                 "{\"k\":\"a\\\"b\\\\c\\n\\u0001\"}",
                 Json.object().put("k", "a\"b\\c\n\u0001").toString());
     }
+
+    /** The same strings appear in the {@code commit_options} test in {@code spec.rs}. */
+    @Test
+    void rebasingCommits() {
+        assertEquals(
+                "{\"allow_empty\":false,\"rebase_with\":{\"type\":\"basic\",\"on_chunk_conflict\":\"use_theirs\","
+                        + "\"fail_on_delete_of_updated_array\":true,\"fail_on_delete_of_updated_group\":false},"
+                        + "\"rebase_tries\":5}",
+                CommitOptions.builder()
+                        .rebaseWith(ConflictSolver.basic(VersionSelection.USE_THEIRS, true, false))
+                        .rebaseTries(5)
+                        .build()
+                        .toJson());
+        assertEquals("{\"type\":\"detector\"}", ConflictSolver.detector().toJson());
+        assertEquals("{\"allow_empty\":false}", CommitOptions.defaults().toJson());
+    }
 }
