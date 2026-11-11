@@ -184,6 +184,9 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
 
 ## Limitations
 
+[Parity with Python](parity.md) compares the API with icechunk-python feature by feature.
+
+
 - Nothing is published to Maven Central. Jars come from GitHub releases or a source build.
 - zarr-java covers numeric data types only. It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
