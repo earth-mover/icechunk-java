@@ -36,6 +36,32 @@ Repository repo = Repository.open(s3);   // or create(...), openOrCreate(...)
 `Repository.open` takes an optional `RepositoryOptions`, which carries credentials for virtual chunk containers and
 configuration overrides.
 
+### Configuration
+
+`RepositoryConfig` sets icechunk's repository configuration with types, the counterpart of icechunk-python's
+`RepositoryConfig`. Unset settings keep the value stored in the repository, or icechunk's default:
+
+```java
+RepositoryConfig config = RepositoryConfig.builder()
+        .inlineChunkThresholdBytes(512)
+        .getPartialValuesConcurrency(16)
+        .compressionLevel(5)
+        .cacheChunkRefs(5_000_000)
+        .storageRetries(5, 100, 10_000)
+        .virtualChunkContainer(VirtualChunkContainer.s3("s3://source-bucket/").region("us-east-1").build())
+        .build();
+Repository repo = Repository.open(storage, RepositoryOptions.builder().config(config).build());
+repo.saveConfig();   // store it in the repository, so later opens use it
+String effective = repo.configJson();
+```
+
+- A config passed at open applies to that `Repository` only; `saveConfig()` persists it. Virtual chunk containers must
+  be saved before other readers can resolve chunks in them.
+- `VirtualChunkContainer` has factories for S3 and S3-compatible services, GCS, Azure, HTTP, the local filesystem and
+  memory.
+- `RepositoryOptions.Builder.configJson` still takes icechunk's JSON form, for settings the builder does not cover, such
+  as manifest splitting.
+
 ## Read a version
 
 A session reads one version: the tip of a branch, a tag, a snapshot, or a branch as it was at a point in time.
@@ -187,8 +213,8 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
 - Nothing is published to Maven Central. Jars come from GitHub releases or a source build.
 - zarr-java covers numeric data types only. It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
-- There is no rebase, node move, or writing of virtual references yet. Repository configuration is passed as a JSON
-  document rather than through typed builders.
+- There is no rebase, node move, or writing of virtual references yet. Manifest splitting and preload conditions are
+  configured only through `configJson`.
 - Credentials are fixed: they cannot refresh through a Java callback. The native HTTP client does not use
   the JVM's proxy settings or trust store.
 - Calls block. Each call occupies the calling thread until icechunk finishes, and there is no

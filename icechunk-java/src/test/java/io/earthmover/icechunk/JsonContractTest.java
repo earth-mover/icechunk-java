@@ -111,4 +111,49 @@ class JsonContractTest {
                 "{\"k\":\"a\\\"b\\\\c\\n\\u0001\"}",
                 Json.object().put("k", "a\"b\\c\n\u0001").toString());
     }
+
+    /** The same string appears in the {@code typed_repository_config} test in {@code spec.rs}. */
+    @Test
+    void typedRepositoryConfig() {
+        RepositoryConfig config = RepositoryConfig.builder()
+                .inlineChunkThresholdBytes(12)
+                .getPartialValuesConcurrency(4)
+                .maxConcurrentRequests(64)
+                .maxConcurrentDecodes(2)
+                .compressionLevel(5)
+                .cacheSnapshotNodes(1)
+                .cacheBytesChunks(2)
+                .storageConcurrency(4, 1048576)
+                .storageRetries(3, 10, 1000)
+                .unsafeUseConditionalUpdate(false)
+                .storageClass("STANDARD_IA")
+                .manifestPreload(100, 10)
+                .maxConcurrentManifestFetchesDuringCommit(8)
+                .virtualChunkContainer(VirtualChunkContainer.s3("s3://b/")
+                        .region("us-east-1")
+                        .anonymous(true)
+                        .build())
+                .virtualChunkContainer(VirtualChunkContainer.inMemory("memory://"))
+                .virtualChunkContainer(VirtualChunkContainer.http("https://e/"))
+                .build();
+        assertEquals(
+                "{\"inline_chunk_threshold_bytes\":12,\"get_partial_values_concurrency\":4,\"max_concurrent_requests\":64,"
+                        + "\"max_concurrent_decodes\":2,\"compression\":{\"level\":5},\"caching\":{\"num_snapshot_nodes\":1,"
+                        + "\"num_bytes_chunks\":2},\"storage\":{\"concurrency\":{\"max_concurrent_requests_for_object\":4,"
+                        + "\"ideal_concurrent_request_size\":1048576},\"retries\":{\"max_tries\":3,\"initial_backoff_ms\":10,"
+                        + "\"max_backoff_ms\":1000},\"unsafe_use_conditional_update\":false,\"storage_class\":\"STANDARD_IA\"},"
+                        + "\"virtual_chunk_containers\":{\"s3://b/\":{\"url_prefix\":\"s3://b/\",\"store\":{\"s3\":{\"region\":\"us-east-1\","
+                        + "\"anonymous\":true,\"allow_http\":false,\"force_path_style\":false,\"requester_pays\":false}}},"
+                        + "\"memory://\":{\"url_prefix\":\"memory://\",\"store\":\"in_memory\"},\"https://e/\":{\"url_prefix\":\"https://e/\","
+                        + "\"store\":{\"http\":{}}}},\"manifest\":{\"preload\":{\"max_total_refs\":100,\"max_arrays_to_scan\":10},"
+                        + "\"max_concurrent_manifest_fetches_during_commit\":8}}",
+                config.toJson());
+        assertEquals("{}", RepositoryConfig.builder().build().toJson());
+        assertEquals(
+                "{\"config\":{\"compression\":{\"level\":5}},\"virtual_chunk_credentials\":{},\"check_clean_root\":true}",
+                RepositoryOptions.builder()
+                        .config(RepositoryConfig.builder().compressionLevel(5).build())
+                        .build()
+                        .toJson());
+    }
 }
