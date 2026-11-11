@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use futures::TryStreamExt as _;
 use icechunk::Repository;
+use icechunk::format::snapshot::SnapshotProperties;
 use icechunk::ops::gc::{ExpiredRefAction, expire, garbage_collect};
 use jni::objects::{JObjectArray, JString};
 use jni::sys::{jboolean, jint, jlong};
@@ -173,6 +174,31 @@ native! { fn repositoryAncestry(env, repository: jlong, version: JString<'l>) ->
     let snapshots: Vec<_> =
         block_on(async { repository.ancestry(&version).await?.try_collect().await })??;
     json_string(env, &SnapshotInfosResult(&snapshots))
+}}
+
+/// Parse a JSON object of repository metadata from Java.
+fn metadata(json: &str) -> NativeResult<SnapshotProperties> {
+    Ok(serde_json::from_str(json)?)
+}
+
+native! { fn repositoryGetMetadata(env, repository: jlong) -> JString<'l> {
+    let repository = handles::repository(repository)?;
+    let metadata = block_on(repository.get_metadata())??;
+    json_string(env, &metadata)
+}}
+
+native! { fn repositorySetMetadata(env, repository: jlong, metadata_json: JString<'l>) -> () {
+    let repository = handles::repository(repository)?;
+    let metadata = metadata(&text(env, &metadata_json)?)?;
+    Ok(block_on(repository.set_metadata(&metadata))??)
+}}
+
+// Merge the entries into the stored metadata and return the result.
+native! { fn repositoryUpdateMetadata(env, repository: jlong, metadata_json: JString<'l>) -> JString<'l> {
+    let repository = handles::repository(repository)?;
+    let metadata = metadata(&text(env, &metadata_json)?)?;
+    let merged = block_on(repository.update_metadata(&metadata))??;
+    json_string(env, &merged)
 }}
 
 native! { fn repositoryLookupSnapshot(env, repository: jlong, id: JString<'l>) -> JString<'l> {
