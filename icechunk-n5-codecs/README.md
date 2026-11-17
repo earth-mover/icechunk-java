@@ -21,7 +21,7 @@ The module is a stopgap until these codecs are available from a shared codec pac
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-n5-codecs</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>

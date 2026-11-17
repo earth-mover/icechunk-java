@@ -38,7 +38,7 @@ lists what the fork changes, and the n5-ij fork that Fiji's URL dialog needs.
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-n5-universe</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>

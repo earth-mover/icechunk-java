@@ -19,7 +19,7 @@ threads.
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-java</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>

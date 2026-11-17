@@ -19,7 +19,7 @@
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-n5</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>

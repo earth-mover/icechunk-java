@@ -20,7 +20,7 @@ Repositories, versions, branches and commits are covered in [Java API](../docs/j
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-zarr-java</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>

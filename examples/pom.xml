@@ -5,7 +5,7 @@
 	<modelVersion>4.0.0</modelVersion>
 
 	<parent>
-		<groupId>io.earthmover.icechunk</groupId>
+		<groupId>io.icechunk</groupId>
 		<artifactId>icechunk-java-parent</artifactId>
 		<version>0.1.0-SNAPSHOT</version>
 	</parent>
@@ -31,12 +31,12 @@
 
 	<dependencies>
 		<dependency>
-			<groupId>io.earthmover.icechunk</groupId>
+			<groupId>io.icechunk</groupId>
 			<artifactId>icechunk-java</artifactId>
 			<version>${project.version}</version>
 		</dependency>
 		<dependency>
-			<groupId>io.earthmover.icechunk</groupId>
+			<groupId>io.icechunk</groupId>
 			<artifactId>icechunk-zarr-java</artifactId>
 			<version>${project.version}</version>
 		</dependency>
@@ -45,7 +45,7 @@
 			<artifactId>zarr-java</artifactId>
 		</dependency>
 		<dependency>
-			<groupId>io.earthmover.icechunk</groupId>
+			<groupId>io.icechunk</groupId>
 			<artifactId>icechunk-n5</artifactId>
 			<version>${project.version}</version>
 		</dependency>

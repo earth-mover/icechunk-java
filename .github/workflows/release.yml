@@ -1,12 +1,21 @@
 name: Release
 
 # Builds the native library for every supported platform, bundles all of them into the
-# icechunk-java jar, and attaches the jars to a draft GitHub release. A person reviews and
-# publishes the draft.
+# icechunk-java jar, uploads the jars to Maven Central, and attaches them to a draft GitHub
+# release. A person reviews and publishes both: the draft release on GitHub, and the
+# validated deployment on central.sonatype.com.
 on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      version:
+        description: >-
+          Upload the build to Maven Central under this version, for validation. Nothing is
+          published until someone presses Publish on central.sonatype.com; drop the
+          deployment there instead to discard it.
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -73,14 +82,7 @@ jobs:
           pattern: native-*
           path: artifacts
       - name: Bundle the native libraries
-        run: |
-          dest=icechunk-java/src/main/resources/io/earthmover/icechunk/native
-          for dir in artifacts/native-*; do
-            platform="${dir#artifacts/native-}"
-            mkdir -p "$dest/$platform"
-            cp "$dir"/* "$dest/$platform/"
-          done
-          find "$dest" -type f | sort
+        run: scripts/bundle-native-libs.sh artifacts
       - uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
@@ -146,6 +148,62 @@ jobs:
         run: |
           scripts/fetch-icechunk-fixtures.sh
           mvn -B verify -Dicechunk.native.dir= -Dicechunk.tests.strict=true
+
+  # Rebuilds the jars rather than reusing the package job's, because deploy needs the
+  # reactor's POMs. The tests already passed on the same sources.
+  publish:
+    needs: [package, test-bundled]
+    if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
+    runs-on: ubuntu-latest
+    # The environment holds the signing key and Central token, so they are only exposed
+    # to runs its protection rules allow.
+    environment: maven-central
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          pattern: native-*
+          path: artifacts
+      - name: Bundle the native libraries
+        run: scripts/bundle-native-libs.sh artifacts
+      # setup-java imports the signing key and writes a settings.xml server "central" that
+      # reads its credentials from the environment variables named here.
+      # No dependency cache: a poisoned cache would end up in the published jars.
+      - uses: actions/setup-java@v6.0.1
+        with:
+          distribution: temurin
+          java-version: "21"
+          server-id: central
+          server-username: CENTRAL_TOKEN_USERNAME
+          server-password: CENTRAL_TOKEN_PASSWORD
+          gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg-passphrase: MAVEN_GPG_PASSPHRASE
+      - name: Set the version
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="${GITHUB_REF_NAME#v}"
+          else
+            version="$INPUT_VERSION"
+          fi
+          # The plugin sends snapshots straight to Central's snapshot repository, skipping
+          # the validated deployment that waits for someone to press Publish.
+          if [[ "$version" == *-SNAPSHOT ]]; then
+            echo "::error::Refusing to upload snapshot version $version"
+            exit 1
+          fi
+          mvn -B -q versions:set -DnewVersion="$version" -DgenerateBackupPoms=false
+      - name: Upload to Maven Central
+        env:
+          CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
+          CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
+          MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: mvn -B deploy -Pcentral -DskipTests
 
   release:
     needs: [package, test-bundled]

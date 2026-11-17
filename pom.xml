@@ -4,7 +4,7 @@
          xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
-	<groupId>io.earthmover.icechunk</groupId>
+	<groupId>io.icechunk</groupId>
 	<artifactId>icechunk-java-parent</artifactId>
 	<version>0.1.0-SNAPSHOT</version>
 	<packaging>pom</packaging>
@@ -19,6 +19,25 @@
 			<url>https://www.apache.org/licenses/LICENSE-2.0</url>
 		</license>
 	</licenses>
+
+	<developers>
+		<developer>
+			<id>earth-mover</id>
+			<name>Earthmover</name>
+			<url>https://github.com/earth-mover</url>
+		</developer>
+	</developers>
+
+	<scm>
+		<connection>scm:git:https://github.com/earth-mover/icechunk-java.git</connection>
+		<developerConnection>scm:git:https://github.com/earth-mover/icechunk-java.git</developerConnection>
+		<url>https://github.com/earth-mover/icechunk-java</url>
+	</scm>
+
+	<issueManagement>
+		<system>GitHub</system>
+		<url>https://github.com/earth-mover/icechunk-java/issues</url>
+	</issueManagement>
 
 	<modules>
 		<module>icechunk-java</module>
@@ -38,6 +57,81 @@
 			<modules>
 				<module>icechunk-n5-universe</module>
 			</modules>
+		</profile>
+		<!-- Builds what Maven Central requires (sources and javadoc jars, GPG signatures) and makes deploy upload
+		     the bundle to the Central Portal. release.yml's publish job runs mvn deploy -Pcentral. A validated
+		     upload waits for someone to press Publish on central.sonatype.com, because a published version can
+		     never be changed or removed. -->
+		<profile>
+			<id>central</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-source-plugin</artifactId>
+						<version>3.4.0</version>
+						<executions>
+							<execution>
+								<id>attach-sources</id>
+								<goals>
+									<goal>jar-no-fork</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-javadoc-plugin</artifactId>
+						<version>3.12.0</version>
+						<configuration>
+							<!-- Many accessors and builder methods have no @param or @return tags. -->
+							<doclint>all,-missing</doclint>
+						</configuration>
+						<executions>
+							<execution>
+								<id>attach-javadocs</id>
+								<goals>
+									<goal>jar</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-gpg-plugin</artifactId>
+						<version>3.2.8</version>
+						<configuration>
+							<!-- Reads the passphrase from MAVEN_GPG_PASSPHRASE rather than settings.xml. -->
+							<bestPractices>true</bestPractices>
+						</configuration>
+						<executions>
+							<execution>
+								<id>sign-artifacts</id>
+								<goals>
+									<goal>sign</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+					<plugin>
+						<groupId>org.sonatype.central</groupId>
+						<artifactId>central-publishing-maven-plugin</artifactId>
+						<version>0.12.0</version>
+						<extensions>true</extensions>
+						<configuration>
+							<publishingServerId>central</publishingServerId>
+							<autoPublish>false</autoPublish>
+							<waitUntil>validated</waitUntil>
+							<!-- The plugin does not honor these modules' maven.deploy.skip. -->
+							<excludeArtifacts>
+								<excludeArtifact>icechunk-java-examples</excludeArtifact>
+								<excludeArtifact>icechunk-java-benchmarks</excludeArtifact>
+								<excludeArtifact>icechunk-java-property-tests</excludeArtifact>
+							</excludeArtifacts>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
 		</profile>
 	</profiles>
 
