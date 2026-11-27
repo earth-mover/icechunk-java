@@ -10,6 +10,7 @@ target/
 /tests/compat/__pycache__/
 dependency-reduced-pom.xml
 /icechunk-java/src/main/resources/io/icechunk/native/
+/icechunk-java/src/main/resources/META-INF/THIRD-PARTY-LICENSES
 /site/
 
 # Eclipse metadata

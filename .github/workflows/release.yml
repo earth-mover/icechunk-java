@@ -72,8 +72,27 @@ jobs:
           path: native/target/${{ matrix.target }}/release/${{ matrix.file }}
           if-no-files-found: error
 
+  # The license notices of the crates compiled into the native library, which binary
+  # distributions must carry. Covers every target listed in native/about.toml.
+  licenses:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+      - name: Generate THIRD-PARTY-LICENSES
+        run: |
+          cargo install --locked cargo-about@0.9.3 --features cli
+          cargo about generate --manifest-path native/Cargo.toml -c native/about.toml \
+            native/about.hbs -o THIRD-PARTY-LICENSES
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: third-party-licenses
+          path: THIRD-PARTY-LICENSES
+          if-no-files-found: error
+
   package:
-    needs: native
+    needs: [native, licenses]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
@@ -83,6 +102,10 @@ jobs:
           path: artifacts
       - name: Bundle the native libraries
         run: scripts/bundle-native-libs.sh artifacts
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: third-party-licenses
+          path: icechunk-java/src/main/resources/META-INF
       - uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
@@ -102,6 +125,7 @@ jobs:
             icechunk-zarr-java/target/icechunk-zarr-java-*.jar
             icechunk-n5/target/icechunk-n5-*.jar
             icechunk-n5-codecs/target/icechunk-n5-codecs-*.jar
+            icechunk-java/src/main/resources/META-INF/THIRD-PARTY-LICENSES
 
   # Runs the tests on each platform against the release libraries, bundled the way the
   # package job bundles them.
@@ -145,7 +169,7 @@ jobs:
   # Rebuilds the jars rather than reusing the package job's, because deploy needs the
   # reactor's POMs. The tests already passed on the same sources.
   publish:
-    needs: [package, test-bundled]
+    needs: [licenses, package, test-bundled]
     if: startsWith(github.ref, 'refs/tags/v') || inputs.version != ''
     runs-on: ubuntu-latest
     # The environment holds the signing key and Central token, so they are only exposed
@@ -163,6 +187,10 @@ jobs:
           path: artifacts
       - name: Bundle the native libraries
         run: scripts/bundle-native-libs.sh artifacts
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: third-party-licenses
+          path: icechunk-java/src/main/resources/META-INF
       # setup-java imports the signing key and writes a settings.xml server "central" that
       # reads its credentials from the environment variables named here.
       # No dependency cache: a poisoned cache would end up in the published jars.
@@ -216,4 +244,4 @@ jobs:
           gh release create "$GITHUB_REF_NAME" --draft --title "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --notes "Experimental, unofficial build. See the README." \
-            $(find jars -name 'icechunk-*.jar')
+            $(find jars -name 'icechunk-*.jar' -o -name THIRD-PARTY-LICENSES)
