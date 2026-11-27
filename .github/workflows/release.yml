@@ -204,7 +204,9 @@ jobs:
           CENTRAL_TOKEN_USERNAME: ${{ secrets.CENTRAL_TOKEN_USERNAME }}
           CENTRAL_TOKEN_PASSWORD: ${{ secrets.CENTRAL_TOKEN_PASSWORD }}
           MAVEN_GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: mvn -B deploy -Pcentral -DskipTests
+        # maven.test.skip rather than skipTests, so icechunk-java's test jar, which only the
+        # other modules' tests use, is not built and published.
+        run: mvn -B deploy -Pcentral -Dmaven.test.skip=true
 
   release:
     needs: [package, test-bundled]
