@@ -70,7 +70,7 @@
 				<artifactId>exec-maven-plugin</artifactId>
 				<version>3.6.4</version>
 				<configuration>
-					<mainClass>io.earthmover.icechunk.examples.${example}</mainClass>
+					<mainClass>io.icechunk.examples.${example}</mainClass>
 					<systemProperties>
 						<systemProperty>
 							<key>icechunk.native.dir</key>

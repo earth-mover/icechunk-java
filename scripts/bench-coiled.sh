@@ -37,7 +37,7 @@ java -jar benchmarks.jar 'StoreBenchmark.(get|getInto|getBuffer|callOverhead|exi
     -rf json -rff results/jmh-t8.json $jmh_args | tee results/jmh-t8.log
 for mode in get getInto getBuffer set setDirect; do
     java -Xmx2g -Dicechunk.native.dir=\$lib -cp benchmarks.jar \
-        io.earthmover.icechunk.benchmarks.MemoryProbe \$mode 4 1024 2>/dev/null | tail -1
+        io.icechunk.benchmarks.MemoryProbe \$mode 4 1024 2>/dev/null | tail -1
 done | tee results/memory.txt
 echo "=== results/jmh-t1.json"; cat results/jmh-t1.json
 echo "=== results/jmh-t8.json"; cat results/jmh-t8.json

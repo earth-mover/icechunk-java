@@ -33,7 +33,7 @@
 
 ## Example
 
-From [`N5Basics.java`](../examples/src/main/java/io/earthmover/icechunk/examples/N5Basics.java): write a dataset with
+From [`N5Basics.java`](../examples/src/main/java/io/icechunk/examples/N5Basics.java): write a dataset with
 n5-zarr's Zarr v3 writer and commit it. Paths are relative to the repository root, so the base path is `""`.
 
 ```java

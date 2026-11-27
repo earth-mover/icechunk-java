@@ -56,6 +56,6 @@ pymdownx.superfences = {}
 
 # Code samples are sections of the runnable programs in examples/, so they compile with the build.
 [project.markdown_extensions.pymdownx.snippets]
-base_path = ["examples/src/main/java/io/earthmover/icechunk/examples"]
+base_path = ["examples/src/main/java/io/icechunk/examples"]
 check_paths = true
 dedent_subsections = true

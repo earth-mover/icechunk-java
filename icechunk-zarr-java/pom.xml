@@ -49,7 +49,7 @@
 				<configuration>
 					<archive>
 						<manifestEntries>
-							<Automatic-Module-Name>io.earthmover.icechunk.zarr</Automatic-Module-Name>
+							<Automatic-Module-Name>io.icechunk.zarr</Automatic-Module-Name>
 						</manifestEntries>
 					</archive>
 				</configuration>

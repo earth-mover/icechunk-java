@@ -110,7 +110,7 @@ jobs:
             !icechunk-java/target/icechunk-java-*-tests.jar
             icechunk-zarr-java/target/icechunk-zarr-java-*.jar
             icechunk-n5/target/icechunk-n5-*.jar
-            icechunk-java/target/classes/io/earthmover/icechunk/native/
+            icechunk-java/target/classes/io/icechunk/native/
 
   # The package job runs on Linux x86_64, so its tests load only that platform's library
   # from the jar. Run the tests once per platform against the bundled libraries.
@@ -130,9 +130,9 @@ jobs:
       - name: Put the bundled libraries on the test classpath
         shell: bash
         run: |
-          mkdir -p icechunk-java/src/main/resources/io/earthmover/icechunk
-          cp -R "$(find jars -type d -name native -path '*io/earthmover/icechunk/native' | head -1)" \
-            icechunk-java/src/main/resources/io/earthmover/icechunk/
+          mkdir -p icechunk-java/src/main/resources/io/icechunk
+          cp -R "$(find jars -type d -name native -path '*io/icechunk/native' | head -1)" \
+            icechunk-java/src/main/resources/io/icechunk/
       - uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin

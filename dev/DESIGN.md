@@ -53,7 +53,7 @@ Each native method is written by hand, in Rust and in Java. Three choices keep t
 ## Layers
 
 ```
-Java API         Storage  Repository  Session  Store        public classes, io.earthmover.icechunk
+Java API         Storage  Repository  Session  Store        public classes, io.icechunk
                     │         │          │        │
 Java internals   NativeHandle (owns a long)   NativeLoader
                     │
@@ -246,7 +246,7 @@ session can keep the readers and writers it built.
 ## Packaging
 
 `.github/workflows/release.yml` builds the native library on each platform, bundles all of them into the
-`icechunk-java` jar under `io/earthmover/icechunk/native/<os>-<arch>/`, runs the tests against that jar, uploads
+`icechunk-java` jar under `io/icechunk/native/<os>-<arch>/`, runs the tests against that jar, uploads
 the jars to Maven Central, and attaches them to a draft GitHub release. A single jar with every platform suits Fiji
 update sites and scripting tools that do not resolve Maven classifiers; per-platform classifier jars can be added for
 applications that care about size.
@@ -267,7 +267,7 @@ dylib extracted to a temporary directory.
 
 A library such as an Arraylake client can add native operations without forking this one. It depends on the
 `icechunk-jni` crate as an `rlib`, adds its own `Java_...` exports using `icechunk_jni::ext` (`run`, `block_on`, and
-`insert_*` to register objects, including its own types), and builds one combined library. Its jar ships that library under `io/earthmover/icechunk/native-ext/<os>-<arch>/`, which the loader prefers.
+`insert_*` to register objects, including its own types), and builds one combined library. Its jar ships that library under `io/icechunk/native-ext/<os>-<arch>/`, which the loader prefers.
 Handles its native code registers live in the same table as the core's, and `NativeExtensions` wraps them as ordinary
 `Repository` and `Storage` objects.
 

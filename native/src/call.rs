@@ -17,14 +17,14 @@ use jni::{Env, EnvUnowned, jni_sig, jni_str};
 use crate::error::{ErrorKind, NativeError, NativeResult};
 use crate::runtime;
 
-/// Define the export `Java_io_earthmover_icechunk_Native_<name>` for the static native
+/// Define the export `Java_io_icechunk_Native_<name>` for the static native
 /// method `Native.<name>`, running `body` through [`run`]. `$env` names (or ignores) the
 /// `&mut Env` the body receives; the remaining arguments follow the Java signature.
 macro_rules! native {
     (fn $name:ident($env:pat $(, $arg:ident: $ty:ty)* $(,)?) -> $ret:ty $body:block) => {
         #[allow(non_snake_case, reason = "JNI export names follow the Java method names")]
         #[allow(unreachable_pub, reason = "the JVM finds exports by symbol name")]
-        #[unsafe(export_name = concat!("Java_io_earthmover_icechunk_Native_", stringify!($name)))]
+        #[unsafe(export_name = concat!("Java_io_icechunk_Native_", stringify!($name)))]
         pub extern "system" fn $name<'l>(
             env: ::jni::EnvUnowned<'l>,
             _class: ::jni::objects::JClass<'l>,
@@ -164,7 +164,7 @@ fn to_exception<'local>(
     let message = env.new_string(&err.message)?;
     let exception = env
         .call_static_method(
-            jni_str!("io/earthmover/icechunk/IcechunkException"),
+            jni_str!("io/icechunk/IcechunkException"),
             jni_str!("fromNative"),
             jni_sig!(
                 "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/RuntimeException;"

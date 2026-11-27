@@ -5,12 +5,12 @@
 
 import com.google.gson.GsonBuilder
 import ij.IJ
-import io.earthmover.icechunk.Repository
-import io.earthmover.icechunk.S3Credentials
-import io.earthmover.icechunk.S3Options
-import io.earthmover.icechunk.Storage
-import io.earthmover.icechunk.Version
-import io.earthmover.icechunk.n5.IcechunkKeyValueAccess
+import io.icechunk.Repository
+import io.icechunk.S3Credentials
+import io.icechunk.S3Options
+import io.icechunk.Storage
+import io.icechunk.Version
+import io.icechunk.n5.IcechunkKeyValueAccess
 import java.awt.GraphicsEnvironment
 import net.imglib2.img.display.imagej.ImageJFunctions
 import net.imglib2.view.Views
