@@ -110,6 +110,7 @@ jobs:
             !icechunk-java/target/icechunk-java-*-tests.jar
             icechunk-zarr-java/target/icechunk-zarr-java-*.jar
             icechunk-n5/target/icechunk-n5-*.jar
+            icechunk-n5-codecs/target/icechunk-n5-codecs-*.jar
             icechunk-java/target/classes/io/icechunk/native/
 
   # The package job runs on Linux x86_64, so its tests load only that platform's library
