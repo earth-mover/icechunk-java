@@ -26,7 +26,7 @@ The memory probe runs one mode per JVM, with mode `get`, `set` or `setDirect`:
 
 ```sh
 java -Dicechunk.native.dir=native/target/release -cp benchmarks/target/benchmarks.jar \
-    io.earthmover.icechunk.benchmarks.MemoryProbe get [chunkMiB] [totalMiB]
+    io.icechunk.benchmarks.MemoryProbe get [chunkMiB] [totalMiB]
 ```
 
 ## Contents

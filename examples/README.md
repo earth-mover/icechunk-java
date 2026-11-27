@@ -5,9 +5,9 @@ repository. They are not published.
 
 | Example | What it does |
 |---|---|
-| [`Quickstart`](src/main/java/io/earthmover/icechunk/examples/Quickstart.java) | Creates a local repository, writes a zarr-java array, commits twice, and reads both versions back. |
-| [`ReadPublicData`](src/main/java/io/earthmover/icechunk/examples/ReadPublicData.java) | Reads one time step of ERA5 2 m temperature from a public S3 repository, without credentials, using zarr-java. |
-| [`N5Basics`](src/main/java/io/earthmover/icechunk/examples/N5Basics.java) | Writes and reads a dataset with N5's n5-zarr, reads an older snapshot, opens through n5-universe, and keeps one writer across commits. |
+| [`Quickstart`](src/main/java/io/icechunk/examples/Quickstart.java) | Creates a local repository, writes a zarr-java array, commits twice, and reads both versions back. |
+| [`ReadPublicData`](src/main/java/io/icechunk/examples/ReadPublicData.java) | Reads one time step of ERA5 2 m temperature from a public S3 repository, without credentials, using zarr-java. |
+| [`N5Basics`](src/main/java/io/icechunk/examples/N5Basics.java) | Writes and reads a dataset with N5's n5-zarr, reads an older snapshot, opens through n5-universe, and keeps one writer across commits. |
 | [`fiji/Era5Temperature.groovy`](fiji/Era5Temperature.groovy) | A Fiji script that opens the same ERA5 data as an image stack through N5. |
 
 ## Run them

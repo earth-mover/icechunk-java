@@ -36,7 +36,7 @@ Repositories, versions, branches and commits are covered in [Java API](../docs/j
 
 ## Example
 
-From [`Quickstart.java`](../examples/src/main/java/io/earthmover/icechunk/examples/Quickstart.java): create an array,
+From [`Quickstart.java`](../examples/src/main/java/io/icechunk/examples/Quickstart.java): create an array,
 write it, commit, then read the first version back after a second commit.
 
 ```java

@@ -84,7 +84,7 @@
 				<configuration>
 					<archive>
 						<manifestEntries>
-							<Automatic-Module-Name>io.earthmover.icechunk.n5.codecs</Automatic-Module-Name>
+							<Automatic-Module-Name>io.icechunk.n5.codecs</Automatic-Module-Name>
 						</manifestEntries>
 					</archive>
 				</configuration>

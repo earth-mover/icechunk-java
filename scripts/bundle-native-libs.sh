@@ -7,7 +7,7 @@ set -euo pipefail
 
 src="$1"
 root="$(cd "$(dirname "$0")/.." && pwd)"
-dest="$root/icechunk-java/src/main/resources/io/earthmover/icechunk/native"
+dest="$root/icechunk-java/src/main/resources/io/icechunk/native"
 
 for dir in "$src"/native-*; do
     platform="${dir##*/native-}"
