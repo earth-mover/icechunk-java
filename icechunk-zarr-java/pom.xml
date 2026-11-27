@@ -29,9 +29,8 @@
 		</dependency>
 		<dependency>
 			<groupId>io.icechunk</groupId>
-			<artifactId>icechunk-java</artifactId>
+			<artifactId>icechunk-java-test-support</artifactId>
 			<version>${project.version}</version>
-			<type>test-jar</type>
 			<scope>test</scope>
 		</dependency>
 		<dependency>

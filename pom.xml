@@ -42,6 +42,7 @@
 	</issueManagement>
 
 	<modules>
+		<module>test-support</module>
 		<module>icechunk-java</module>
 		<module>icechunk-zarr-java</module>
 		<module>icechunk-n5</module>
@@ -126,6 +127,7 @@
 							<waitUntil>validated</waitUntil>
 							<!-- The plugin does not honor these modules' maven.deploy.skip. -->
 							<excludeArtifacts>
+								<excludeArtifact>icechunk-java-test-support</excludeArtifact>
 								<excludeArtifact>icechunk-java-examples</excludeArtifact>
 								<excludeArtifact>icechunk-java-benchmarks</excludeArtifact>
 								<excludeArtifact>icechunk-java-property-tests</excludeArtifact>
