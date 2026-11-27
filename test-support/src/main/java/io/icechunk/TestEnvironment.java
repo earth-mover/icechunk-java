@@ -18,8 +18,7 @@ import java.util.List;
 import java.util.stream.Stream;
 
 /**
- * Locates the optional resources some tests need, skipping those tests when a resource is missing. The other modules
- * use it through this module's test jar.
+ * Locates the optional resources some tests need, skipping those tests when a resource is missing.
  */
 public final class TestEnvironment {
     /** Maven runs each module's tests in the module directory. */
