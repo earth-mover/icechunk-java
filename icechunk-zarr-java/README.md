@@ -1,8 +1,8 @@
 # icechunk-zarr-java
 
 > [!WARNING]
-> Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
-> notice. See the [top-level README](../README.md).
+> Experimental and not officially supported. The API will change without notice. See the
+> [top-level README](../README.md).
 
 `IcechunkZarrStore` lets [zarr-java](https://github.com/zarr-developers/zarr-java) read and write arrays in an
 [icechunk](https://icechunk.io) repository.
@@ -20,7 +20,7 @@ Repositories, versions, branches and commits are covered in [Java API](../docs/j
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-zarr-java</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>
@@ -36,7 +36,7 @@ Repositories, versions, branches and commits are covered in [Java API](../docs/j
 
 ## Example
 
-From [`Quickstart.java`](../examples/src/main/java/io/earthmover/icechunk/examples/Quickstart.java): create an array,
+From [`Quickstart.java`](../examples/src/main/java/io/icechunk/examples/Quickstart.java): create an array,
 write it, commit, then read the first version back after a second commit.
 
 ```java

@@ -2,8 +2,8 @@
 
 > [!WARNING]
 > Experimental and not officially supported. This is not an Earthmover product and is not part of the icechunk
-> project's supported surface. Nothing is published to Maven Central, the API will change without notice, and there
-> is no guarantee of fixes or compatibility. Do not use it for data you cannot afford to lose.
+> project's supported surface. The API will change without notice, and there is no guarantee of fixes or
+> compatibility. Do not use it for data you cannot afford to lose.
 >
 > Interested in official support? [Open a GitHub issue](https://github.com/earth-mover/icechunk-java/issues)
 > and say what you would use it for.
@@ -61,10 +61,20 @@ and bytes needs only `icechunk-java`.
 
 ## Getting the jars
 
-Nothing is on Maven Central, and no release is tagged yet, so build the jars from source ([Building](#building)).
-Tagged releases will attach the jars to a GitHub release, with the native library for Linux (x86_64, aarch64),
-macOS (x86_64, arm64) and Windows (x86_64) bundled inside `icechunk-java`. Put `icechunk-java` and the adapter you
-use on the classpath, plus zarr-java or n5 and n5-zarr.
+Tagged releases are published to Maven Central under the groupId `io.icechunk`, and attached to a
+[GitHub release](https://github.com/earth-mover/icechunk-java/releases). The native library for Linux (x86_64,
+aarch64), macOS (x86_64, arm64) and Windows (x86_64) is bundled inside `icechunk-java`. No release is tagged yet;
+until then, build the jars from source ([Building](#building)).
+
+```xml
+<dependency>
+  <groupId>io.icechunk</groupId>
+  <artifactId>icechunk-java</artifactId>
+  <version>VERSION</version>
+</dependency>
+```
+
+Add zarr-java, or n5 and n5-zarr, yourself if you use an adapter: they are `provided` dependencies.
 
 ## Building
 

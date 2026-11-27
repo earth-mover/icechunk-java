@@ -1,8 +1,8 @@
 # icechunk-n5
 
 > [!WARNING]
-> Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
-> notice. See the [top-level README](../README.md).
+> Experimental and not officially supported. The API will change without notice. See the
+> [top-level README](../README.md).
 
 `IcechunkKeyValueAccess` lets [N5](https://github.com/saalfeldlab/n5) read and write an
 [icechunk](https://icechunk.io) repository.
@@ -19,7 +19,7 @@
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-n5</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>
@@ -33,7 +33,7 @@
 
 ## Example
 
-From [`N5Basics.java`](../examples/src/main/java/io/earthmover/icechunk/examples/N5Basics.java): write a dataset with
+From [`N5Basics.java`](../examples/src/main/java/io/icechunk/examples/N5Basics.java): write a dataset with
 n5-zarr's Zarr v3 writer and commit it. Paths are relative to the repository root, so the base path is `""`.
 
 ```java

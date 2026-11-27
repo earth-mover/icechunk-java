@@ -1,0 +1,345 @@
+package io.icechunk.n5.universe;
+
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
+import io.icechunk.AzureCredentials;
+import io.icechunk.Credentials;
+import io.icechunk.GcsCredentials;
+import io.icechunk.GcsOptions;
+import io.icechunk.IcechunkException;
+import io.icechunk.Repository;
+import io.icechunk.RepositoryOptions;
+import io.icechunk.S3Credentials;
+import io.icechunk.S3Options;
+import io.icechunk.Session;
+import io.icechunk.Storage;
+import io.icechunk.n5.IcechunkKeyValueAccess;
+import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URL;
+import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.ServiceConfigurationError;
+import java.util.ServiceLoader;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
+import java.util.function.Supplier;
+import org.janelia.saalfeldlab.n5.KeyValueAccess;
+import org.janelia.saalfeldlab.n5.N5Exception;
+import org.janelia.saalfeldlab.n5.universe.KeyValueAccessProvider;
+import org.janelia.saalfeldlab.n5.universe.N5Factory;
+
+/**
+ * Opens {@link IcechunkUrl icechunk URLs} through n5-universe, so any tool that opens a location with
+ * {@link N5Factory}, such as n5-ij's importer, opens {@code s3://bucket/repo|icechunk://branch.main/em/raw} as a
+ * Zarr v3 container rooted at that node.
+ *
+ * <p>n5-universe finds this provider through {@code META-INF/services}, so putting the jar on the classpath is enough.
+ * URLs open read-only: writes need a commit, which a URL has no place for.
+ *
+ * <p>S3 and Google Cloud Storage repositories are opened with the credentials the environment provides, such as the
+ * AWS default chain, and anonymously if that fails, so public repositories open without credentials. An S3 bucket's
+ * region is looked up from the bucket. Each repository is opened once and kept open. Each URL opened gets a new
+ * session, so a URL naming a branch reads the branch's tip at the time the URL is opened.
+ *
+ * <p>Virtual chunks are read from every container the repository declares, anonymously, so no credentials are ever
+ * sent to a location the repository names. Containers on the local file system are not authorized. Setting the system
+ * property {@code icechunk.virtualChunks} to {@code none} authorizes no containers.
+ *
+ * <p>icechunk splits a large read into ranged requests of about {@code icechunk.requestSize} bytes and sends them in
+ * parallel. This provider sets that size to 2 MiB, overriding the repository's own setting; icechunk's default is
+ * 12 MiB. The request size applies to every read from the repository: virtual chunks, and chunks and manifests on S3
+ * or Google Cloud Storage. To use another size, set the system property {@code icechunk.requestSize} to a number of
+ * bytes.
+ *
+ * <p>A failed request is tried up to 10 times, waiting from 100 ms up to 10 s between tries. Some servers refuse
+ * connections beyond a limit, and a viewer reading several chunks at once can reach that limit. These retries override
+ * the repository's settings, which for a repository on the local file system allow a single try.
+ *
+ * <p>A location that a {@link RepositoryResolver} on the classpath claims, such as an Arraylake repository name, is
+ * opened by that resolver, which supplies the repository's credentials, including those for its virtual chunks. The
+ * request size and retries apply to those repositories too.
+ */
+public final class IcechunkKeyValueAccessProvider implements KeyValueAccessProvider {
+    private static final Map<String, Repository> REPOSITORIES = new ConcurrentHashMap<>();
+    /** The errors from resolvers that failed to load, reported when no loaded resolver claims a location. */
+    private static final List<Throwable> RESOLVER_FAILURES = new ArrayList<>();
+
+    private static final List<RepositoryResolver> RESOLVERS = resolvers();
+
+    // A viewer reads one chunk at a time, often from servers that limit each connection's speed, so a chunk read as
+    // one request is slow. Several smaller ranged requests in parallel get past the per-connection limit.
+    private static final long DEFAULT_REQUEST_SIZE = 2 << 20;
+
+    @Override
+    public boolean test(URI uri) {
+        if (IcechunkUrl.claims(uri.toString())) {
+            return true;
+        }
+        try {
+            return resolver(IcechunkUrl.parse(uri).location(), new ArrayList<>()) != null;
+        } catch (IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    @Override
+    public KeyValueAccess apply(URI uri, N5Factory factory, boolean readOnly) {
+        if (!readOnly) {
+            throw new N5Exception("icechunk URLs open read-only; to write, use IcechunkKeyValueAccess on a writable"
+                    + " session and commit it: " + uri);
+        }
+        IcechunkUrl url = IcechunkUrl.parse(uri);
+        Session session;
+        try {
+            session = repository(url.location()).readonlySession(url.version());
+        } catch (IcechunkException e) {
+            throw new N5Exception.N5IOException("cannot open " + url + ": " + e.getMessage(), e);
+        }
+        return new UrlKeyValueAccess(new IcechunkKeyValueAccess(session), url.path());
+    }
+
+    /**
+     * The repository at {@code location}, opened on first use and kept open. It is opened outside the map, since
+     * opening can take seconds and computeIfAbsent would block other locations meanwhile.
+     */
+    static Repository repository(String location) {
+        Repository cached = REPOSITORIES.get(location);
+        if (cached != null) {
+            return cached;
+        }
+        Repository opened = open(location);
+        Repository raced = REPOSITORIES.putIfAbsent(location, opened);
+        if (raced == null) {
+            return opened;
+        }
+        opened.close();
+        return raced;
+    }
+
+    private static Repository open(String location) {
+        List<Throwable> claimFailures = new ArrayList<>();
+        RepositoryResolver resolver = resolver(location, claimFailures);
+        if (resolver != null) {
+            try {
+                return resolver.open(
+                        location,
+                        RepositoryOptions.builder().configJson(storageConfig()).build());
+            } catch (N5Exception e) {
+                throw e;
+            } catch (RuntimeException e) {
+                throw new N5Exception.N5IOException("cannot open " + location + ": " + e.getMessage(), e);
+            }
+        }
+        if (location.startsWith("s3://")) {
+            String[] bucketAndPrefix = bucketAndPrefix(location, "s3://");
+            String region = bucketRegion(bucketAndPrefix[0]);
+            Function<S3Credentials, Storage> storage = credentials -> {
+                S3Options.Builder options = S3Options.builder(bucketAndPrefix[0])
+                        .prefix(bucketAndPrefix[1])
+                        .credentials(credentials);
+                if (region != null) {
+                    options.region(region);
+                }
+                return Storage.s3(options.build());
+            };
+            return openEitherWay(
+                    () -> storage.apply(S3Credentials.fromEnvironment()),
+                    () -> storage.apply(S3Credentials.anonymous()));
+        }
+        if (location.startsWith("gs://")) {
+            String[] bucketAndPrefix = bucketAndPrefix(location, "gs://");
+            Function<GcsCredentials, Storage> storage =
+                    credentials -> Storage.gcs(GcsOptions.builder(bucketAndPrefix[0])
+                            .prefix(bucketAndPrefix[1])
+                            .credentials(credentials)
+                            .build());
+            return openEitherWay(
+                    () -> storage.apply(GcsCredentials.fromEnvironment()),
+                    () -> storage.apply(GcsCredentials.anonymous()));
+        }
+        if (location.startsWith("http://") || location.startsWith("https://")) {
+            return open(Storage.http(location));
+        }
+        if (IcechunkUrl.hasScheme(location)) {
+            N5Exception unsupported = new N5Exception("unsupported icechunk repository location: " + location
+                    + "; no RepositoryResolver on the classpath claims it");
+            RESOLVER_FAILURES.forEach(unsupported::addSuppressed);
+            claimFailures.forEach(unsupported::addSuppressed);
+            throw unsupported;
+        }
+        return open(Storage.localFilesystem(Paths.get(location)));
+    }
+
+    /** Opens with the environment's credentials, then anonymously; if both fail, throws the first failure. */
+    private static Repository openEitherWay(Supplier<Storage> withCredentials, Supplier<Storage> anonymously) {
+        try {
+            return open(withCredentials.get());
+        } catch (N5Exception credentialed) {
+            try {
+                return open(anonymously.get());
+            } catch (N5Exception anonymous) {
+                credentialed.addSuppressed(anonymous);
+                throw credentialed;
+            }
+        }
+    }
+
+    private static Repository open(Storage storage) {
+        RepositoryOptions.Builder options = RepositoryOptions.builder().configJson(storageConfig());
+        try (Storage s = storage) {
+            Repository repo = Repository.open(s, options.build());
+            if ("none".equals(System.getProperty("icechunk.virtualChunks"))) {
+                return repo;
+            }
+            Map<String, Credentials> containers = anonymousAccess(repo.configJson());
+            if (containers.isEmpty()) {
+                return repo;
+            }
+            repo.close();
+            containers.forEach(options::authorizeVirtualChunkAccess);
+            return Repository.open(s, options.build());
+        } catch (IcechunkException e) {
+            throw new N5Exception.N5IOException("cannot open icechunk repository: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * Loads each resolver on its own, skipping any that fail: this runs while the provider class initializes, so one
+     * broken resolver jar would otherwise stop every icechunk URL from opening, not only its own. ServiceLoader reports
+     * a resolver class that cannot be linked from {@code hasNext}, and one that cannot be instantiated from
+     * {@code next}, and moves past either. After failing to read the services files, ServiceLoader retries on every
+     * call and fails again, so the loop stops at the first such failure.
+     */
+    private static List<RepositoryResolver> resolvers() {
+        List<RepositoryResolver> resolvers = new ArrayList<>();
+        Iterator<RepositoryResolver> loader = ServiceLoader.load(
+                        RepositoryResolver.class, IcechunkKeyValueAccessProvider.class.getClassLoader())
+                .iterator();
+        while (true) {
+            try {
+                if (!loader.hasNext()) {
+                    break;
+                }
+                resolvers.add(loader.next());
+            } catch (ServiceConfigurationError | LinkageError e) {
+                RESOLVER_FAILURES.add(e);
+                if (e.getCause() instanceof IOException) {
+                    break;
+                }
+            }
+        }
+        return Collections.unmodifiableList(resolvers);
+    }
+
+    /**
+     * The first resolver that claims {@code location}. n5-universe asks about every URL it opens, so a resolver that
+     * throws from {@code claims} is taken not to claim it, and the failure is added to {@code failures}.
+     */
+    private static RepositoryResolver resolver(String location, List<Throwable> failures) {
+        for (RepositoryResolver resolver : RESOLVERS) {
+            try {
+                if (resolver.claims(location)) {
+                    return resolver;
+                }
+            } catch (RuntimeException | LinkageError e) {
+                failures.add(e);
+            }
+        }
+        return null;
+    }
+
+    /** The configuration layered over each repository's own: request size and retries. */
+    static String storageConfig() {
+        String property = System.getProperty("icechunk.requestSize");
+        long size;
+        try {
+            size = property == null ? DEFAULT_REQUEST_SIZE : Long.parseLong(property.trim());
+        } catch (NumberFormatException e) {
+            size = 0;
+        }
+        if (size <= 0) {
+            throw new N5Exception("icechunk.requestSize must be a positive number of bytes: " + property);
+        }
+        return "{\"storage\": {\"concurrency\": {\"ideal_concurrent_request_size\": " + size + "},"
+                + " \"retries\": {\"max_tries\": 10, \"initial_backoff_ms\": 100, \"max_backoff_ms\": 10000}}}";
+    }
+
+    /**
+     * Anonymous credentials for each virtual chunk container in a repository's configuration, by URL prefix. Local
+     * file system containers are left out: a repository opened from a URL should not read local files unasked.
+     */
+    static Map<String, Credentials> anonymousAccess(String configJson) {
+        Map<String, Credentials> access = new LinkedHashMap<>();
+        JsonElement containers =
+                JsonParser.parseString(configJson).getAsJsonObject().get("virtual_chunk_containers");
+        if (containers == null || !containers.isJsonObject()) {
+            return access;
+        }
+        for (Map.Entry<String, JsonElement> container :
+                containers.getAsJsonObject().entrySet()) {
+            JsonObject store = container.getValue().getAsJsonObject().getAsJsonObject("store");
+            String type = store == null || store.size() != 1
+                    ? ""
+                    : store.keySet().iterator().next();
+            Credentials credentials = anonymous(type);
+            if (credentials != null) {
+                access.put(container.getKey(), credentials);
+            }
+        }
+        return access;
+    }
+
+    private static Credentials anonymous(String storeType) {
+        switch (storeType) {
+            case "http":
+                return Credentials.http();
+            case "s3":
+            case "s3_compatible":
+            case "tigris":
+                return Credentials.s3(S3Credentials.anonymous());
+            case "gcs":
+                return Credentials.gcs(GcsCredentials.anonymous());
+            case "azure":
+                return Credentials.azure(AzureCredentials.anonymous());
+            default:
+                return null;
+        }
+    }
+
+    private static String[] bucketAndPrefix(String location, String scheme) {
+        String rest = location.substring(scheme.length());
+        int slash = rest.indexOf('/');
+        return slash < 0 ? new String[] {rest, ""} : new String[] {rest.substring(0, slash), rest.substring(slash + 1)};
+    }
+
+    /**
+     * The region S3 reports for {@code bucket}, or null if the lookup fails. S3 answers a request for any bucket with
+     * the bucket's region, with or without credentials.
+     */
+    private static String bucketRegion(String bucket) {
+        try {
+            HttpURLConnection connection =
+                    (HttpURLConnection) new URL("https://s3.amazonaws.com/" + bucket).openConnection();
+            try {
+                connection.setRequestMethod("HEAD");
+                connection.setInstanceFollowRedirects(false);
+                connection.setConnectTimeout(10_000);
+                connection.setReadTimeout(10_000);
+                connection.getResponseCode();
+                return connection.getHeaderField("x-amz-bucket-region");
+            } finally {
+                connection.disconnect();
+            }
+        } catch (IOException e) {
+            return null;
+        }
+    }
+}

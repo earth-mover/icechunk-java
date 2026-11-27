@@ -81,6 +81,42 @@ script handles that too.
 `KnownIcechunkBugsTest` asserts the behaviour of icechunk bugs that the tests work around. If one of its tests fails
 after an update, that bug is fixed: delete the test and remove the workaround it names.
 
+## Releasing
+
+Pushing a `v*` tag starts `.github/workflows/release.yml`, which does the rest:
+
+1. `git tag v0.1.0 && git push origin v0.1.0`. The workflow builds the native library on every platform, bundles them
+   into the jar, and runs the tests on each platform against it.
+2. Approve the `publish` job in the Actions tab. It waits for a reviewer of the `maven-central` environment, then signs
+   the jars and uploads them to the Central Portal.
+3. On [central.sonatype.com](https://central.sonatype.com), under Publish, check the deployment and press
+   **Publish**. The jars appear on Maven Central, usually within the hour. A published version can never be changed or
+   removed; press **Drop** instead to discard it.
+4. Publish the draft GitHub release the workflow created, with the jars attached.
+
+Don't create the release with GitHub's "Draft a new release" button. The tag it creates starts the workflow, whose last
+step then fails because the release already exists.
+
+To try the pipeline without publishing, push a tag such as `v0.1.0-rc1`, drop the deployment in the portal, and delete
+the draft release and the tag. The workflow can also be run by hand from `main` with a `version` input, which uploads
+without creating a GitHub release.
+
+### Publishing credentials
+
+The `maven-central` environment holds four secrets, and only `main` and `v*` tags can use them:
+
+- `CENTRAL_TOKEN_USERNAME` and `CENTRAL_TOKEN_PASSWORD`: a Central Portal user token (View Account > Generate User
+  Token). Tokens belong to one person's account and expire. When the upload step fails with 401, generate a new token
+  and replace both secrets. Revoke the old one if someone with access to it leaves.
+- `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE`: the armored secret key and passphrase of the "icechunk-java release signing"
+  key, fingerprint `CCA9E4D916273A33D8402FB172C833F9E8DDCA94`, published on keyserver.ubuntu.com, where Central checks
+  signatures. It expires on 2029-11-26. Before then, extend it with `gpg --quick-set-expire` and send it to the
+  keyserver again, or make a new key, publish it, and replace both secrets.
+
+The `io.icechunk` namespace was verified with a DNS TXT record on icechunk.io, whose DNS is managed at Namecheap. The
+record can be removed once the namespace is verified. The namespace covers every groupId under `io.icechunk`, so other
+projects can publish there with their own environment and secrets.
+
 ## Commits
 
 Describe what the change does and why. Keep unrelated changes in separate commits.

@@ -1,8 +1,8 @@
 # icechunk-n5-codecs
 
 > [!WARNING]
-> Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
-> notice. See the [top-level README](../README.md).
+> Experimental and not officially supported. The API will change without notice. See the
+> [top-level README](../README.md).
 
 Codecs that let [n5-zarr](https://github.com/saalfeldlab/n5-zarr) read arrays zarr-python wrote with
 `numcodecs.pcodec` or `numcodecs.zlib`.
@@ -21,7 +21,7 @@ The module is a stopgap until these codecs are available from a shared codec pac
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-n5-codecs</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>

@@ -1,9 +1,9 @@
 # icechunk-java
 
 !!! warning "Experimental, not officially supported"
-    This is not an Earthmover product and is not part of the icechunk project's supported surface. Nothing is
-    published to Maven Central, the API will change without notice, and there is no guarantee of fixes or
-    compatibility. Do not use it for data you cannot afford to lose.
+    This is not an Earthmover product and is not part of the icechunk project's supported surface. The API will
+    change without notice, and there is no guarantee of fixes or compatibility. Do not use it for data you cannot
+    afford to lose.
 
     Interested in official support? [Open a GitHub issue](https://github.com/earth-mover/icechunk-java/issues)
     and say what you would use it for.
@@ -41,7 +41,6 @@ try (Session session = repo.readonlySession(Version.branch("main"))) {
 
 ## Get the jars
 
-Nothing is on Maven Central, and no release is tagged yet, so build the jars from source:
-[Get the jars](n5.md#get-the-jars) installs them into your local Maven repository, and
-[Use in Fiji](fiji.md#build-the-jars) builds the set Fiji needs. Tagged releases will attach the jars to a GitHub
-release, with the native library bundled.
+Tagged releases are published to Maven Central under the groupId `io.icechunk`, with the native library bundled. No
+release is tagged yet, so for now build the jars from source: [Get the jars](n5.md#get-the-jars) installs them into
+your local Maven repository, and [Use in Fiji](fiji.md#build-the-jars) builds the set Fiji needs.

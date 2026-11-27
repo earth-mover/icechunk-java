@@ -184,7 +184,7 @@ GcSummary deleted = repo.garbageCollect(monthAgo);
 
 ## Limitations
 
-- Nothing is published to Maven Central. Jars come from GitHub releases or a source build.
+- No release is tagged yet, so jars come from a source build. Tagged releases go to Maven Central and GitHub releases.
 - zarr-java covers numeric data types only. It cannot read float16, complex, string or datetime arrays, so many
   xarray-written repositories have arrays that `IcechunkZarrStore` can open as keys but zarr-java cannot decode.
 - There is no rebase, node move, or writing of virtual references yet. Repository configuration is passed as a JSON

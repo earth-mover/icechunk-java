@@ -53,7 +53,7 @@ Each native method is written by hand, in Rust and in Java. Three choices keep t
 ## Layers
 
 ```
-Java API         Storage  Repository  Session  Store        public classes, io.earthmover.icechunk
+Java API         Storage  Repository  Session  Store        public classes, io.icechunk
                     │         │          │        │
 Java internals   NativeHandle (owns a long)   NativeLoader
                     │
@@ -246,14 +246,19 @@ session can keep the readers and writers it built.
 ## Packaging
 
 `.github/workflows/release.yml` builds the native library on each platform, bundles all of them into the
-`icechunk-java` jar under `io/earthmover/icechunk/native/<os>-<arch>/`, runs the tests against that jar, and attaches
-the jars to a draft GitHub release. A single jar with every platform suits Fiji update sites and scripting tools that
-do not resolve Maven classifiers; per-platform classifier jars can be added for applications that care about size.
+`icechunk-java` jar under `io/icechunk/native/<os>-<arch>/`, runs the tests against that jar, uploads
+the jars to Maven Central, and attaches them to a draft GitHub release. A single jar with every platform suits Fiji
+update sites and scripting tools that do not resolve Maven classifiers; per-platform classifier jars can be added for
+applications that care about size.
 
 - Linux libraries are built in manylinux_2_28 containers, as icechunk-python's wheels are, so they load on older
   distributions.
 - Platforms: Linux x86_64 and aarch64, macOS x86_64 and arm64, Windows x86_64.
-- Publishing to Maven Central needs a verified groupId namespace and signed artifacts, and is not set up.
+- Releases go to Maven Central under `io.icechunk`, a namespace verified through the icechunk.io domain. The
+  `central` profile in the root pom adds the sources and javadoc jars and GPG signatures Central requires. The upload
+  waits on central.sonatype.com until someone presses Publish, because a published version can never be changed or
+  removed. GitHub Packages was the alternative, but its Maven registry needs a token even to download public
+  packages.
 
 To check before relying on it: macOS applications packaged with jpackage and hardened runtime may refuse an unsigned
 dylib extracted to a temporary directory.
@@ -262,7 +267,7 @@ dylib extracted to a temporary directory.
 
 A library such as an Arraylake client can add native operations without forking this one. It depends on the
 `icechunk-jni` crate as an `rlib`, adds its own `Java_...` exports using `icechunk_jni::ext` (`run`, `block_on`, and
-`insert_*` to register objects, including its own types), and builds one combined library. Its jar ships that library under `io/earthmover/icechunk/native-ext/<os>-<arch>/`, which the loader prefers.
+`insert_*` to register objects, including its own types), and builds one combined library. Its jar ships that library under `io/icechunk/native-ext/<os>-<arch>/`, which the loader prefers.
 Handles its native code registers live in the same table as the core's, and `NativeExtensions` wraps them as ordinary
 `Repository` and `Storage` objects.
 

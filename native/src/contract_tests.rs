@@ -9,10 +9,9 @@ use crate::error::ErrorKind;
 use crate::{repository, store};
 
 const NATIVE_JAVA: &str =
-    include_str!("../../icechunk-java/src/main/java/io/earthmover/icechunk/Native.java");
-const EXCEPTION_JAVA: &str = include_str!(
-    "../../icechunk-java/src/main/java/io/earthmover/icechunk/IcechunkException.java"
-);
+    include_str!("../../icechunk-java/src/main/java/io/icechunk/Native.java");
+const EXCEPTION_JAVA: &str =
+    include_str!("../../icechunk-java/src/main/java/io/icechunk/IcechunkException.java");
 
 /// `static final int NAME = value;` and `static final long NAME = value;` declarations.
 fn java_constants() -> HashMap<String, i64> {

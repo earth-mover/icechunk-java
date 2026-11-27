@@ -1,8 +1,8 @@
 # icechunk-n5-universe
 
 > [!WARNING]
-> Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
-> notice. See the [top-level README](../README.md).
+> Experimental and not officially supported. Not published to Maven Central, because it needs an unreleased
+> n5-universe. The API will change without notice. See the [top-level README](../README.md).
 
 Opens [icechunk](https://icechunk.io) repositories by URL in
 [n5-universe](https://github.com/saalfeldlab/n5-universe), and saves Fiji images into them.
@@ -38,7 +38,7 @@ lists what the fork changes, and the n5-ij fork that Fiji's URL dialog needs.
 
 ```xml
 <dependency>
-  <groupId>io.earthmover.icechunk</groupId>
+  <groupId>io.icechunk</groupId>
   <artifactId>icechunk-n5-universe</artifactId>
   <version>0.1.0-SNAPSHOT</version>
 </dependency>
