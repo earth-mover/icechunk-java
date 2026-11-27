@@ -148,7 +148,12 @@ jobs:
         shell: bash
         run: |
           scripts/fetch-icechunk-fixtures.sh
-          mvn -B verify -Dicechunk.native.dir= -Dicechunk.tests.strict=true
+          # hegel, which runs the property tests, has no library for Intel macOS.
+          skip=""
+          if [[ "$RUNNER_OS" == macOS && "$RUNNER_ARCH" == X64 ]]; then
+            skip="-pl !property-tests"
+          fi
+          mvn -B verify -Dicechunk.native.dir= -Dicechunk.tests.strict=true $skip
 
   # Rebuilds the jars rather than reusing the package job's, because deploy needs the
   # reactor's POMs. The tests already passed on the same sources.
