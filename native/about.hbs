@@ -1,0 +1,16 @@
+Third-party licenses for the icechunk-java native library
+
+The native library bundled in icechunk-java is compiled from the Rust crates below. Each license
+is listed once, followed by its text, with the crates it covers.
+{{#each licenses}}
+
+================================================================================
+{{{name}}} ({{id}})
+
+Used by:
+{{#each used_by}}
+  {{crate.name}} {{crate.version}}{{#if crate.repository}} ({{{crate.repository}}}){{/if}}
+{{/each}}
+
+{{{text}}}
+{{/each}}
