@@ -1,8 +1,8 @@
 # icechunk-n5-codecs
 
 > [!WARNING]
-> Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
-> notice. See the [top-level README](../README.md).
+> Experimental and not officially supported. The API will change without notice. See the
+> [top-level README](../README.md).
 
 Codecs that let [n5-zarr](https://github.com/saalfeldlab/n5-zarr) read arrays zarr-python wrote with
 `numcodecs.pcodec` or `numcodecs.zlib`.

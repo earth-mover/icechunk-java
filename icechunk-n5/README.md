@@ -1,8 +1,8 @@
 # icechunk-n5
 
 > [!WARNING]
-> Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
-> notice. See the [top-level README](../README.md).
+> Experimental and not officially supported. The API will change without notice. See the
+> [top-level README](../README.md).
 
 `IcechunkKeyValueAccess` lets [N5](https://github.com/saalfeldlab/n5) read and write an
 [icechunk](https://icechunk.io) repository.

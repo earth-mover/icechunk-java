@@ -1,8 +1,8 @@
 # icechunk-zarr-java
 
 > [!WARNING]
-> Experimental and not officially supported. Nothing is published to Maven Central, and the API will change without
-> notice. See the [top-level README](../README.md).
+> Experimental and not officially supported. The API will change without notice. See the
+> [top-level README](../README.md).
 
 `IcechunkZarrStore` lets [zarr-java](https://github.com/zarr-developers/zarr-java) read and write arrays in an
 [icechunk](https://icechunk.io) repository.

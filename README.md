@@ -2,8 +2,8 @@
 
 > [!WARNING]
 > Experimental and not officially supported. This is not an Earthmover product and is not part of the icechunk
-> project's supported surface. Nothing is published to Maven Central, the API will change without notice, and there
-> is no guarantee of fixes or compatibility. Do not use it for data you cannot afford to lose.
+> project's supported surface. The API will change without notice, and there is no guarantee of fixes or
+> compatibility. Do not use it for data you cannot afford to lose.
 >
 > Interested in official support? [Open a GitHub issue](https://github.com/earth-mover/icechunk-java/issues)
 > and say what you would use it for.
