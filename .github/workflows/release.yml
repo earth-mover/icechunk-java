@@ -88,35 +88,25 @@ jobs:
           distribution: temurin
           java-version: "21"
           cache: maven
-      # pcodec 1.0.4 has no wheels for Python 3.15, and its PyO3 refuses to build for 3.15.
-      # Without a pin, uv uses a 3.15 it finds on PATH, as on macos-latest.
-      - uses: astral-sh/setup-uv@v10.2.0
-        with:
-          python-version: "3.14"
       - name: Set the version from the tag
         if: startsWith(github.ref, 'refs/tags/v')
         run: mvn -B -q versions:set -DnewVersion="${GITHUB_REF_NAME#v}" -DgenerateBackupPoms=false
-      # An empty icechunk.native.dir makes the tests load the library bundled in the jar,
-      # the way users will.
-      - name: Build and test against the bundled library
-        run: |
-          scripts/fetch-icechunk-fixtures.sh
-          mvn -B verify -Dicechunk.native.dir= -Dicechunk.tests.strict=true
+      # test-bundled runs the tests, on every platform.
+      - name: Build the jars
+        run: mvn -B package -Dmaven.test.skip=true
       - uses: actions/upload-artifact@v7.0.1
         with:
           name: jars
           path: |
             icechunk-java/target/icechunk-java-*.jar
-            !icechunk-java/target/icechunk-java-*-tests.jar
             icechunk-zarr-java/target/icechunk-zarr-java-*.jar
             icechunk-n5/target/icechunk-n5-*.jar
             icechunk-n5-codecs/target/icechunk-n5-codecs-*.jar
-            icechunk-java/target/classes/io/icechunk/native/
 
-  # The package job runs on Linux x86_64, so its tests load only that platform's library
-  # from the jar. Run the tests once per platform against the bundled libraries.
+  # Runs the tests on each platform against the release libraries, bundled the way the
+  # package job bundles them.
   test-bundled:
-    needs: package
+    needs: native
     strategy:
       fail-fast: false
       matrix:
@@ -126,14 +116,11 @@ jobs:
       - uses: actions/checkout@v7.0.1
       - uses: actions/download-artifact@v8.0.1
         with:
-          name: jars
-          path: jars
-      - name: Put the bundled libraries on the test classpath
+          pattern: native-*
+          path: artifacts
+      - name: Bundle the native libraries
         shell: bash
-        run: |
-          mkdir -p icechunk-java/src/main/resources/io/icechunk
-          cp -R "$(find jars -type d -name native -path '*io/icechunk/native' | head -1)" \
-            icechunk-java/src/main/resources/io/icechunk/
+        run: scripts/bundle-native-libs.sh artifacts
       - uses: actions/setup-java@v6.0.1
         with:
           distribution: temurin
